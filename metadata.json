@@ -1,0 +1,6 @@
+{
+  "name": "TAHFIZH SMPIA21",
+  "description": "Sistem Pencatatan & Monitoring Tahfizh Al-Qur'an dan Pembelajaran Metode Ummi untuk Guru, Admin, dan Wali Murid",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
