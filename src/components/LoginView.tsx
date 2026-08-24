@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import { 
-  ShieldCheck, 
-  GraduationCap, 
-  HeartHandshake, 
   Lock, 
-  User, 
+  User as UserIcon, 
   ArrowRight, 
-  Sparkles, 
-  BookOpen, 
-  CheckCircle2,
+  AlertCircle,
+  Eye,
+  EyeOff,
+  ShieldCheck,
   KeyRound
 } from 'lucide-react';
-import { Role, UserProfile } from '../types';
+import { UserProfile } from '../types';
+import { storageService } from '../services/storageService';
+import { LogoAlAzhar } from './LogoAlAzhar';
 
 interface LoginViewProps {
   onLogin: (user: UserProfile) => void;
@@ -19,189 +19,196 @@ interface LoginViewProps {
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
-  const [selectedRole, setSelectedRole] = useState<Role>('guru');
-  const [username, setUsername] = useState('ustadz.fauzan@smpia21.sch.id');
-  const [password, setPassword] = useState('••••••••');
-
-  const handleSelectRole = (role: Role) => {
-    setSelectedRole(role);
-    if (role === 'admin') {
-      setUsername('admin.tahfizh@smpia21.sch.id');
-    } else if (role === 'guru') {
-      setUsername('ustadz.fauzan@smpia21.sch.id');
-    } else {
-      setUsername('wali.fatih@gmail.com');
-    }
-  };
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('admin21');
+  const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showAccountGuide, setShowAccountGuide] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    let user: UserProfile;
-    if (selectedRole === 'admin') {
-      user = {
-        id: 'usr-admin',
-        name: 'Ustadz Ahmad Fauzan, Lc., M.Ag.',
-        email: username,
-        role: 'admin',
-        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
-        title: 'Koordinator Tahfizh & Admin Sistem'
-      };
-    } else if (selectedRole === 'guru') {
-      user = {
-        id: 'usr-guru',
-        name: 'Ustadzah Siti Maryam, S.Pd.I.',
-        email: username,
-        role: 'guru',
-        avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
-        title: 'Guru Pengampu Halaqah Tahfizh'
-      };
-    } else {
-      user = {
-        id: 'usr-wali',
-        name: 'Bpk. H. Iskandar Zulkarnain',
-        email: username,
-        role: 'wali',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-        title: 'Orang Tua / Wali Santri'
-      };
-    }
+    setErrorMessage(null);
+    setIsLoading(true);
 
-    onLogin(user);
+    setTimeout(() => {
+      const result = storageService.authenticate(username, password);
+      setIsLoading(false);
+
+      if (result.success && result.user) {
+        onLogin(result.user);
+      } else {
+        setErrorMessage(result.message || 'Username atau kata sandi tidak valid.');
+      }
+    }, 250);
+  };
+
+  const handleFillDemo = (demoUser: string, demoPass: string) => {
+    setUsername(demoUser);
+    setPassword(demoPass);
+    setErrorMessage(null);
   };
 
   return (
     <div className="min-h-screen bg-[#F1F5F9] flex items-center justify-center p-4">
-      
-      <div className="w-full max-w-md bg-white rounded-xl shadow-xs border border-slate-200 overflow-hidden relative z-10 animate-in fade-in zoom-in-95 duration-200">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden relative z-10 animate-in fade-in zoom-in-95 duration-200">
         
-        {/* Top Header */}
+        {/* Top Header with Al Azhar 21 Emblem */}
         <div className="bg-[#1E293B] p-6 text-center text-white relative">
-          <div className="w-12 h-12 rounded-xl bg-[#D4AF37] text-slate-900 flex items-center justify-center mx-auto shadow-xs">
-            <BookOpen className="w-6 h-6" />
+          <div className="flex justify-center mb-3">
+            <div className="p-1.5 bg-white rounded-full shadow-md inline-block">
+              <LogoAlAzhar size={72} />
+            </div>
           </div>
 
-          <h2 className="text-xl font-bold mt-3 tracking-tight">
-            TAHFIZH SMPIA21
-          </h2>
-          <p className="text-xs text-slate-300 mt-0.5">
+          <h1 className="text-lg sm:text-xl font-extrabold tracking-tight">
+            TAHFIZH SMPIA 21
+          </h1>
+          <p className="text-xs text-slate-300 mt-1 font-medium">
             Sistem Monitoring Tahfizh Al-Qur'an & Metode Ummi
+          </p>
+          <p className="text-[11px] text-[#D4AF37] font-semibold mt-0.5">
+            SMP Islam Al Azhar 21
           </p>
         </div>
 
         <div className="p-6 space-y-5">
           
-          {/* Role Selector Tabs */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-2">Pilih Role Akses Masuk:</label>
-            <div className="grid grid-cols-3 gap-2">
-              
-              {/* Admin */}
-              <button
-                type="button"
-                onClick={() => handleSelectRole('admin')}
-                className={`p-2.5 rounded-lg border text-center transition cursor-pointer flex flex-col items-center gap-1.5 ${
-                  selectedRole === 'admin'
-                    ? 'bg-[#1E293B] text-white border-[#1E293B] shadow-xs'
-                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-                }`}
-              >
-                <ShieldCheck className="w-4 h-4" />
-                <span className="text-xs font-semibold">Admin</span>
-              </button>
+          {/* Security Notice */}
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-start gap-2.5 text-xs text-slate-600">
+            <ShieldCheck className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
+            <p className="leading-relaxed">
+              Silakan masuk menggunakan <strong>Username</strong> dan <strong>Kata Sandi</strong> resmi yang telah diberikan oleh Administrator.
+            </p>
+          </div>
 
-              {/* Guru */}
-              <button
-                type="button"
-                onClick={() => handleSelectRole('guru')}
-                className={`p-2.5 rounded-lg border text-center transition cursor-pointer flex flex-col items-center gap-1.5 ${
-                  selectedRole === 'guru'
-                    ? 'bg-[#1E293B] text-white border-[#1E293B] shadow-xs'
-                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-                }`}
-              >
-                <GraduationCap className="w-4 h-4" />
-                <span className="text-xs font-semibold">Guru</span>
-              </button>
-
-              {/* Wali Santri */}
-              <button
-                type="button"
-                onClick={() => handleSelectRole('wali')}
-                className={`p-2.5 rounded-lg border text-center transition cursor-pointer flex flex-col items-center gap-1.5 ${
-                  selectedRole === 'wali'
-                    ? 'bg-[#1E293B] text-white border-[#1E293B] shadow-xs'
-                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-                }`}
-              >
-                <HeartHandshake className="w-4 h-4" />
-                <span className="text-xs font-semibold">Wali Santri</span>
-              </button>
-
+          {/* Error Alert */}
+          {errorMessage && (
+            <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2.5 text-xs text-red-700 animate-in fade-in">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+              <div className="flex-1 font-medium">{errorMessage}</div>
             </div>
-          </div>
+          )}
 
-          {/* Role Explanatory Card */}
-          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-600">
-            {selectedRole === 'admin' && (
-              <p>🔐 <strong>Hak Akses Admin:</strong> Kelola seluruh guru, santri, rombel kelas, target hafalan, import data CSV, dan pengaturan sekolah.</p>
-            )}
-            {selectedRole === 'guru' && (
-              <p>📖 <strong>Hak Akses Guru:</strong> Catat setoran hafalan harian, evaluasi jilid Metode Ummi, nilai tajwid, dan input catatan perkembangan.</p>
-            )}
-            {selectedRole === 'wali' && (
-              <p>🌟 <strong>Hak Akses Wali Santri:</strong> Pantau live mutaba'ah hafalan putra/putri, kenaikan jilid Ummi, dan hubungi guru via WhatsApp.</p>
-            )}
-          </div>
-
-          {/* Login Form */}
+          {/* Direct Credential Login Form */}
           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Email / Akun Pengguna</label>
+              <label className="block font-bold text-slate-700 mb-1.5">
+                Username / Email Akun
+              </label>
               <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <UserIcon className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                 <input
-                  type="email"
+                  type="text"
                   required
+                  autoComplete="username"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                  onChange={(e) => {
+                    setUsername(e.target.value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
+                  placeholder="Contoh: admin, fauzan, maryam, dll."
+                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:border-[#D4AF37] focus:outline-none transition"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Kata Sandi</label>
+              <label className="block font-bold text-slate-700 mb-1.5">
+                Kata Sandi
+              </label>
               <div className="relative">
-                <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
+                  autoComplete="current-password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
+                  placeholder="Masukkan kata sandi akun"
+                  className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:border-[#D4AF37] focus:outline-none transition"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
+                  title={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
             <button
               type="submit"
-              className="w-full py-2.5 bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs rounded-lg shadow-xs transition flex items-center justify-center gap-2 cursor-pointer mt-2"
+              disabled={isLoading}
+              className="w-full py-3 bg-[#1E293B] hover:bg-slate-800 active:scale-[0.99] text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer mt-3 disabled:opacity-70"
             >
-              <span>Masuk sebagai {selectedRole === 'admin' ? 'Administrator' : selectedRole === 'guru' ? 'Guru Tahfizh' : 'Wali Santri'}</span>
-              <ArrowRight className="w-4 h-4 text-[#D4AF37]" />
+              {isLoading ? (
+                <span>Memverifikasi akun...</span>
+              ) : (
+                <>
+                  <span>Masuk ke Sistem</span>
+                  <ArrowRight className="w-4 h-4 text-[#D4AF37]" />
+                </>
+              )}
             </button>
           </form>
+
+          {/* Collapsible Helper for Default System Credentials */}
+          <div className="pt-2 border-t border-slate-100 text-center">
+            <button
+              type="button"
+              onClick={() => setShowAccountGuide(!showAccountGuide)}
+              className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 underline decoration-slate-300 underline-offset-4 cursor-pointer"
+            >
+              {showAccountGuide ? 'Sembunyikan Info Akun Bawaan' : 'Lihat Akun & Kata Sandi Bawaan Sistem'}
+            </button>
+
+            {showAccountGuide && (
+              <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl text-left text-[11px] space-y-2 animate-in fade-in">
+                <p className="font-bold text-slate-700">Daftar Akun Bawaan Terdaftar:</p>
+                <div className="grid grid-cols-1 gap-1.5 font-mono">
+                  <div 
+                    onClick={() => handleFillDemo('admin', 'admin21')}
+                    className="p-1.5 bg-white rounded border border-slate-200 flex justify-between items-center cursor-pointer hover:border-[#D4AF37] transition"
+                  >
+                    <span><strong>Admin:</strong> admin</span>
+                    <span className="text-slate-500 font-sans text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">Pass: admin21</span>
+                  </div>
+                  <div 
+                    onClick={() => handleFillDemo('fauzan', 'fauzan21')}
+                    className="p-1.5 bg-white rounded border border-slate-200 flex justify-between items-center cursor-pointer hover:border-[#D4AF37] transition"
+                  >
+                    <span><strong>Guru:</strong> fauzan</span>
+                    <span className="text-slate-500 font-sans text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">Pass: fauzan21</span>
+                  </div>
+                  <div 
+                    onClick={() => handleFillDemo('wali.rayhan', 'wali21')}
+                    className="p-1.5 bg-white rounded border border-slate-200 flex justify-between items-center cursor-pointer hover:border-[#D4AF37] transition"
+                  >
+                    <span><strong>Wali:</strong> wali.rayhan</span>
+                    <span className="text-slate-500 font-sans text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">Pass: wali21</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1 font-sans">
+                  * Klik salah satu baris di atas untuk otomatis mengisi form. Admin dapat mengubah kata sandi di menu Pengaturan.
+                </p>
+              </div>
+            )}
+          </div>
 
         </div>
 
         {/* Footer */}
-        <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 text-center text-[11px] text-slate-400">
-          SMP Islam Al Azhar 21 • Aplikasi Tahfizh & Metode Ummi v2.6
+        <div className="bg-slate-50 px-6 py-3.5 border-t border-slate-200 text-center text-[11px] text-slate-500 font-medium">
+          SMP Islam Al Azhar 21 • Aplikasi Tahfizh & Metode Ummi
         </div>
 
       </div>
-
     </div>
   );
 };

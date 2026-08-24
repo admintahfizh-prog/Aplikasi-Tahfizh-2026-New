@@ -86,14 +86,85 @@ export const storageService = {
   },
 
   // Current User / Auth
-  getCurrentUser(): User {
-    return getItem(STORAGE_KEYS.CURRENT_USER, INITIAL_USERS[0]);
+  getCurrentUser(): User | null {
+    return getItem<User | null>(STORAGE_KEYS.CURRENT_USER, INITIAL_USERS[0]);
   },
-  setCurrentUser(user: User): void {
-    setItem(STORAGE_KEYS.CURRENT_USER, user);
+  setCurrentUser(user: User | null): void {
+    if (user === null) {
+      try {
+        localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+      } catch (e) {
+        console.error(e);
+      }
+    } else {
+      setItem(STORAGE_KEYS.CURRENT_USER, user);
+    }
   },
   getUsers(): User[] {
-    return getItem(STORAGE_KEYS.USERS, INITIAL_USERS);
+    const users = getItem<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
+    // Ensure all initial users exist or merge
+    if (!users || users.length === 0) {
+      setItem(STORAGE_KEYS.USERS, INITIAL_USERS);
+      return INITIAL_USERS;
+    }
+    return users;
+  },
+  saveUser(user: User): void {
+    const list = this.getUsers();
+    const idx = list.findIndex(u => u.id === user.id);
+    if (idx >= 0) {
+      list[idx] = user;
+    } else {
+      list.push(user);
+    }
+    setItem(STORAGE_KEYS.USERS, list);
+  },
+  deleteUser(id: string): void {
+    const list = this.getUsers().filter(u => u.id !== id);
+    setItem(STORAGE_KEYS.USERS, list);
+  },
+  authenticate(identifier: string, passwordInput: string): { success: boolean; user?: User; message?: string } {
+    const cleanId = (identifier || '').trim().toLowerCase();
+    const cleanPass = (passwordInput || '').trim();
+
+    if (!cleanId || !cleanPass) {
+      return { success: false, message: 'Username dan kata sandi wajib diisi.' };
+    }
+
+    const users = this.getUsers();
+    const user = users.find(u => 
+      (u.username && u.username.toLowerCase() === cleanId) ||
+      (u.email && u.email.toLowerCase() === cleanId) ||
+      (u.phone && u.phone.replace(/[\s-]/g, '') === cleanId.replace(/[\s-]/g, '')) ||
+      (u.id && u.id.toLowerCase() === cleanId)
+    );
+
+    if (!user) {
+      return { 
+        success: false, 
+        message: 'Akun dengan username / email tersebut tidak ditemukan dalam sistem.' 
+      };
+    }
+
+    // Default fallback passwords for demo accounts if password not set
+    const expectedPass = user.password || (
+      user.role === 'admin' ? 'admin21' : user.role === 'guru' ? 'guru21' : 'wali21'
+    );
+
+    // Accept exact password or admin master override or fallback
+    if (
+      user.password === cleanPass || 
+      expectedPass === cleanPass || 
+      cleanPass === 'admin21' || 
+      cleanPass === 'smpia21'
+    ) {
+      return { success: true, user };
+    }
+
+    return { 
+      success: false, 
+      message: 'Kata sandi tidak sesuai. Silakan hubungi Admin untuk reset kata sandi.' 
+    };
   },
 
   // Classes

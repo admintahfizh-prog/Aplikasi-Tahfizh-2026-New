@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500">
+  <defs>
+    <path id="topTextPath" d="M 55,250 A 195,195 0 1,1 445,250" fill="none" />
+    <path id="bottomTextPath" d="M 445,250 A 195,195 0 0,1 55,250" fill="none" />
+    <clipPath id="innerCircleClip">
+      <circle cx="250" cy="250" r="167" />
+    </clipPath>
+  </defs>
+  <circle cx="250" cy="250" r="242" fill="#FFFFFF" stroke="#000000" stroke-width="12" />
+  <circle cx="250" cy="250" r="172" fill="none" stroke="#000000" stroke-width="10" />
+  <circle cx="250" cy="250" r="167" fill="#0088D2" />
+  <text fill="#000000" font-family="'Arial Black', 'Montserrat', sans-serif" font-weight="900" font-size="30.5" letter-spacing="2.8">
+    <textPath href="#topTextPath" startOffset="50%" text-anchor="middle">
+      SEKOLAH MENENGAH PERTAMA ISLAM
+    </textPath>
+  </text>
+  <text fill="#000000" font-family="'Arial Black', 'Montserrat', sans-serif" font-weight="900" font-size="40" letter-spacing="4">
+    <textPath href="#bottomTextPath" startOffset="50%" text-anchor="middle">
+      AL AZHAR 21
+    </textPath>
+  </text>
+  <g clip-path="url(#innerCircleClip)">
+    <path d="M 83,417 L 417,417 L 417,340 L 365,340 L 365,370 L 260,370 L 260,358 L 244,358 L 244,372 L 180,372 L 180,372 L 138,372 L 138,417 Z" fill="#FFFFFF" stroke="#000000" stroke-width="7" stroke-linejoin="round" />
+    <rect x="138" y="188" width="43" height="184" fill="#FFFFFF" stroke="#000000" stroke-width="7" />
+    <rect x="135" y="173" width="49" height="16" fill="#FFFFFF" stroke="#000000" stroke-width="7" />
+    <rect x="142" y="176" width="6.5" height="10" fill="#0088D2" stroke="#000000" stroke-width="2.5" />
+    <rect x="151.5" y="176" width="6.5" height="10" fill="#0088D2" stroke="#000000" stroke-width="2.5" />
+    <rect x="161" y="176" width="6.5" height="10" fill="#0088D2" stroke="#000000" stroke-width="2.5" />
+    <rect x="170.5" y="176" width="6.5" height="10" fill="#0088D2" stroke="#000000" stroke-width="2.5" />
+    <path d="M 139,173 C 139,145 159.5,125 159.5,125 C 159.5,125 180,145 180,173 Z" fill="#FFFFFF" stroke="#000000" stroke-width="7" stroke-linejoin="round" />
+    <line x1="159.5" y1="125" x2="159.5" y2="116" stroke="#000000" stroke-width="5" stroke-linecap="round" />
+    <path d="M 180,358 L 260,358 L 260,372 L 180,372 Z" fill="#FFFFFF" stroke="#000000" stroke-width="7" />
+    <path d="M 244,342 L 260,342 L 260,358 L 244,358 Z" fill="#FFFFFF" stroke="#000000" stroke-width="7" />
+    <path d="M 244,342 C 244,228 314,204 314,204 C 314,204 384,228 384,342 Z" fill="#FFFFFF" stroke="#000000" stroke-width="7" stroke-linejoin="round" />
+    <g transform="translate(314, 182)">
+      <path d="M 2,-18 C -14,-18 -26,-6 -26,10 C -26,26 -14,38 2,38 C -7,32 -13,22 -13,10 C -13,-2 -7,-12 2,-18 Z" fill="#FFFFFF" stroke="#000000" stroke-width="5" stroke-linejoin="round" />
+      <path d="M 6,3 L 8.5,-4 L 14.5,-4 L 9.5,-8 L 11.5,-15 L 6,-11 L 0.5,-15 L 2.5,-8 L -2.5,-4 L 3.5,-4 Z" transform="translate(4, 8) scale(1.1)" fill="#FFFFFF" stroke="#000000" stroke-width="4" stroke-linejoin="round" />
+    </g>
+  </g>
+</svg>

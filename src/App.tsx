@@ -70,36 +70,6 @@ export default function App() {
     loadAllData();
   }, [loadAllData]);
 
-  // Handle Role Change
-  const handleRoleChange = (role: Role) => {
-    const updatedUser: UserProfile = {
-      id: `usr-${role}`,
-      name: role === 'admin' 
-        ? 'Ustadz Ahmad Fauzan, Lc., M.Ag.' 
-        : role === 'guru' 
-        ? 'Ustadzah Siti Maryam, S.Pd.I.' 
-        : 'Bpk. H. Iskandar Zulkarnain',
-      email: `${role}@smpia21.sch.id`,
-      role,
-      avatar: role === 'admin'
-        ? 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80'
-        : role === 'guru'
-        ? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80'
-        : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-      title: role === 'admin' 
-        ? 'Koordinator Tahfizh & Admin' 
-        : role === 'guru' 
-        ? 'Guru Pengampu Halaqah' 
-        : 'Orang Tua / Wali Santri'
-    };
-    storageService.setCurrentUser(updatedUser);
-    setCurrentUser(updatedUser);
-
-    if (role === 'wali') {
-      setCurrentView('parent-portal');
-    }
-  };
-
   const handleLogin = (user: UserProfile) => {
     storageService.setCurrentUser(user);
     setCurrentUser(user);
@@ -111,8 +81,9 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    storageService.setCurrentUser(null as any);
+    storageService.setCurrentUser(null);
     setCurrentUser(null);
+    setCurrentView('dashboard');
   };
 
   const handleOpenDailyInput = (studentId?: string) => {
@@ -136,10 +107,12 @@ export default function App() {
       {/* Top Navbar */}
       <Navbar
         currentUser={currentUser}
-        onRoleChange={handleRoleChange}
         onOpenDailyInput={() => handleOpenDailyInput()}
         onLogout={handleLogout}
+        onOpenSettings={() => setCurrentView('settings')}
         schoolName={settings.schoolName}
+        activeView={currentView}
+        setActiveView={(v) => setCurrentView(v)}
       />
 
       {/* Main Container Layout */}

@@ -24,35 +24,59 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'usr-admin',
     name: 'Ustadz H. Sulaiman Affandi (Admin)',
+    username: 'admin',
+    password: 'admin21',
     email: 'admin@smpialazhar21.sch.id',
     role: 'admin',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    title: 'Kepala Sekolah & Administrator Utama',
     phone: '081234567890'
   },
   {
     id: 'usr-guru-1',
     name: 'Ustadz Ahmad Fauzan, Lc.',
+    username: 'fauzan',
+    password: 'fauzan21',
     email: 'fauzan@smpialazhar21.sch.id',
     role: 'guru',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    title: 'Koordinator Tahfizh & Pengampu Kelas 7A',
     phone: '081298765432',
     teacherId: 't-1'
   },
   {
     id: 'usr-guru-2',
     name: 'Ustadzah Siti Maryam, S.Pd.I',
+    username: 'maryam',
+    password: 'maryam21',
     email: 'siti.maryam@smpialazhar21.sch.id',
     role: 'guru',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+    title: 'Pengampu Halaqah Tahfizh Putri & Kelas 7B',
     phone: '081311223344',
     teacherId: 't-2'
   },
   {
+    id: 'usr-guru-3',
+    name: 'Ustadz M. Zulkifli, S.Pd.I',
+    username: 'zulkifli',
+    password: 'zulkifli21',
+    email: 'zulkifli@smpialazhar21.sch.id',
+    role: 'guru',
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    title: 'Pengampu Halaqah Takhassus & Kelas 8A',
+    phone: '081377889900',
+    teacherId: 't-3'
+  },
+  {
     id: 'usr-wali-1',
     name: 'Bpk. Hendra Gunawan (Wali Ahmad Rayhan)',
+    username: 'wali.rayhan',
+    password: 'wali21',
     email: 'wali.rayhan@gmail.com',
     role: 'wali',
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    title: 'Orang Tua / Wali Santri',
     phone: '081399887766',
     studentId: 'std-1'
   }
