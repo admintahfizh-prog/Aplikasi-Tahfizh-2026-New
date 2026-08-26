@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Printer, 
   Share2, 
@@ -49,10 +49,17 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
   const [periodTitle, setPeriodTitle] = useState<string>('TENGAH SEMESTER 1');
   const [academicYear, setAcademicYear] = useState<string>(settings.academicYear || '2026/2027');
   
-  // Halaqah / Category
+  // Halaqah / Category (Akselerasi, Reguler, Khusus)
+  const normalizeHalaqah = (prog?: string): string => {
+    if (!prog) return 'Reguler';
+    const p = prog.toLowerCase();
+    if (p.includes('aksel') || p.includes('unggul')) return 'Akselerasi';
+    if (p.includes('khusus') || p.includes('takhassus')) return 'Khusus';
+    return 'Reguler';
+  };
+
   const [halaqahType, setHalaqahType] = useState<string>(
-    student.program === 'Takhassus 30 Juz' ? 'Khusus' : 
-    student.program === 'Tahfizh Unggulan' ? 'Unggulan' : 'Reguler'
+    normalizeHalaqah(student.program)
   );
 
   // Tahfizh Progress
@@ -83,30 +90,53 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
 
   const [pelanggaranNotes, setPelanggaranNotes] = useState<string>(violationSummaryText());
 
-  // Metode Ummi Breakdown
-  const avgScoreNum = Math.round(student.avgScore || 88);
-  const getGradeText = (score: number) => {
-    if (score >= 90) return 'Mumtaz (A)';
-    if (score >= 85) return 'Jayyid Jiddan (B+)';
-    if (score >= 75) return 'Jayyid (B)';
-    if (score >= 65) return 'Maqbul (C)';
-    return 'Dhaif (D)';
+  // Query all Ummi records for this student (sorted by date descending)
+  const studentUmmiRecords = useMemo(() => {
+    const rawList = ummiRecords && ummiRecords.length > 0
+      ? ummiRecords.filter(r => r.studentId === student.id)
+      : storageService.getUmmiRecords().filter(r => r.studentId === student.id);
+    
+    return [...rawList].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [ummiRecords, student.id]);
+
+  const latestUmmiRecord = studentUmmiRecords[0];
+
+  // Derive initial values based on latest Ummi input or student record
+  const computeUmmiCapaian = (std: Student, rec?: UmmiRecord) => {
+    if (rec && rec.jilid && rec.page) {
+      return `${rec.jilid} halaman ${rec.page}`;
+    }
+    if (std.currentUmmiJilid) {
+      return `${std.currentUmmiJilid} halaman ${std.currentUmmiPage || 1}`;
+    }
+    return 'Jilid 1 halaman 1';
   };
 
-  const [ummiJilidScore, setUmmiJilidScore] = useState<number>(avgScoreNum >= 80 ? avgScoreNum : 86);
-  const [ummiJilidNote, setUmmiJilidNote] = useState<string>(`${student.currentUmmiJilid || 'Jilid 4'} Hal. ${student.currentUmmiPage || 25} (Lancar)`);
-  
-  const [ummiFashohahScore, setUmmiFashohahScore] = useState<number>(Math.min(100, avgScoreNum + 2));
-  const [ummiFashohahNote, setUmmiFashohahNote] = useState<string>('Fasih dalam pelafalan makharijul huruf');
+  const computeUmmiNilai = (std: Student, rec?: UmmiRecord) => {
+    if (rec && rec.score !== undefined && rec.score !== null) {
+      return String(rec.score);
+    }
+    if (std.avgScore) {
+      return String(Math.round(std.avgScore));
+    }
+    return '88';
+  };
 
-  const [ummiTartilScore, setUmmiTartilScore] = useState<number>(avgScoreNum);
-  const [ummiTartilNote, setUmmiTartilNote] = useState<string>('Tepat pada mad, ghunnah, dan harakat');
+  // Capaian UMMI (Format tabel: Capaian UMMI -> Jilid/Tilawah/Gharib/Tajwid & Nilai)
+  const [ummiCapaianDescription, setUmmiCapaianDescription] = useState<string>(
+    computeUmmiCapaian(student, latestUmmiRecord)
+  );
+  const [ummiNilaiScore, setUmmiNilaiScore] = useState<string>(
+    computeUmmiNilai(student, latestUmmiRecord)
+  );
 
-  const [ummiKelancaranScore, setUmmiKelancaranScore] = useState<number>(Math.max(75, avgScoreNum - 1));
-  const [ummiKelancaranNote, setUmmiKelancaranNote] = useState<string>('Tertib waqaf & ibtida\' tanpa terbata-bata');
-
-  const [ummiGhoribScore, setUmmiGhoribScore] = useState<number>(Math.max(78, avgScoreNum));
-  const [ummiGhoribNote, setUmmiGhoribNote] = useState<string>('Memahami bacaan ghorib & kaidah dasar');
+  // Sync state when student or Ummi records change
+  useEffect(() => {
+    setUmmiCapaianDescription(computeUmmiCapaian(student, latestUmmiRecord));
+    setUmmiNilaiScore(computeUmmiNilai(student, latestUmmiRecord));
+    setSuratAyatCapaian(student.lastHafalan || 'Al-Muzzammil : 9');
+    setHalaqahType(normalizeHalaqah(student.program));
+  }, [student.id, student.currentUmmiJilid, student.currentUmmiPage, latestUmmiRecord]);
 
   // Teacher Notes
   const [teacherNotes, setTeacherNotes] = useState<string>(
@@ -148,7 +178,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
       `*Halaqah:* ${halaqahType}\n\n` +
       `*I. Ketercapaian Tahfizh:* ${suratAyatCapaian} (Target: ${targetSuratAyat})\n` +
       `*II. Kedisiplinan:* A: ${alphaCount}, I: ${izinCount}, S: ${sakitCount}\n` +
-      `*III. Metode Ummi:* ${student.currentUmmiJilid || 'Jilid 4'} (Nilai Rata-rata: ${avgScoreNum} - ${getGradeText(avgScoreNum)})\n\n` +
+      `*III. Capaian UMMI:* ${ummiCapaianDescription} (Nilai: ${ummiNilaiScore || '-'})\n\n` +
       `*Catatan Guru Pembimbing:* "${teacherNotes}"\n\n` +
       `_Laporan lengkap dapat diunduh di Portal Wali Santri SMPI Al Azhar 21._`
     );
@@ -297,9 +327,9 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                 onChange={(e) => setHalaqahType(e.target.value)}
                 className="w-full p-2 bg-white border border-slate-300 rounded-lg font-semibold"
               >
-                <option value="Khusus">Khusus (Takhassus)</option>
-                <option value="Unggulan">Unggulan</option>
+                <option value="Akselerasi">Akselerasi</option>
                 <option value="Reguler">Reguler</option>
+                <option value="Khusus">Khusus</option>
               </select>
             </div>
 
@@ -362,7 +392,82 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             </div>
           </div>
 
-          {/* Row 3: Catatan Pembimbing */}
+          {/* Row 3: Capaian UMMI (Jilid/Tilawah/Gharib/Tajwid & Nilai) */}
+          <div className="bg-white p-3 rounded-lg border border-amber-300 space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-1">
+              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <BookMarked className="w-3.5 h-3.5 text-[#D4AF37]" />
+                Capaian Metode Ummi Santri
+              </span>
+              {latestUmmiRecord && (
+                <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded font-medium">
+                  ✓ Otomatis dari input terakhir: {latestUmmiRecord.jilid} hal. {latestUmmiRecord.page} (Nilai: {latestUmmiRecord.score})
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Capaian UMMI (Jilid/Tilawah/Gharib/Tajwid):
+                </label>
+                <input
+                  type="text"
+                  value={ummiCapaianDescription}
+                  onChange={(e) => setUmmiCapaianDescription(e.target.value)}
+                  placeholder="Contoh: Jilid 1 halaman 13"
+                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-semibold text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Nilai Capaian UMMI:
+                </label>
+                <input
+                  type="text"
+                  value={ummiNilaiScore}
+                  onChange={(e) => setUmmiNilaiScore(e.target.value)}
+                  placeholder="Nilai (contoh: 88 atau kosong)"
+                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-semibold text-xs text-center"
+                />
+              </div>
+            </div>
+
+            {/* Quick selector from Ummi input history */}
+            {studentUmmiRecords.length > 0 && (
+              <div className="pt-1 border-t border-slate-100">
+                <span className="text-[10px] text-slate-500 font-semibold block mb-1">
+                  Pilih dari riwayat input pembelajaran Ummi ananda:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {studentUmmiRecords.slice(0, 5).map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => {
+                        setUmmiCapaianDescription(`${r.jilid} halaman ${r.page}`);
+                        setUmmiNilaiScore(String(r.score));
+                      }}
+                      className={`px-2 py-1 rounded text-[11px] font-semibold border transition cursor-pointer flex items-center gap-1 ${
+                        ummiCapaianDescription === `${r.jilid} halaman ${r.page}`
+                          ? 'bg-amber-100 text-amber-950 border-amber-400 font-bold'
+                          : 'bg-slate-50 hover:bg-amber-50 text-slate-700 border-slate-200'
+                      }`}
+                      title={`Klik untuk mengisi raport dengan data setoran tanggal ${r.date}`}
+                    >
+                      <span>{r.jilid} hal. {r.page}</span>
+                      <span className="text-slate-300">|</span>
+                      <span className="text-amber-900 font-bold">Nilai: {r.score}</span>
+                      <span className="text-[10px] text-slate-400">({r.date})</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Row 4: Catatan Pembimbing */}
           <div>
             <label className="block font-bold text-slate-700 mb-1">Catatan Pembimbing / Evaluasi:</label>
             <textarea
@@ -373,7 +478,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             />
           </div>
 
-          {/* Row 4: Tanda Tangan */}
+          {/* Row 5: Tanda Tangan */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             <div>
               <label className="block font-bold text-slate-700 mb-1">Nama Wali Kelas / Guru Pengampu:</label>
@@ -608,7 +713,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             </div>
 
             {/* ========================================================================= */}
-            {/* III. PERKEMBANGAN INDIVIDU METODE UMMI (GANTI DARI IBADAH SESUAI PERMINTAAN) */}
+            {/* III. PERKEMBANGAN INDIVIDU METODE UMMI (SESUAI FORMAT GAMBAR)             */}
             {/* ========================================================================= */}
             <div className="space-y-1 pt-1">
               <h3 className="font-bold text-[13px] text-slate-950">
@@ -617,95 +722,27 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
 
               <table className="w-full text-[12px] border border-slate-900 border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-900">
-                    <th rowSpan={2} className="py-1 px-3 border-r border-slate-900 text-left font-bold w-5/12">
-                      Materi / Aspek Pembelajaran Metode Ummi
-                    </th>
-                    <th colSpan={2} className="py-1 px-2 border-r border-slate-900 text-center font-bold w-3/12">
-                      Nilai
-                    </th>
-                    <th rowSpan={2} className="py-1 px-3 text-left font-bold w-4/12">
-                      Keterangan Capaian
+                  <tr className="bg-slate-50 border-b border-slate-900 text-slate-900">
+                    <th colSpan={2} className="py-1.5 px-3 text-center font-bold text-[12px]">
+                      Capaian UMMI
                     </th>
                   </tr>
                   <tr className="bg-white border-b border-slate-900 text-slate-900 font-bold">
-                    <th className="py-0.5 px-2 border-r border-slate-900 text-center w-14">Angka</th>
-                    <th className="py-0.5 px-2 border-r border-slate-900 text-center">Huruf</th>
+                    <th className="py-1 px-3 border-r border-slate-900 text-left w-8/12 font-bold">
+                      Jilid/Tilawah/Gharib/Tajwid
+                    </th>
+                    <th className="py-1 px-3 text-center w-4/12 font-bold">
+                      Nilai
+                    </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-900">
+                <tbody>
                   <tr>
-                    <td className="py-1 px-3 border-r border-slate-900 font-medium">
-                      1. Jilid / Bacaan Al-Qur'an (Jilid 1–6 / Al-Qur'an)
+                    <td className="py-2 px-3 border-r border-slate-900 font-normal text-slate-900">
+                      {ummiCapaianDescription}
                     </td>
-                    <td className="py-1 px-2 border-r border-slate-900 text-center font-bold font-mono">
-                      {ummiJilidScore}
-                    </td>
-                    <td className="py-1 px-2 border-r border-slate-900 text-center font-semibold text-[11px]">
-                      {getGradeText(ummiJilidScore)}
-                    </td>
-                    <td className="py-1 px-3 text-[11.5px] text-slate-800">
-                      {ummiJilidNote}
-                    </td>
-                  </tr>
-
-                  <tr>
-                    <td className="py-1 px-3 border-r border-slate-900 font-medium">
-                      2. Fashohah & Makharijul Huruf
-                    </td>
-                    <td className="py-1 px-2 border-r border-slate-900 text-center font-bold font-mono">
-                      {ummiFashohahScore}
-                    </td>
-                    <td className="py-1 px-2 border-r border-slate-900 text-center font-semibold text-[11px]">
-                      {getGradeText(ummiFashohahScore)}
-                    </td>
-                    <td className="py-1 px-3 text-[11.5px] text-slate-800">
-                      {ummiFashohahNote}
-                    </td>
-                  </tr>
-
-                  <tr>
-                    <td className="py-1 px-3 border-r border-slate-900 font-medium">
-                      3. Tartil & Ketepatan Tajwid (Mad, Ghunnah, dll)
-                    </td>
-                    <td className="py-1 px-2 border-r border-slate-900 text-center font-bold font-mono">
-                      {ummiTartilScore}
-                    </td>
-                    <td className="py-1 px-2 border-r border-slate-900 text-center font-semibold text-[11px]">
-                      {getGradeText(ummiTartilScore)}
-                    </td>
-                    <td className="py-1 px-3 text-[11.5px] text-slate-800">
-                      {ummiTartilNote}
-                    </td>
-                  </tr>
-
-                  <tr>
-                    <td className="py-1 px-3 border-r border-slate-900 font-medium">
-                      4. Kelancaran Bacaan & Waqaf Ibtida'
-                    </td>
-                    <td className="py-1 px-2 border-r border-slate-900 text-center font-bold font-mono">
-                      {ummiKelancaranScore}
-                    </td>
-                    <td className="py-1 px-2 border-r border-slate-900 text-center font-semibold text-[11px]">
-                      {getGradeText(ummiKelancaranScore)}
-                    </td>
-                    <td className="py-1 px-3 text-[11.5px] text-slate-800">
-                      {ummiKelancaranNote}
-                    </td>
-                  </tr>
-
-                  <tr>
-                    <td className="py-1 px-3 border-r border-slate-900 font-medium">
-                      5. Ghorib & Musykilat / Kaidah Tajwid Ummi
-                    </td>
-                    <td className="py-1 px-2 border-r border-slate-900 text-center font-bold font-mono">
-                      {ummiGhoribScore}
-                    </td>
-                    <td className="py-1 px-2 border-r border-slate-900 text-center font-semibold text-[11px]">
-                      {getGradeText(ummiGhoribScore)}
-                    </td>
-                    <td className="py-1 px-3 text-[11.5px] text-slate-800">
-                      {ummiGhoribNote}
+                    <td className="py-2 px-3 text-center font-bold font-mono text-slate-900">
+                      {ummiNilaiScore}
                     </td>
                   </tr>
                 </tbody>

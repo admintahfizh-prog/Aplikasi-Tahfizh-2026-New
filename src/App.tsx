@@ -190,6 +190,7 @@ export default function App() {
               records={records}
               students={students}
               teachers={teachers}
+              classes={classes}
               userRole={currentUser.role}
               onOpenDailyInput={() => handleOpenDailyInput()}
               onRefreshData={loadAllData}
@@ -203,6 +204,7 @@ export default function App() {
               ummiRecords={ummiRecords}
               students={students}
               teachers={teachers}
+              classes={classes}
               userRole={currentUser.role}
               onOpenDailyInput={() => handleOpenDailyInput()}
               onRefreshData={loadAllData}

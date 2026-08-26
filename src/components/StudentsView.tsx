@@ -102,6 +102,15 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
     alert(`Kata sandi akun santri/wali ${passwordModalStudent.name} berhasil diperbarui!`);
   };
 
+  // Helper for halaqah normalization (Akselerasi, Reguler, Khusus)
+  const normalizeHalaqah = (prog?: string): string => {
+    if (!prog) return 'Reguler';
+    const p = prog.toLowerCase();
+    if (p.includes('aksel') || p.includes('unggul')) return 'Akselerasi';
+    if (p.includes('khusus') || p.includes('takhassus')) return 'Khusus';
+    return 'Reguler';
+  };
+
   // Form State
   const [formData, setFormData] = useState<Partial<Student>>({
     nis: '',
@@ -114,7 +123,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
     parentName: '',
     parentPhone: '',
     parentEmail: '',
-    program: 'Tahfizh Unggulan',
+    program: 'Akselerasi',
     targetJuz: 4.0,
     currentUmmiJilid: 'Jilid 4',
     currentUmmiPage: 1,
@@ -142,7 +151,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
     
     const matchClass = !selectedClassFilter || s.classId === selectedClassFilter;
     const matchTeacher = !selectedTeacherFilter || s.teacherId === selectedTeacherFilter;
-    const matchProgram = !selectedProgramFilter || s.program === selectedProgramFilter;
+    const matchProgram = !selectedProgramFilter || normalizeHalaqah(s.program) === selectedProgramFilter;
 
     return matchSearch && matchClass && matchTeacher && matchProgram;
   });
@@ -160,7 +169,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
       parentName: '',
       parentPhone: '0812',
       parentEmail: '',
-      program: 'Tahfizh Unggulan',
+      program: 'Akselerasi',
       targetJuz: 4.0,
       currentUmmiJilid: 'Jilid 4',
       currentUmmiPage: 1,
@@ -361,17 +370,17 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
             </select>
           </div>
 
-          {/* Filter Program */}
+          {/* Filter Program / Halaqah */}
           <div>
             <select
               value={selectedProgramFilter}
               onChange={(e) => setSelectedProgramFilter(e.target.value)}
               className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
             >
-              <option value="">Semua Program Tahfizh</option>
-              <option value="Tahfizh Unggulan">Tahfizh Unggulan</option>
-              <option value="Reguler Tahfizh">Reguler Tahfizh</option>
-              <option value="Takhassus 30 Juz">Takhassus 30 Juz</option>
+              <option value="">Semua Pilihan Halaqah</option>
+              <option value="Akselerasi">Akselerasi</option>
+              <option value="Reguler">Reguler</option>
+              <option value="Khusus">Khusus</option>
             </select>
           </div>
 
@@ -417,9 +426,20 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-[10px] font-mono text-slate-400 font-bold">NIS: {std.nis}</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700">
-                      {cls?.name || '7A'}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                        normalizeHalaqah(std.program) === 'Akselerasi'
+                          ? 'bg-amber-50 text-amber-900 border-amber-300'
+                          : normalizeHalaqah(std.program) === 'Khusus'
+                          ? 'bg-purple-50 text-purple-900 border-purple-300'
+                          : 'bg-blue-50 text-blue-800 border-blue-200'
+                      }`}>
+                        {normalizeHalaqah(std.program)}
+                      </span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                        {cls?.name || '7A'}
+                      </span>
+                    </div>
                   </div>
                   <h3 
                     onClick={() => onOpenStudentDetail(std.id)}
@@ -641,15 +661,15 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Program Tahfizh</label>
+                  <label className="block font-bold text-slate-700 mb-1">Pilihan Halaqah Santri</label>
                   <select
                     value={formData.program}
                     onChange={(e) => setFormData({ ...formData, program: e.target.value as any })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-semibold focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
                   >
-                    <option value="Tahfizh Unggulan">Tahfizh Unggulan</option>
-                    <option value="Reguler Tahfizh">Reguler Tahfizh</option>
-                    <option value="Takhassus 30 Juz">Takhassus 30 Juz</option>
+                    <option value="Akselerasi">Akselerasi</option>
+                    <option value="Reguler">Reguler</option>
+                    <option value="Khusus">Khusus</option>
                   </select>
                 </div>
                 <div>

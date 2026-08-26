@@ -11,9 +11,11 @@ import {
   Sparkles,
   BookOpen,
   ChevronRight,
-  UserCheck
+  UserCheck,
+  ArrowUpDown,
+  GraduationCap
 } from 'lucide-react';
-import { UmmiRecord, Student, Teacher, Role } from '../types';
+import { UmmiRecord, Student, Teacher, ClassItem, Role } from '../types';
 import { UMMI_SYLLABUS, UMMI_JILIDS } from '../data/ummiData';
 import { storageService } from '../services/storageService';
 
@@ -21,6 +23,7 @@ interface UmmiViewProps {
   ummiRecords: UmmiRecord[];
   students: Student[];
   teachers: Teacher[];
+  classes?: ClassItem[];
   userRole: Role;
   onOpenDailyInput: () => void;
   onRefreshData: () => void;
@@ -31,6 +34,7 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
   ummiRecords,
   students,
   teachers,
+  classes = [],
   userRole,
   onOpenDailyInput,
   onRefreshData,
@@ -38,7 +42,9 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
 }) => {
   const [selectedJilidTab, setSelectedJilidTab] = useState<string>('Semua Jilid');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedClassFilter, setSelectedClassFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [sortBy, setSortBy] = useState<'class-asc' | 'class-desc' | 'date-desc' | 'date-asc' | 'name-asc' | 'jilid-asc' | 'score-desc'>('class-asc');
 
   // Calculate students count per jilid
   const studentDistribution = UMMI_JILIDS.map(j => ({
@@ -54,10 +60,48 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
       r.materialName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       r.notes.toLowerCase().includes(searchTerm.toLowerCase());
 
+    const matchClass = !selectedClassFilter || std?.classId === selectedClassFilter;
     const matchJilid = selectedJilidTab === 'Semua Jilid' || r.jilid === selectedJilidTab;
     const matchStatus = !statusFilter || r.status === statusFilter;
 
-    return matchSearch && matchJilid && matchStatus;
+    return matchSearch && matchClass && matchJilid && matchStatus;
+  });
+
+  // Sort records
+  const sortedRecords = [...filteredRecords].sort((a, b) => {
+    const stdA = students.find(s => s.id === a.studentId);
+    const stdB = students.find(s => s.id === b.studentId);
+    const clsA = classes.find(c => c.id === stdA?.classId);
+    const clsB = classes.find(c => c.id === stdB?.classId);
+
+    if (sortBy === 'class-asc') {
+      const clsCompare = (clsA?.name || '').localeCompare(clsB?.name || '');
+      if (clsCompare !== 0) return clsCompare;
+      const nameCompare = (stdA?.name || '').localeCompare(stdB?.name || '');
+      if (nameCompare !== 0) return nameCompare;
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    }
+    if (sortBy === 'class-desc') {
+      const clsCompare = (clsB?.name || '').localeCompare(clsA?.name || '');
+      if (clsCompare !== 0) return clsCompare;
+      return (stdA?.name || '').localeCompare(stdB?.name || '');
+    }
+    if (sortBy === 'date-desc') {
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    }
+    if (sortBy === 'date-asc') {
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    }
+    if (sortBy === 'name-asc') {
+      return (stdA?.name || '').localeCompare(stdB?.name || '');
+    }
+    if (sortBy === 'jilid-asc') {
+      return (a.jilid || '').localeCompare(b.jilid || '');
+    }
+    if (sortBy === 'score-desc') {
+      return b.score - a.score;
+    }
+    return 0;
   });
 
   return (
@@ -71,7 +115,7 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
             Pembelajaran & Evaluasi Metode Ummi
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Sistem berjenjang Jilid 1–6, Al-Qur'an Dewasa, Gharib Al-Qur'an, dan Teori Kaidah Tajwid Ummi Foundation
+            Sistem berjenjang Jilid 1–6, Al-Qur'an Dewasa, Gharib Al-Qur'an, dan Teori Kaidah Tajwid Ummi Foundation terorganisir per kelas
           </p>
         </div>
 
@@ -166,7 +210,7 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
             <h3 className="text-sm font-bold text-slate-800">
               Log Evaluasi & Ujian Kenaikan Jilid Ummi
             </h3>
-            <p className="text-xs text-slate-500">Catatan perkembangan jilid, halaman, dan status kelulusan</p>
+            <p className="text-xs text-slate-500">Catatan perkembangan jilid, halaman, dan status kelulusan diurutkan per kelas</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -180,6 +224,33 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
                 className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
               />
             </div>
+
+            {/* Filter Kelas */}
+            <select
+              value={selectedClassFilter}
+              onChange={(e) => setSelectedClassFilter(e.target.value)}
+              className="py-1.5 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+            >
+              <option value="">Semua Kelas</option>
+              {classes.map(c => (
+                <option key={c.id} value={c.id}>Kelas {c.name}</option>
+              ))}
+            </select>
+
+            {/* Sort Selector */}
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="py-1.5 px-3 bg-amber-50/70 border border-amber-200 rounded-lg text-xs font-bold text-amber-900 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+            >
+              <option value="class-asc">Sort: Berdasarkan Kelas (A → Z)</option>
+              <option value="class-desc">Sort: Berdasarkan Kelas (Z → A)</option>
+              <option value="date-desc">Sort: Tanggal Terbaru</option>
+              <option value="date-asc">Sort: Tanggal Terlama</option>
+              <option value="name-asc">Sort: Nama Santri (A → Z)</option>
+              <option value="jilid-asc">Sort: Urutan Jilid</option>
+              <option value="score-desc">Sort: Nilai Tertinggi</option>
+            </select>
 
             <select
               value={statusFilter}
@@ -199,25 +270,59 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-semibold">
-                <th className="py-3 px-3">Tanggal</th>
+                <th 
+                  onClick={() => setSortBy(sortBy === 'class-asc' ? 'class-desc' : 'class-asc')}
+                  className="py-3 px-3 cursor-pointer hover:bg-slate-100 transition select-none"
+                  title="Klik untuk mengurutkan berdasarkan Kelas"
+                >
+                  <div className="flex items-center gap-1.5 text-slate-900 font-bold">
+                    <GraduationCap className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>Kelas</span>
+                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                  </div>
+                </th>
                 <th className="py-3 px-3">Nama Santri</th>
+                <th 
+                  onClick={() => setSortBy(sortBy === 'date-desc' ? 'date-asc' : 'date-desc')}
+                  className="py-3 px-3 cursor-pointer hover:bg-slate-100 transition select-none"
+                  title="Klik untuk urutkan tanggal"
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Tanggal</span>
+                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                  </div>
+                </th>
                 <th className="py-3 px-3">Jilid</th>
                 <th className="py-3 px-3">Halaman</th>
                 <th className="py-3 px-3">Materi Pokok</th>
                 <th className="py-3 px-3">Status</th>
-                <th className="py-3 px-3">Nilai</th>
+                <th 
+                  onClick={() => setSortBy('score-desc')}
+                  className="py-3 px-3 cursor-pointer hover:bg-slate-100 transition select-none"
+                  title="Klik untuk urutkan nilai"
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Nilai</span>
+                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                  </div>
+                </th>
                 <th className="py-3 px-3">Guru Penguji</th>
                 <th className="py-3 px-3">Catatan Pembinaan</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredRecords.map((r) => {
+              {sortedRecords.map((r) => {
                 const std = students.find(s => s.id === r.studentId);
                 const teacher = teachers.find(t => t.id === r.teacherId);
+                const cls = std ? classes.find(c => c.id === std.classId) : null;
 
                 return (
                   <tr key={r.id} className="hover:bg-slate-50 transition">
-                    <td className="py-3 px-3 font-mono text-slate-500 whitespace-nowrap">{r.date}</td>
+                    <td className="py-3 px-3 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold text-xs bg-slate-100 text-slate-800 border border-slate-200">
+                        {cls?.name || '7A'}
+                      </span>
+                    </td>
                     <td className="py-3 px-3">
                       <div 
                         onClick={() => std && onOpenStudentDetail(std.id)}
@@ -228,9 +333,13 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
                           alt="" 
                           className="w-6 h-6 rounded-full object-cover border" 
                         />
-                        <span className="font-bold text-slate-800">{std?.name || 'Siswa'}</span>
+                        <div>
+                          <span className="font-bold text-slate-800 block">{std?.name || 'Siswa'}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">NIS: {std?.nis || '-'}</span>
+                        </div>
                       </div>
                     </td>
+                    <td className="py-3 px-3 font-mono text-slate-500 whitespace-nowrap">{r.date}</td>
                     <td className="py-3 px-3 font-bold text-slate-800">{r.jilid}</td>
                     <td className="py-3 px-3 font-semibold">Hal. {r.page}</td>
                     <td className="py-3 px-3 text-slate-800 font-medium">{r.materialName}</td>
@@ -256,7 +365,7 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
           </table>
         </div>
 
-        {filteredRecords.length === 0 && (
+        {sortedRecords.length === 0 && (
           <p className="text-center py-10 text-slate-400 text-xs">Belum ada catatan evaluasi Ummi yang cocok.</p>
         )}
       </div>

@@ -40,6 +40,8 @@ export interface ClassItem {
   studentCount?: number;
 }
 
+export type HalaqahType = 'Akselerasi' | 'Reguler' | 'Khusus';
+
 export interface Student {
   id: string;
   nis: string;
@@ -52,7 +54,7 @@ export interface Student {
   parentName: string;
   parentPhone: string;
   parentEmail?: string;
-  program: 'Reguler Tahfizh' | 'Tahfizh Unggulan' | 'Takhassus 30 Juz';
+  program: HalaqahType | 'Reguler Tahfizh' | 'Tahfizh Unggulan' | 'Takhassus 30 Juz' | string;
   targetJuz: number; // e.g. 4.0
   photo: string;
   entryYear: string;

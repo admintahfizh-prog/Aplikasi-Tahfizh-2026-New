@@ -76,6 +76,15 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
   const teacher = teachers.find(t => t.id === student.teacherId);
   const studentClass = classes.find(c => c.id === student.classId);
 
+  const normalizeHalaqah = (prog?: string): string => {
+    if (!prog) return 'Reguler';
+    const p = prog.toLowerCase();
+    if (p.includes('aksel') || p.includes('unggul')) return 'Akselerasi';
+    if (p.includes('khusus') || p.includes('takhassus')) return 'Khusus';
+    return 'Reguler';
+  };
+
+  const halaqahName = normalizeHalaqah(student.program);
   const studentRecords = records.filter(r => r.studentId === student.id);
   const studentUmmiRecords = ummiRecords.filter(r => r.studentId === student.id);
   const studentViolations = storageService.getViolationsByStudent(student.id);
@@ -160,8 +169,14 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
             />
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold px-2 py-0.5 rounded bg-[#D4AF37] text-slate-950">
-                  {student.program}
+                <span className={`text-xs font-bold px-2.5 py-0.5 rounded shadow-xs ${
+                  halaqahName === 'Akselerasi'
+                    ? 'bg-[#D4AF37] text-slate-950'
+                    : halaqahName === 'Khusus'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-blue-600 text-white'
+                }`}>
+                  Halaqah {halaqahName}
                 </span>
                 <span className="text-xs text-slate-300 font-mono">NIS: {student.nis}</span>
               </div>
