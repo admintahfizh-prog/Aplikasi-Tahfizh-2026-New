@@ -163,6 +163,38 @@ export function calculateAyahCount(start: number, end: number): number {
   return end - start + 1;
 }
 
+export function calculateMultiSurahAyahCount(
+  startSurahNumber: number,
+  startAyah: number,
+  endSurahNumber: number,
+  endAyah: number
+): number {
+  if (startSurahNumber > endSurahNumber) return 0;
+  if (startSurahNumber === endSurahNumber) {
+    return calculateAyahCount(startAyah, endAyah);
+  }
+
+  const startSurah = getSurahByNumber(startSurahNumber);
+  const endSurah = getSurahByNumber(endSurahNumber);
+  if (!startSurah || !endSurah) return 0;
+
+  // Ayahs in start surah
+  let total = Math.max(0, startSurah.totalAyahs - startAyah + 1);
+
+  // Ayahs in intermediate full surahs
+  for (let sNum = startSurahNumber + 1; sNum < endSurahNumber; sNum++) {
+    const s = getSurahByNumber(sNum);
+    if (s) {
+      total += s.totalAyahs;
+    }
+  }
+
+  // Ayahs in end surah
+  total += Math.max(0, endAyah);
+
+  return total;
+}
+
 export function validateAyahRange(surahNumber: number, start: number, end: number): { valid: boolean; error?: string } {
   const surah = getSurahByNumber(surahNumber);
   if (!surah) return { valid: false, error: 'Surat tidak ditemukan.' };
@@ -175,6 +207,64 @@ export function validateAyahRange(surahNumber: number, start: number, end: numbe
     };
   }
   return { valid: true };
+}
+
+export function validateMultiSurahRange(
+  startSurahNumber: number,
+  startAyah: number,
+  endSurahNumber: number,
+  endAyah: number
+): { valid: boolean; error?: string } {
+  const startSurah = getSurahByNumber(startSurahNumber);
+  const endSurah = getSurahByNumber(endSurahNumber);
+
+  if (!startSurah) return { valid: false, error: 'Surat awal tidak ditemukan.' };
+  if (!endSurah) return { valid: false, error: 'Surat akhir tidak ditemukan.' };
+
+  if (startAyah < 1) return { valid: false, error: 'Ayat mulai minimal adalah 1.' };
+  if (startAyah > startSurah.totalAyahs) {
+    return { 
+      valid: false, 
+      error: `Surat awal ${startSurah.name} hanya memiliki ${startSurah.totalAyahs} ayat (input ayat mulai: ${startAyah}).` 
+    };
+  }
+
+  if (endAyah < 1) return { valid: false, error: 'Ayat selesai minimal adalah 1.' };
+  if (endAyah > endSurah.totalAyahs) {
+    return { 
+      valid: false, 
+      error: `Surat akhir ${endSurah.name} hanya memiliki ${endSurah.totalAyahs} ayat (input ayat selesai: ${endAyah}).` 
+    };
+  }
+
+  if (startSurahNumber > endSurahNumber) {
+    return { 
+      valid: false, 
+      error: 'Nomor surat akhir tidak boleh lebih kecil dari surat awal (surat akhir mendahului surat awal).' 
+    };
+  }
+
+  if (startSurahNumber === endSurahNumber && endAyah < startAyah) {
+    return { 
+      valid: false, 
+      error: 'Ayat selesai tidak boleh lebih kecil dari ayat mulai pada surat yang sama.' 
+    };
+  }
+
+  return { valid: true };
+}
+
+export function formatHafalanRange(
+  startSurahName: string,
+  startAyah: number,
+  endSurahName?: string,
+  endAyah?: number
+): string {
+  const finalEndAyah = endAyah ?? startAyah;
+  if (!endSurahName || endSurahName === startSurahName) {
+    return `${startSurahName} (${startAyah}–${finalEndAyah})`;
+  }
+  return `${startSurahName}:${startAyah} – ${endSurahName}:${finalEndAyah}`;
 }
 
 export function calculateCategory(score: number): 'Sangat Baik' | 'Baik' | 'Cukup' | 'Perlu Bimbingan' {

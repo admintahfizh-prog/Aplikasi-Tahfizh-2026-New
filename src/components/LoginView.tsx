@@ -19,8 +19,8 @@ interface LoginViewProps {
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin21');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -170,7 +170,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
 
             {showAccountGuide && (
               <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl text-left text-[11px] space-y-2 animate-in fade-in">
-                <p className="font-bold text-slate-700">Daftar Akun Bawaan Terdaftar:</p>
+                <p className="font-bold text-slate-700">Daftar Contoh Akun Bawaan:</p>
                 <div className="grid grid-cols-1 gap-1.5 font-mono">
                   <div 
                     onClick={() => handleFillDemo('admin', 'admin21')}
@@ -180,22 +180,22 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
                     <span className="text-slate-500 font-sans text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">Pass: admin21</span>
                   </div>
                   <div 
-                    onClick={() => handleFillDemo('fauzan', 'fauzan21')}
+                    onClick={() => handleFillDemo('fauzan', 'guru21')}
                     className="p-1.5 bg-white rounded border border-slate-200 flex justify-between items-center cursor-pointer hover:border-[#D4AF37] transition"
                   >
                     <span><strong>Guru:</strong> fauzan</span>
-                    <span className="text-slate-500 font-sans text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">Pass: fauzan21</span>
+                    <span className="text-slate-500 font-sans text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">Pass: guru21</span>
                   </div>
                   <div 
-                    onClick={() => handleFillDemo('wali.rayhan', 'wali21')}
+                    onClick={() => handleFillDemo('2607001', 'santri21')}
                     className="p-1.5 bg-white rounded border border-slate-200 flex justify-between items-center cursor-pointer hover:border-[#D4AF37] transition"
                   >
-                    <span><strong>Wali:</strong> wali.rayhan</span>
-                    <span className="text-slate-500 font-sans text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">Pass: wali21</span>
+                    <span><strong>Siswa (NIS):</strong> 2607001</span>
+                    <span className="text-slate-500 font-sans text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">Pass: santri21</span>
                   </div>
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1 font-sans">
-                  * Klik salah satu baris di atas untuk otomatis mengisi form. Admin dapat mengubah kata sandi di menu Pengaturan.
+                <p className="text-[10px] text-slate-500 mt-1 font-sans">
+                  * Siswa/Wali dapat login menggunakan <strong>NIS</strong> (contoh: 2607001). Admin dapat membuat & mengubah password guru/siswa di menu Pengaturan.
                 </p>
               </div>
             )}

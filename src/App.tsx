@@ -12,6 +12,7 @@ import { ReportsView } from './components/ReportsView';
 import { ParentPortalView } from './components/ParentPortalView';
 import { TeachersClassesView } from './components/TeachersClassesView';
 import { MaterialsView } from './components/MaterialsView';
+import { ViolationsView } from './components/ViolationsView';
 import { SettingsView } from './components/SettingsView';
 import { DailyInputModal } from './components/DailyInputModal';
 import { LoginView } from './components/LoginView';
@@ -25,6 +26,7 @@ import {
   UmmiRecord, 
   TargetProgress, 
   LearningMaterial, 
+  TahfizhViolation,
   AppSettings, 
   UserProfile, 
   Role 
@@ -50,6 +52,7 @@ export default function App() {
   const [classes, setClasses] = useState<ClassItem[]>(() => storageService.getClasses());
   const [records, setRecords] = useState<MemorizationRecord[]>(() => storageService.getMemorizationRecords());
   const [ummiRecords, setUmmiRecords] = useState<UmmiRecord[]>(() => storageService.getUmmiRecords());
+  const [violations, setViolations] = useState<TahfizhViolation[]>(() => storageService.getViolations());
   const [targets, setTargets] = useState<TargetProgress[]>(() => storageService.getTargets());
   const [materials, setMaterials] = useState<LearningMaterial[]>(() => storageService.getMaterials());
   const [settings, setSettings] = useState<AppSettings>(() => storageService.getSettings());
@@ -61,6 +64,7 @@ export default function App() {
     setClasses(storageService.getClasses());
     setRecords(storageService.getMemorizationRecords());
     setUmmiRecords(storageService.getUmmiRecords());
+    setViolations(storageService.getViolations());
     setTargets(storageService.getTargets());
     setMaterials(storageService.getMaterials());
     setSettings(storageService.getSettings());
@@ -201,6 +205,19 @@ export default function App() {
               teachers={teachers}
               userRole={currentUser.role}
               onOpenDailyInput={() => handleOpenDailyInput()}
+              onRefreshData={loadAllData}
+              onOpenStudentDetail={handleOpenStudentDetail}
+            />
+          )}
+
+          {/* VIEW: PELANGGARAN TAHFIZH & KEDISIPLINAN */}
+          {(currentView === 'violations' || currentView === 'pelanggaran') && (
+            <ViolationsView
+              students={students}
+              teachers={teachers}
+              classes={classes}
+              violations={violations}
+              userRole={currentUser.role}
               onRefreshData={loadAllData}
               onOpenStudentDetail={handleOpenStudentDetail}
             />

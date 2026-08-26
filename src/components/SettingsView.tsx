@@ -15,9 +15,19 @@ import {
   Trash2,
   Edit2,
   Eye,
-  EyeOff
+  EyeOff,
+  Search,
+  Users,
+  GraduationCap,
+  UserCheck,
+  RefreshCw,
+  Copy,
+  Check,
+  Sparkles,
+  Share2,
+  Lock
 } from 'lucide-react';
-import { AppSettings, Role, User } from '../types';
+import { AppSettings, Role, User, Student, Teacher } from '../types';
 import { storageService } from '../services/storageService';
 
 interface SettingsViewProps {
@@ -33,10 +43,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const [formData, setFormData] = useState<AppSettings>({ ...settings });
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'users'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'users'>('users');
   
   // User Management state
   const [usersList, setUsersList] = useState<User[]>(() => storageService.getUsers());
+  const [allStudents, setAllStudents] = useState<Student[]>(() => storageService.getStudents());
+  const [allTeachers, setAllTeachers] = useState<Teacher[]>(() => storageService.getTeachers());
+  
+  const [userRoleFilter, setUserRoleFilter] = useState<'all' | 'guru' | 'wali' | 'admin'>('all');
+  const [userSearchTerm, setUserSearchTerm] = useState('');
+  
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [userForm, setUserForm] = useState<{
@@ -48,6 +64,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     role: Role;
     title: string;
     phone: string;
+    teacherId?: string;
+    studentId?: string;
   }>({
     id: '',
     name: '',
@@ -56,10 +74,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     email: '',
     role: 'guru',
     title: '',
-    phone: ''
+    phone: '',
+    teacherId: undefined,
+    studentId: undefined
   });
+  
   const [showPass, setShowPass] = useState(false);
+  const [visiblePasswords, setVisiblePasswords] = useState<{ [key: string]: boolean }>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [userMsg, setUserMsg] = useState<string | null>(null);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,16 +93,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     onRefreshData();
   };
 
+  const handleToggleVisiblePassword = (userId: string) => {
+    setVisiblePasswords(prev => ({
+      ...prev,
+      [userId]: !prev[userId]
+    }));
+  };
+
+  const handleCopyCredentials = (u: User) => {
+    const text = `*AKUN LOGIN TAHFIZH SMPI AL AZHAR 21*\nNama: ${u.name}\nRole: ${u.role === 'admin' ? 'Administrator' : u.role === 'guru' ? 'Guru Pengampu' : 'Siswa / Wali Santri'}\nUsername: ${u.username || u.email}\nKata Sandi: ${u.password || 'santri21'}\nLink Website: ${window.location.origin}`;
+    navigator.clipboard.writeText(text);
+    setCopiedId(u.id);
+    setTimeout(() => setCopiedId(null), 2500);
+  };
+
   const handleOpenAddUser = () => {
     setUserForm({
       id: `usr-${Date.now()}`,
       name: '',
       username: '',
-      password: '',
+      password: 'guru21',
       email: '',
       role: 'guru',
       title: '',
-      phone: ''
+      phone: '',
+      teacherId: undefined,
+      studentId: undefined
     });
     setEditingUser(null);
     setUserModalOpen(true);
@@ -90,15 +130,61 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       id: u.id,
       name: u.name,
       username: u.username || u.id,
-      password: u.password || '',
-      email: u.email,
+      password: u.password || (u.role === 'admin' ? 'admin21' : u.role === 'guru' ? 'guru21' : 'santri21'),
+      email: u.email || '',
       role: u.role,
       title: u.title || '',
-      phone: u.phone || ''
+      phone: u.phone || '',
+      teacherId: u.teacherId,
+      studentId: u.studentId
     });
     setEditingUser(u);
     setUserModalOpen(true);
     setUserMsg(null);
+  };
+
+  const handleSelectStudentForAccount = (studentId: string) => {
+    const st = allStudents.find(s => s.id === studentId);
+    if (!st) return;
+    setUserForm(prev => ({
+      ...prev,
+      name: `${st.name} (${st.nickname || 'Santri'})`,
+      username: st.nis,
+      password: prev.password || 'santri21',
+      email: st.parentEmail || `${st.nis}@santri.smpialazhar21.sch.id`,
+      role: 'wali',
+      title: `Wali Santri / Siswa (${st.parentName || st.name})`,
+      phone: st.parentPhone || '',
+      studentId: st.id,
+      teacherId: undefined
+    }));
+  };
+
+  const handleSelectTeacherForAccount = (teacherId: string) => {
+    const tch = allTeachers.find(t => t.id === teacherId);
+    if (!tch) return;
+    const cleanUsername = tch.email ? tch.email.split('@')[0].toLowerCase() : `guru.${tch.nip.slice(-4)}`;
+    setUserForm(prev => ({
+      ...prev,
+      name: tch.name,
+      username: cleanUsername,
+      password: prev.password || 'guru21',
+      email: tch.email || `${cleanUsername}@smpialazhar21.sch.id`,
+      role: 'guru',
+      title: `Guru Pengampu (${tch.specialization})`,
+      phone: tch.phone || '',
+      teacherId: tch.id,
+      studentId: undefined
+    }));
+  };
+
+  const handleGenerateRandomPass = (type: Role) => {
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    let newPass = '';
+    if (type === 'admin') newPass = `admin${randomSuffix}`;
+    else if (type === 'guru') newPass = `guru${randomSuffix}`;
+    else newPass = `santri${randomSuffix}`;
+    setUserForm(prev => ({ ...prev, password: newPass }));
   };
 
   const handleSaveUser = (e: React.FormEvent) => {
@@ -115,9 +201,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       password: userForm.password.trim(),
       email: userForm.email || `${userForm.username.toLowerCase()}@smpialazhar21.sch.id`,
       role: userForm.role,
-      avatar: editingUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      avatar: editingUser?.avatar || (
+        userForm.role === 'admin'
+          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
+          : userForm.role === 'guru'
+          ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'
+          : 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150&auto=format&fit=crop&q=80'
+      ),
       title: userForm.title,
-      phone: userForm.phone
+      phone: userForm.phone,
+      teacherId: userForm.teacherId,
+      studentId: userForm.studentId
     };
 
     storageService.saveUser(updated);
@@ -131,11 +225,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       alert('Akun Administrator Utama tidak boleh dihapus.');
       return;
     }
-    if (window.confirm(`Hapus akun pengguna "${name}"?`)) {
+    if (window.confirm(`Hapus akun pengguna "${name}"? Pengguna tidak akan dapat login lagi.`)) {
       storageService.deleteUser(id);
       setUsersList(storageService.getUsers());
       onRefreshData();
     }
+  };
+
+  const handleSyncAllAccounts = () => {
+    const result = storageService.syncAllAccounts();
+    setUsersList(storageService.getUsers());
+    setSyncNotice(`Berhasil menyinkronkan! ${result.totalCreated} akun baru dibuat. Total ${result.totalUsers} akun siap digunakan.`);
+    setTimeout(() => setSyncNotice(null), 4000);
+    onRefreshData();
   };
 
   const handleResetData = () => {
@@ -143,6 +245,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       storageService.resetToInitial();
       onRefreshData();
       setUsersList(storageService.getUsers());
+      setAllStudents(storageService.getStudents());
+      setAllTeachers(storageService.getTeachers());
       alert('Data berhasil direset ke pengaturan awal.');
     }
   };
@@ -167,41 +271,60 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     link.click();
   };
 
+  // Filtered Users List
+  const filteredUsers = usersList.filter(u => {
+    const matchRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+    const term = userSearchTerm.toLowerCase().trim();
+    const matchSearch = !term || 
+      u.name.toLowerCase().includes(term) ||
+      (u.username && u.username.toLowerCase().includes(term)) ||
+      (u.email && u.email.toLowerCase().includes(term)) ||
+      (u.phone && u.phone.includes(term)) ||
+      (u.title && u.title.toLowerCase().includes(term));
+    return matchRole && matchSearch;
+  });
+
+  const countAdmin = usersList.filter(u => u.role === 'admin').length;
+  const countGuru = usersList.filter(u => u.role === 'guru').length;
+  const countSiswa = usersList.filter(u => u.role === 'wali').length;
+
   return (
-    <div className="space-y-6 animate-in fade-in max-w-4xl pb-12">
+    <div className="space-y-6 animate-in fade-in max-w-5xl pb-16">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <Settings className="w-5 h-5 text-[#D4AF37]" />
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 flex items-center gap-2.5">
+            <div className="p-2 bg-slate-900 rounded-xl text-[#D4AF37]">
+              <Settings className="w-5 h-5" />
+            </div>
             Pengaturan Sistem & Manajemen Akun
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Konfigurasi profil sekolah, tahun ajaran aktif, KKM penilaian, dan akun login pengguna
+          <p className="text-xs text-slate-500 mt-1">
+            Konfigurasi profil sekolah, tahun ajaran aktif, KKM, serta manajemen username dan kata sandi Guru & Siswa
           </p>
         </div>
 
         {/* Tab Selector */}
-        <div className="flex items-center p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs">
-          <button
-            type="button"
-            onClick={() => setActiveTab('general')}
-            className={`px-3 py-1.5 rounded-md font-semibold transition cursor-pointer ${
-              activeTab === 'general' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Profil Sekolah & KKM
-          </button>
+        <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs">
           <button
             type="button"
             onClick={() => setActiveTab('users')}
-            className={`px-3 py-1.5 rounded-md font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'users' ? 'bg-[#1E293B] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <KeyRound className="w-3.5 h-3.5 text-[#D4AF37]" />
-            Akun Login & Password
+            Akun Login & Password ({usersList.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('general')}
+            className={`px-3.5 py-2 rounded-lg font-semibold transition cursor-pointer ${
+              activeTab === 'general' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Profil Sekolah & KKM
           </button>
         </div>
       </div>
@@ -213,7 +336,263 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
-      {/* TAB 1: GENERAL SETTINGS */}
+      {syncNotice && (
+        <div className="p-3.5 bg-sky-50 border border-sky-200 rounded-xl flex items-center gap-2 text-xs text-sky-800 font-semibold animate-in fade-in">
+          <Sparkles className="w-4 h-4 text-sky-600" />
+          {syncNotice}
+        </div>
+      )}
+
+      {/* TAB 1: USER ACCOUNTS & PASSWORD MANAGEMENT */}
+      {activeTab === 'users' && (
+        <div className="space-y-4">
+
+          {/* Stat Summary Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div 
+              onClick={() => setUserRoleFilter('all')}
+              className={`p-3.5 rounded-xl border cursor-pointer transition ${
+                userRoleFilter === 'all' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-800 border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center justify-between text-xs font-semibold">
+                <span>Total Akun</span>
+                <Users className={`w-4 h-4 ${userRoleFilter === 'all' ? 'text-[#D4AF37]' : 'text-slate-400'}`} />
+              </div>
+              <p className="text-2xl font-extrabold mt-1">{usersList.length}</p>
+              <p className={`text-[10px] mt-0.5 ${userRoleFilter === 'all' ? 'text-slate-300' : 'text-slate-400'}`}>Semua hak akses</p>
+            </div>
+
+            <div 
+              onClick={() => setUserRoleFilter('guru')}
+              className={`p-3.5 rounded-xl border cursor-pointer transition ${
+                userRoleFilter === 'guru' ? 'bg-emerald-800 text-white border-emerald-800' : 'bg-white text-slate-800 border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center justify-between text-xs font-semibold">
+                <span>Guru Tahfizh</span>
+                <GraduationCap className={`w-4 h-4 ${userRoleFilter === 'guru' ? 'text-emerald-300' : 'text-emerald-600'}`} />
+              </div>
+              <p className="text-2xl font-extrabold mt-1">{countGuru}</p>
+              <p className={`text-[10px] mt-0.5 ${userRoleFilter === 'guru' ? 'text-emerald-200' : 'text-slate-400'}`}>Pengampu Halaqah</p>
+            </div>
+
+            <div 
+              onClick={() => setUserRoleFilter('wali')}
+              className={`p-3.5 rounded-xl border cursor-pointer transition ${
+                userRoleFilter === 'wali' ? 'bg-amber-800 text-white border-amber-800' : 'bg-white text-slate-800 border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center justify-between text-xs font-semibold">
+                <span>Siswa / Wali</span>
+                <UserCheck className={`w-4 h-4 ${userRoleFilter === 'wali' ? 'text-amber-300' : 'text-amber-600'}`} />
+              </div>
+              <p className="text-2xl font-extrabold mt-1">{countSiswa}</p>
+              <p className={`text-[10px] mt-0.5 ${userRoleFilter === 'wali' ? 'text-amber-200' : 'text-slate-400'}`}>Portal Pantauan</p>
+            </div>
+
+            <div 
+              onClick={() => setUserRoleFilter('admin')}
+              className={`p-3.5 rounded-xl border cursor-pointer transition ${
+                userRoleFilter === 'admin' ? 'bg-purple-900 text-white border-purple-900' : 'bg-white text-slate-800 border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center justify-between text-xs font-semibold">
+                <span>Administrator</span>
+                <ShieldCheck className={`w-4 h-4 ${userRoleFilter === 'admin' ? 'text-purple-300' : 'text-purple-600'}`} />
+              </div>
+              <p className="text-2xl font-extrabold mt-1">{countAdmin}</p>
+              <p className={`text-[10px] mt-0.5 ${userRoleFilter === 'admin' ? 'text-purple-200' : 'text-slate-400'}`}>Akses Penuh</p>
+            </div>
+          </div>
+
+          {/* Action and Search Toolbar */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+            
+            {/* Search Input */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={userSearchTerm}
+                onChange={(e) => setUserSearchTerm(e.target.value)}
+                placeholder="Cari berdasarkan nama, NIS, username, atau email..."
+                className="w-full pl-9 pr-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSyncAllAccounts}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition cursor-pointer border border-slate-200"
+                title="Buat akun otomatis untuk semua guru dan siswa yang belum terdaftar"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-slate-600" />
+                <span>Otomatis Buat Akun Guru & Siswa</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenAddUser}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                <Plus className="w-4 h-4 text-[#D4AF37]" />
+                <span>Tambah Akun Baru</span>
+              </button>
+            </div>
+          </div>
+
+          {/* User Table */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
+                  <tr>
+                    <th className="p-3.5">Nama & Profil Pengguna</th>
+                    <th className="p-3.5">Hak Akses (Role)</th>
+                    <th className="p-3.5">Username Login</th>
+                    <th className="p-3.5">Kata Sandi (Password)</th>
+                    <th className="p-3.5 text-center">Salin Akun</th>
+                    <th className="p-3.5 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-400">
+                        Tidak ada akun yang sesuai dengan pencarian atau filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredUsers.map((u) => {
+                      const isPassVisible = !!visiblePasswords[u.id];
+                      const plainPass = u.password || (
+                        u.role === 'admin' ? 'admin21' : u.role === 'guru' ? 'guru21' : 'santri21'
+                      );
+
+                      return (
+                        <tr key={u.id} className="hover:bg-slate-50/70 transition">
+                          
+                          {/* Name & Avatar */}
+                          <td className="p-3.5">
+                            <div className="flex items-center gap-2.5">
+                              <img
+                                src={u.avatar}
+                                alt={u.name}
+                                className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
+                              />
+                              <div>
+                                <p className="font-bold text-slate-900">{u.name}</p>
+                                <p className="text-[11px] text-slate-400 line-clamp-1">
+                                  {u.title || u.email}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Role Badge */}
+                          <td className="p-3.5">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                              u.role === 'admin'
+                                ? 'bg-slate-900 text-[#D4AF37]'
+                                : u.role === 'guru'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-amber-50 text-amber-800 border border-amber-200'
+                            }`}>
+                              {u.role === 'admin' ? 'Admin' : u.role === 'guru' ? 'Guru' : 'Siswa / Wali'}
+                            </span>
+                          </td>
+
+                          {/* Username */}
+                          <td className="p-3.5">
+                            <span className="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-1 rounded border border-slate-200">
+                              {u.username || u.email.split('@')[0]}
+                            </span>
+                          </td>
+
+                          {/* Password */}
+                          <td className="p-3.5">
+                            <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
+                              <span className="font-mono font-bold text-slate-700 select-all">
+                                {isPassVisible ? plainPass : '••••••••'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleVisiblePassword(u.id)}
+                                className="text-slate-400 hover:text-slate-700 transition cursor-pointer p-0.5"
+                                title={isPassVisible ? "Sembunyikan Kata Sandi" : "Lihat Kata Sandi"}
+                              >
+                                {isPassVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </td>
+
+                          {/* Copy Credential for WA */}
+                          <td className="p-3.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleCopyCredentials(u)}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${
+                                copiedId === u.id
+                                  ? 'bg-emerald-600 text-white'
+                                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                              }`}
+                              title="Salin username & kata sandi untuk dikirim ke WhatsApp guru atau orang tua"
+                            >
+                              {copiedId === u.id ? (
+                                <>
+                                  <Check className="w-3 h-3" />
+                                  <span>Tersalin!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3 text-slate-500" />
+                                  <span>Salin</span>
+                                </>
+                              )}
+                            </button>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="p-3.5 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditUser(u)}
+                                className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition cursor-pointer flex items-center gap-1 border border-slate-200"
+                                title="Ubah Password & Edit Akun"
+                              >
+                                <Edit2 className="w-3.5 h-3.5 text-slate-700" />
+                                <span className="text-[11px] font-bold">Ubah Sandi</span>
+                              </button>
+                              {u.id !== 'usr-admin' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteUser(u.id, u.name)}
+                                  className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition cursor-pointer border border-transparent hover:border-red-200"
+                                  title="Hapus Akun"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* TAB 2: GENERAL SETTINGS */}
       {activeTab === 'general' && (
         <form onSubmit={handleSave} className="space-y-6">
           {/* School Profile */}
@@ -335,137 +714,108 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </form>
       )}
 
-      {/* TAB 2: USER ACCOUNTS & PASSWORD MANAGEMENT */}
-      {activeTab === 'users' && (
-        <div className="space-y-4">
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                <KeyRound className="w-4 h-4 text-[#D4AF37]" />
-                Daftar Akun & Kata Sandi Login Pengguna
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Kelola username, kata sandi, dan hak akses untuk seluruh Admin, Guru Tahfizh, dan Wali Santri.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleOpenAddUser}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer"
-            >
-              <Plus className="w-4 h-4 text-[#D4AF37]" />
-              Tambah Akun Baru
-            </button>
-          </div>
-
-          {/* User Table */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
-                  <tr>
-                    <th className="p-3.5">Nama & Profil</th>
-                    <th className="p-3.5">Role</th>
-                    <th className="p-3.5">Username Login</th>
-                    <th className="p-3.5">Kata Sandi</th>
-                    <th className="p-3.5 text-right">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {usersList.map((u) => (
-                    <tr key={u.id} className="hover:bg-slate-50/70 transition">
-                      <td className="p-3.5">
-                        <div className="flex items-center gap-2.5">
-                          <img
-                            src={u.avatar}
-                            alt={u.name}
-                            className="w-8 h-8 rounded-full object-cover border border-slate-200"
-                          />
-                          <div>
-                            <p className="font-bold text-slate-800">{u.name}</p>
-                            <p className="text-[11px] text-slate-400">{u.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-3.5">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                          u.role === 'admin'
-                            ? 'bg-[#1E293B] text-[#D4AF37]'
-                            : u.role === 'guru'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-amber-50 text-amber-800 border border-amber-200'
-                        }`}>
-                          {u.role}
-                        </span>
-                      </td>
-                      <td className="p-3.5 font-mono font-bold text-slate-800">
-                        {u.username || u.email.split('@')[0]}
-                      </td>
-                      <td className="p-3.5 font-mono text-slate-600">
-                        <span className="bg-slate-100 px-2 py-1 rounded text-[11px] border border-slate-200 font-semibold">
-                          {u.password || 'admin21'}
-                        </span>
-                      </td>
-                      <td className="p-3.5 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditUser(u)}
-                            className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-                            title="Edit Username & Sandi"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          {u.id !== 'usr-admin' && (
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteUser(u.id, u.name)}
-                              className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition cursor-pointer"
-                              title="Hapus Akun"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: ADD / EDIT USER */}
+      {/* MODAL: ADD / EDIT USER & PASSWORD */}
       {userModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-slate-200 overflow-hidden animate-in zoom-in-95">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 overflow-hidden animate-in zoom-in-95">
             <div className="bg-[#1E293B] p-4 text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <KeyRound className="w-4 h-4 text-[#D4AF37]" />
                 <h3 className="font-bold text-sm">
-                  {editingUser ? 'Edit Akun & Reset Sandi' : 'Tambah Akun Pengguna Baru'}
+                  {editingUser ? `Ubah Password & Akun: ${editingUser.name}` : 'Tambah Akun Pengguna Baru'}
                 </h3>
               </div>
               <button
                 onClick={() => setUserModalOpen(false)}
-                className="text-slate-400 hover:text-white text-xs cursor-pointer"
+                className="text-slate-400 hover:text-white text-xs cursor-pointer p-1"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSaveUser} className="p-5 space-y-3.5 text-xs">
+            <form onSubmit={handleSaveUser} className="p-5 space-y-4 text-xs">
               {userMsg && (
                 <div className="p-2.5 bg-red-50 text-red-700 border border-red-200 rounded-lg font-medium">
                   {userMsg}
                 </div>
               )}
 
+              {/* Role Selector */}
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Nama Lengkap</label>
+                <label className="block font-bold text-slate-700 mb-1">Peran / Hak Akses</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setUserForm({ ...userForm, role: 'guru' })}
+                    className={`py-2 px-3 rounded-lg font-bold border text-center transition cursor-pointer ${
+                      userForm.role === 'guru'
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-800 ring-1 ring-emerald-500'
+                        : 'bg-slate-50 border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    Guru Tahfizh
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUserForm({ ...userForm, role: 'wali' })}
+                    className={`py-2 px-3 rounded-lg font-bold border text-center transition cursor-pointer ${
+                      userForm.role === 'wali'
+                        ? 'bg-amber-50 border-amber-500 text-amber-800 ring-1 ring-amber-500'
+                        : 'bg-slate-50 border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    Siswa / Wali
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUserForm({ ...userForm, role: 'admin' })}
+                    className={`py-2 px-3 rounded-lg font-bold border text-center transition cursor-pointer ${
+                      userForm.role === 'admin'
+                        ? 'bg-slate-900 border-slate-900 text-[#D4AF37]'
+                        : 'bg-slate-50 border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    Admin
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Link from Existing Teacher/Student if creating */}
+              {!editingUser && userForm.role === 'guru' && (
+                <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-200 space-y-1.5">
+                  <label className="block font-bold text-emerald-900">Pilih dari Daftar Guru yang Ada (Opsional):</label>
+                  <select
+                    onChange={(e) => handleSelectTeacherForAccount(e.target.value)}
+                    className="w-full p-2 bg-white border border-emerald-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>-- Pilih guru untuk mengisi otomatis data --</option>
+                    {allTeachers.map(t => (
+                      <option key={t.id} value={t.id}>{t.name} (NIP: {t.nip})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {!editingUser && userForm.role === 'wali' && (
+                <div className="p-3 bg-amber-50/50 rounded-xl border border-amber-200 space-y-1.5">
+                  <label className="block font-bold text-amber-900">Pilih dari Daftar Santri yang Ada (Opsional):</label>
+                  <select
+                    onChange={(e) => handleSelectStudentForAccount(e.target.value)}
+                    className="w-full p-2 bg-white border border-amber-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>-- Pilih santri untuk mengisi NIS dan data login --</option>
+                    {allStudents.map(s => (
+                      <option key={s.id} value={s.id}>{s.name} (NIS: {s.nis})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Name */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Nama Lengkap Pengguna</label>
                 <input
                   type="text"
                   required
@@ -476,18 +826,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 />
               </div>
 
+              {/* Username & Phone */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Role Akses</label>
-                  <select
-                    value={userForm.role}
-                    onChange={(e) => setUserForm({ ...userForm, role: e.target.value as Role })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
-                  >
-                    <option value="admin">Administrator</option>
-                    <option value="guru">Guru Tahfizh</option>
-                    <option value="wali">Wali Santri</option>
-                  </select>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    {userForm.role === 'wali' ? 'Username / NIS Login' : 'Username Login'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={userForm.username}
+                    onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
+                    placeholder={userForm.role === 'wali' ? 'Contoh: 2607001' : 'Contoh: ridwan'}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none font-mono"
+                  />
                 </div>
 
                 <div>
@@ -502,54 +854,76 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Username Login</label>
-                <input
-                  type="text"
-                  required
-                  value={userForm.username}
-                  onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
-                  placeholder="Contoh: ridwan / guru.ridwan"
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
-                />
-              </div>
+              {/* Password Section */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold text-slate-800">
+                    Kata Sandi (Password) Akun
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateRandomPass(userForm.role)}
+                    className="text-[11px] font-bold text-slate-600 hover:text-slate-900 underline decoration-slate-300 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3 text-[#D4AF37]" />
+                    Buat Sandi Acak
+                  </button>
+                </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Kata Sandi Baru</label>
                 <div className="relative">
                   <input
                     type={showPass ? 'text' : 'password'}
                     required
                     value={userForm.password}
                     onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
-                    placeholder="Masukkan kata sandi"
-                    className="w-full pl-3 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                    placeholder="Masukkan kata sandi baru"
+                    className="w-full pl-3 pr-10 py-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold text-slate-900 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPass(!showPass)}
-                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+                    title={showPass ? "Sembunyikan kata sandi" : "Lihat kata sandi"}
                   >
                     {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                <p className="text-[10px] text-slate-500">
+                  * Sandi ini digunakan oleh pengguna untuk login ke sistem Tahfizh SMPIA 21.
+                </p>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              {/* Modal Buttons */}
+              <div className="pt-2 flex items-center justify-between">
                 <button
                   type="button"
-                  onClick={() => setUserModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold cursor-pointer"
+                  onClick={() => {
+                    const text = `*AKUN LOGIN TAHFIZH SMPI AL AZHAR 21*\nNama: ${userForm.name}\nUsername / NIS: ${userForm.username}\nKata Sandi: ${userForm.password}\nLink Website: ${window.location.origin}`;
+                    navigator.clipboard.writeText(text);
+                    alert('Format pesan WhatsApp login berhasil disalin!');
+                  }}
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold flex items-center gap-1.5 cursor-pointer text-xs"
                 >
-                  Batal
+                  <Share2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Salin format WA</span>
                 </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-[#1E293B] hover:bg-slate-800 text-white rounded-lg font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
-                >
-                  <Save className="w-3.5 h-3.5 text-[#D4AF37]" />
-                  Simpan Akun
-                </button>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setUserModalOpen(false)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-[#1E293B] hover:bg-slate-800 text-white rounded-lg font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Save className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    Simpan Akun
+                  </button>
+                </div>
               </div>
             </form>
           </div>

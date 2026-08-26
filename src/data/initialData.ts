@@ -7,6 +7,7 @@ import {
   UmmiRecord, 
   TargetProgress, 
   NotificationItem, 
+  TahfizhViolation,
   AppSettings 
 } from '../types';
 
@@ -762,5 +763,61 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     type: 'success',
     read: false,
     studentId: 'std-8'
+  }
+];
+
+export const INITIAL_VIOLATIONS: TahfizhViolation[] = [
+  {
+    id: 'vio-1',
+    studentId: 'std-2', // Siti Khadijah
+    teacherId: 't-2',
+    date: '2026-08-24',
+    type: 'tidak_bawa_mutabaah',
+    typeName: 'Tidak Membawa Buku Mutaba\'ah',
+    point: 5,
+    details: 'Buku mutaba\'ah yaumiyah tertinggal di rumah, setoran dicatat sementara di kartu pembinaan darurat.',
+    actionTaken: 'Teguran lisan & menyalin paraf setoran hari ini ke buku mutaba\'ah esok pagi.',
+    status: 'Tercatat',
+    notes: 'Sudah diingatkan untuk menyiapkan buku di tas malam hari.'
+  },
+  {
+    id: 'vio-2',
+    studentId: 'std-5', // Umar Al-Faruq
+    teacherId: 't-1',
+    date: '2026-08-23',
+    type: 'kurang_baris_ayat',
+    typeName: 'Kurang Baris/Ayat',
+    point: 5,
+    details: 'Target harian 10 baris (Surat Al-Insan), ananda hanya mampu menyetorkan 4 baris karena belum lancar.',
+    actionTaken: 'Muroja\'ah mandiri 15 menit dan melengkapi 6 baris sisa pada sesi istirahat pertama.',
+    status: 'Dalam Pembinaan',
+    notes: 'Perlu bimbingan ketukan tartil dan mad thabi\'i.'
+  },
+  {
+    id: 'vio-3',
+    studentId: 'std-6', // Fatimah Az-Zahra
+    teacherId: 't-2',
+    date: '2026-08-22',
+    type: 'tidak_bawa_ummi',
+    typeName: 'Tidak Membawa Buku Ummi',
+    point: 5,
+    details: 'Buku Metode Ummi Jilid 4 tertinggal di asrama/loker.',
+    actionTaken: 'Menggunakan mushaf/buku peraga bersama halaqah & komitmen membawa besok.',
+    status: 'Selesai / Dituntaskan',
+    resolvedDate: '2026-08-23',
+    notes: 'Ananda sudah membawa buku di pertemuan berikutnya.'
+  },
+  {
+    id: 'vio-4',
+    studentId: 'std-7', // Salman Al-Farisi
+    teacherId: 't-3',
+    date: '2026-08-21',
+    type: 'tidak_setoran',
+    typeName: 'Tidak Setoran',
+    point: 10,
+    details: 'Tidak menyetorkan hafalan maupun muroja\'ah pada sesi halaqah pagi tanpa alasan syar\'i.',
+    actionTaken: 'Pembinaan khusus bersama Ustadz Pengampu, muraja\'ah dobel 1 lembar Surat Al-Waqi\'ah.',
+    status: 'Dalam Pembinaan',
+    notes: 'Orang tua diinformasikan via WhatsApp pembinaan halaqah.'
   }
 ];

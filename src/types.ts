@@ -98,6 +98,8 @@ export interface MemorizationRecord {
   surahName: string;
   startAyah: number;
   endAyah: number;
+  endSurahNumber?: number;
+  endSurahName?: string;
   totalAyah: number;
   type: SetoranType;
   scores: ScoreBreakdown;
@@ -164,6 +166,28 @@ export interface NotificationItem {
   type: 'success' | 'warning' | 'info';
   read: boolean;
   studentId?: string;
+}
+
+export type ViolationType = 
+  | 'tidak_setoran' 
+  | 'kurang_baris_ayat' 
+  | 'tidak_bawa_mutabaah' 
+  | 'tidak_bawa_ummi' 
+  | 'lainnya';
+
+export interface TahfizhViolation {
+  id: string;
+  studentId: string;
+  teacherId: string;
+  date: string; // YYYY-MM-DD
+  type: ViolationType;
+  typeName: string; // e.g. 'Tidak Setoran', 'Kurang Baris/Ayat', 'Tidak Membawa Buku Mutaba\'ah', 'Tidak Membawa Buku Ummi'
+  point: number; // Nilai poin pelanggaran
+  details?: string; // Penjelasan spesifik
+  actionTaken: string; // Tindakan pembinaan
+  status: 'Tercatat' | 'Dalam Pembinaan' | 'Selesai / Dituntaskan';
+  resolvedDate?: string;
+  notes?: string;
 }
 
 export interface AppSettings {

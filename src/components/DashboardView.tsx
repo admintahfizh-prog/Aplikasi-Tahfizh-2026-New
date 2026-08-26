@@ -476,7 +476,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-800 truncate">{std?.name}</p>
                         <p className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
-                          <span className="font-semibold text-slate-700">{rec.surahName} : {rec.startAyah}–{rec.endAyah}</span>
+                          <span className="font-semibold text-slate-700">
+                            {rec.endSurahName && rec.endSurahName !== rec.surahName
+                              ? `${rec.surahName} (${rec.startAyah}) – ${rec.endSurahName} (${rec.endAyah})`
+                              : `${rec.surahName} : ${rec.startAyah}–${rec.endAyah}`
+                            }
+                          </span>
                           <span>•</span>
                           <span className="px-1.5 py-0.2 bg-slate-100 rounded text-[10px]">{rec.type}</span>
                         </p>

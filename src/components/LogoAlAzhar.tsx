@@ -21,37 +21,39 @@ export const LogoAlAzhar: React.FC<LogoProps> = ({
         xmlns="http://www.w3.org/2000/svg"
       >
         <defs>
-          {/* Circular path for top text */}
-          {/* Radius ~ 215, centered at 250,250 */}
+          {/* Top text curved path */}
           <path
             id="topTextPath"
-            d="M 55,250 A 195,195 0 1,1 445,250"
+            d="M 90.26,361.85 A 195,195 0 1,1 409.74,361.85"
             fill="none"
           />
-          {/* Circular path for bottom text */}
+          {/* Bottom text curved path */}
           <path
             id="bottomTextPath"
-            d="M 445,250 A 195,195 0 0,1 55,250"
+            d="M 409.74,361.85 A 206,206 0 0,1 90.26,361.85"
             fill="none"
           />
+          <clipPath id="innerCircleClip">
+            <circle cx="250" cy="250" r="166" />
+          </clipPath>
         </defs>
 
-        {/* Outer White Background Ring */}
+        {/* Outer White Background Ring & Outermost Black Border */}
         <circle cx="250" cy="250" r="242" fill="#FFFFFF" stroke="#000000" strokeWidth="12" />
 
         {/* Inner Border Ring */}
         <circle cx="250" cy="250" r="172" fill="none" stroke="#000000" strokeWidth="10" />
 
         {/* Inner Sky Blue Circle */}
-        <circle cx="250" cy="250" r="167" fill="#0088D2" />
+        <circle cx="250" cy="250" r="166" fill="#0082C8" />
 
-        {/* Text Around Circle - Top: SEKOLAH MENENGAH PERTAMA ISLAM */}
+        {/* Top Arc Text: SEKOLAH MENENGAH PERTAMA ISLAM */}
         <text
           fill="#000000"
-          fontFamily="'Arial Black', 'Montserrat', 'Impact', sans-serif"
+          fontFamily="'Arial Black', 'Montserrat', 'Trebuchet MS', sans-serif"
           fontWeight="900"
-          fontSize="30.5"
-          letterSpacing="2.8"
+          fontSize="28"
+          letterSpacing="2.6"
         >
           <textPath
             href="#topTextPath"
@@ -62,13 +64,13 @@ export const LogoAlAzhar: React.FC<LogoProps> = ({
           </textPath>
         </text>
 
-        {/* Text Around Circle - Bottom: AL AZHAR 21 */}
+        {/* Bottom Arc Text: AL AZHAR 21 */}
         <text
           fill="#000000"
-          fontFamily="'Arial Black', 'Montserrat', 'Impact', sans-serif"
+          fontFamily="'Arial Black', 'Montserrat', 'Trebuchet MS', sans-serif"
           fontWeight="900"
-          fontSize="40"
-          letterSpacing="4"
+          fontSize="38"
+          letterSpacing="4.2"
         >
           <textPath
             href="#bottomTextPath"
@@ -79,17 +81,12 @@ export const LogoAlAzhar: React.FC<LogoProps> = ({
           </textPath>
         </text>
 
-        {/* --- MOSQUE ARTWORK (WHITE WITH BLACK OUTLINES) --- */}
+        {/* --- MOSQUE & MINARET GRAPHICS --- */}
         <g id="mosque-graphics">
-          {/* Clip to inner circle */}
-          <clipPath id="innerCircleClip">
-            <circle cx="250" cy="250" r="167" />
-          </clipPath>
-
           <g clipPath="url(#innerCircleClip)">
             {/* Mosque Base / Ground Wall */}
             <path
-              d="M 83,417 L 417,417 L 417,340 L 365,340 L 365,370 L 260,370 L 260,358 L 244,358 L 244,372 L 180,372 L 180,372 L 138,372 L 138,417 Z"
+              d="M 80,420 L 420,420 L 420,344 L 388,344 C 388,344 388,370 365,370 L 260,370 L 260,358 L 244,358 L 244,374 L 180,374 L 138,374 L 138,420 Z"
               fill="#FFFFFF"
               stroke="#000000"
               strokeWidth="7"
@@ -99,9 +96,9 @@ export const LogoAlAzhar: React.FC<LogoProps> = ({
             {/* Left Minaret Tower Body */}
             <rect
               x="138"
-              y="188"
+              y="186"
               width="43"
-              height="184"
+              height="188"
               fill="#FFFFFF"
               stroke="#000000"
               strokeWidth="7"
@@ -109,35 +106,37 @@ export const LogoAlAzhar: React.FC<LogoProps> = ({
 
             {/* Minaret Balcony Upper Ring */}
             <rect
-              x="135"
-              y="173"
-              width="49"
+              x="134"
+              y="171"
+              width="51"
               height="16"
-              fill="#FFFFFF"
-              stroke="#000000"
-              strokeWidth="7"
-            />
-
-            {/* Minaret 4 Windows (Horizontal stripe cutouts) */}
-            <rect x="142" y="176" width="6.5" height="10" fill="#0088D2" stroke="#000000" strokeWidth="2.5" />
-            <rect x="151.5" y="176" width="6.5" height="10" fill="#0088D2" stroke="#000000" strokeWidth="2.5" />
-            <rect x="161" y="176" width="6.5" height="10" fill="#0088D2" stroke="#000000" strokeWidth="2.5" />
-            <rect x="170.5" y="176" width="6.5" height="10" fill="#0088D2" stroke="#000000" strokeWidth="2.5" />
-
-            {/* Minaret Dome Top */}
-            <path
-              d="M 139,173 C 139,145 159.5,125 159.5,125 C 159.5,125 180,145 180,173 Z"
               fill="#FFFFFF"
               stroke="#000000"
               strokeWidth="7"
               strokeLinejoin="round"
             />
-            {/* Minaret Finial Pin */}
-            <line x1="159.5" y1="125" x2="159.5" y2="116" stroke="#000000" strokeWidth="5" strokeLinecap="round" />
 
-            {/* Minaret Lower Base L-cut */}
+            {/* Minaret 4 Windows */}
+            <rect x="140" y="174.5" width="6.5" height="9.5" fill="#0082C8" stroke="#000000" strokeWidth="2.4" />
+            <rect x="149.5" y="174.5" width="6.5" height="9.5" fill="#0082C8" stroke="#000000" strokeWidth="2.4" />
+            <rect x="159" y="174.5" width="6.5" height="9.5" fill="#0082C8" stroke="#000000" strokeWidth="2.4" />
+            <rect x="168.5" y="174.5" width="6.5" height="9.5" fill="#0082C8" stroke="#000000" strokeWidth="2.4" />
+
+            {/* Minaret Dome Top */}
             <path
-              d="M 180,358 L 260,358 L 260,372 L 180,372 Z"
+              d="M 138,171 C 138,142 159.5,122 159.5,122 C 159.5,122 181,142 181,171 Z"
+              fill="#FFFFFF"
+              stroke="#000000"
+              strokeWidth="7"
+              strokeLinejoin="round"
+            />
+            
+            {/* Minaret Finial Pin */}
+            <line x1="159.5" y1="122" x2="159.5" y2="112" stroke="#000000" strokeWidth="5" strokeLinecap="round" />
+
+            {/* Minaret Lower Base L-cuts */}
+            <path
+              d="M 181,358 L 260,358 L 260,374 L 181,374 Z"
               fill="#FFFFFF"
               stroke="#000000"
               strokeWidth="7"
@@ -149,20 +148,20 @@ export const LogoAlAzhar: React.FC<LogoProps> = ({
               strokeWidth="7"
             />
 
-            {/* Main Central/Right Dome */}
+            {/* Main Central Dome */}
             <path
-              d="M 244,342 C 244,228 314,204 314,204 C 314,204 384,228 384,342 Z"
+              d="M 244,342 C 244,228 313,202 313,202 C 313,202 386,228 386,342 Z"
               fill="#FFFFFF"
               stroke="#000000"
               strokeWidth="7"
               strokeLinejoin="round"
             />
 
-            {/* Crescent Moon & Star Finial on Main Dome */}
-            <g transform="translate(314, 182)">
+            {/* Crescent Moon & 5-Pointed Star Finial on Main Dome */}
+            <g transform="translate(313, 180)">
               {/* Crescent Moon */}
               <path
-                d="M 2,-18 C -14,-18 -26,-6 -26,10 C -26,26 -14,38 2,38 C -7,32 -13,22 -13,10 C -13,-2 -7,-12 2,-18 Z"
+                d="M 3,-18 C -14,-18 -26,-6 -26,10 C -26,26 -14,38 3,38 C -6,32 -13,22 -13,10 C -13,-2 -6,-12 3,-18 Z"
                 fill="#FFFFFF"
                 stroke="#000000"
                 strokeWidth="5"
@@ -171,7 +170,7 @@ export const LogoAlAzhar: React.FC<LogoProps> = ({
               {/* 5-point Star inside Crescent */}
               <path
                 d="M 6,3 L 8.5,-4 L 14.5,-4 L 9.5,-8 L 11.5,-15 L 6,-11 L 0.5,-15 L 2.5,-8 L -2.5,-4 L 3.5,-4 Z"
-                transform="translate(4, 8) scale(1.1)"
+                transform="translate(4, 8) scale(1.15)"
                 fill="#FFFFFF"
                 stroke="#000000"
                 strokeWidth="4"

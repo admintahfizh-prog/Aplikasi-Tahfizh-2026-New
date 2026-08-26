@@ -259,8 +259,22 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
                     </td>
                     <td className="py-3 px-3.5 font-bold text-slate-800">Juz {r.juz}</td>
                     <td className="py-3 px-3.5">
-                      <span className="font-bold text-slate-900">{r.surahName}</span>
-                      <span className="text-slate-500 ml-1 font-mono">({r.startAyah}–{r.endAyah})</span>
+                      {r.endSurahName && r.endSurahName !== r.surahName ? (
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-900 text-xs">
+                            {r.surahName} <span className="font-mono font-normal text-slate-500 text-[11px]">(Ayat {r.startAyah})</span>
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-semibold">s.d.</span>
+                          <span className="font-bold text-slate-900 text-xs">
+                            {r.endSurahName} <span className="font-mono font-normal text-slate-500 text-[11px]">(Ayat {r.endAyah})</span>
+                          </span>
+                        </div>
+                      ) : (
+                        <div>
+                          <span className="font-bold text-slate-900">{r.surahName}</span>
+                          <span className="text-slate-500 ml-1 font-mono">({r.startAyah}–{r.endAyah})</span>
+                        </div>
+                      )}
                     </td>
                     <td className="py-3 px-3.5 font-semibold text-slate-800">{r.totalAyah} Ayat</td>
                     <td className="py-3 px-3.5">

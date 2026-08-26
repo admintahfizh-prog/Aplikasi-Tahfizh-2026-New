@@ -12,7 +12,8 @@ import {
   BarChart3, 
   Settings, 
   School,
-  HeartHandshake
+  HeartHandshake,
+  ShieldAlert
 } from 'lucide-react';
 import { Role } from '../types';
 
@@ -45,6 +46,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'parent-portal', label: 'Dashboard Ananda', icon: HeartHandshake },
         { id: 'hafalan', label: 'Riwayat Hafalan', icon: BookOpen },
         { id: 'ummi', label: 'Perkembangan Ummi', icon: BookMarked },
+        { id: 'violations', label: 'Catatan Kedisiplinan', icon: ShieldAlert },
         { id: 'reports', label: 'Raport Tahfizh', icon: BarChart3 },
       ];
     }
@@ -55,6 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       { id: 'teachers', label: 'Guru & Kelas', icon: Users },
       { id: 'hafalan', label: 'Hafalan Al-Qur\'an', icon: BookOpen },
       { id: 'ummi', label: 'Pembelajaran Ummi', icon: BookMarked },
+      { id: 'violations', label: 'Pelanggaran Tahfizh', icon: ShieldAlert },
       { id: 'materials', label: 'Materi & Kurikulum', icon: FileText },
       { id: 'scores', label: 'Penilaian & Nilai', icon: Star },
       { id: 'targets', label: 'Target Hafalan', icon: Target },

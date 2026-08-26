@@ -7,6 +7,7 @@ import {
   LearningMaterial, 
   TargetProgress, 
   NotificationItem, 
+  TahfizhViolation,
   AppSettings, 
   User 
 } from '../types';
@@ -19,7 +20,8 @@ import {
   INITIAL_TARGETS, 
   INITIAL_TEACHERS, 
   INITIAL_UMMI_RECORDS, 
-  INITIAL_USERS 
+  INITIAL_USERS,
+  INITIAL_VIOLATIONS 
 } from '../data/initialData';
 import { INITIAL_MATERIALS } from '../data/ummiData';
 import { calculateCategory } from '../data/quranData';
@@ -35,7 +37,8 @@ const STORAGE_KEYS = {
   MATERIALS: 'tahfizh_smpia21_materials',
   TARGETS: 'tahfizh_smpia21_targets',
   NOTIFICATIONS: 'tahfizh_smpia21_notifications',
-  CURRENT_USER: 'tahfizh_smpia21_current_user'
+  CURRENT_USER: 'tahfizh_smpia21_current_user',
+  VIOLATIONS: 'tahfizh_smpia21_violations'
 };
 
 function getItem<T>(key: string, defaultVal: T): T {
@@ -57,6 +60,13 @@ function setItem<T>(key: string, val: T): void {
   }
 }
 
+function rEndSurah(r: MemorizationRecord): string {
+  if (r.endSurahName && r.endSurahName !== r.surahName) {
+    return `${r.surahName}:${r.startAyah} - ${r.endSurahName}:${r.endAyah}`;
+  }
+  return `${r.surahName}: ${r.startAyah}-${r.endAyah}`;
+}
+
 export const storageService = {
   // Reset all data to default
   resetToDefaults(): void {
@@ -71,6 +81,7 @@ export const storageService = {
     setItem(STORAGE_KEYS.TARGETS, INITIAL_TARGETS);
     setItem(STORAGE_KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
     setItem(STORAGE_KEYS.CURRENT_USER, INITIAL_USERS[0]);
+    setItem(STORAGE_KEYS.VIOLATIONS, INITIAL_VIOLATIONS);
   },
 
   resetToInitial(): void {
@@ -87,7 +98,7 @@ export const storageService = {
 
   // Current User / Auth
   getCurrentUser(): User | null {
-    return getItem<User | null>(STORAGE_KEYS.CURRENT_USER, INITIAL_USERS[0]);
+    return getItem<User | null>(STORAGE_KEYS.CURRENT_USER, null);
   },
   setCurrentUser(user: User | null): void {
     if (user === null) {
@@ -101,11 +112,10 @@ export const storageService = {
     }
   },
   getUsers(): User[] {
-    const users = getItem<User[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
-    // Ensure all initial users exist or merge
+    let users = getItem<User[]>(STORAGE_KEYS.USERS, []);
     if (!users || users.length === 0) {
-      setItem(STORAGE_KEYS.USERS, INITIAL_USERS);
-      return INITIAL_USERS;
+      users = [...INITIAL_USERS];
+      setItem(STORAGE_KEYS.USERS, users);
     }
     return users;
   },
@@ -123,6 +133,76 @@ export const storageService = {
     const list = this.getUsers().filter(u => u.id !== id);
     setItem(STORAGE_KEYS.USERS, list);
   },
+  getUserByTeacherId(teacherId: string): User | undefined {
+    return this.getUsers().find(u => u.teacherId === teacherId);
+  },
+  getUserByStudentId(studentId: string): User | undefined {
+    return this.getUsers().find(u => u.studentId === studentId);
+  },
+  updateUserPassword(userId: string, newPassword: string): boolean {
+    const list = this.getUsers();
+    const user = list.find(u => u.id === userId);
+    if (!user) return false;
+    user.password = newPassword.trim();
+    setItem(STORAGE_KEYS.USERS, list);
+    return true;
+  },
+  syncAllAccounts(): { totalCreated: number; totalUsers: number } {
+    const users = this.getUsers();
+    const teachers = this.getTeachers();
+    const students = this.getStudents();
+    let createdCount = 0;
+
+    // Ensure all Teachers have accounts
+    teachers.forEach(t => {
+      const existing = users.find(u => u.teacherId === t.id || (u.email && u.email.toLowerCase() === t.email.toLowerCase()));
+      if (!existing) {
+        const username = t.email ? t.email.split('@')[0].toLowerCase() : `guru.${t.nip.slice(-4)}`;
+        users.push({
+          id: `usr-t-${t.id}`,
+          name: t.name,
+          username,
+          password: 'guru21',
+          email: t.email || `${username}@smpialazhar21.sch.id`,
+          role: 'guru',
+          avatar: t.photo || (t.gender === 'P'
+            ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80'
+            : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'),
+          title: `Guru Pengampu Tahfizh (${t.specialization})`,
+          phone: t.phone,
+          teacherId: t.id
+        });
+        createdCount++;
+      } else if (!existing.teacherId) {
+        existing.teacherId = t.id;
+      }
+    });
+
+    // Ensure all Students have accounts
+    students.forEach(s => {
+      const existing = users.find(u => u.studentId === s.id || (u.username && u.username.toLowerCase() === s.nis.toLowerCase()));
+      if (!existing) {
+        users.push({
+          id: `usr-s-${s.id}`,
+          name: `${s.name} (${s.nickname || 'Santri'})`,
+          username: s.nis,
+          password: 'santri21',
+          email: s.parentEmail || `${s.nis}@santri.smpialazhar21.sch.id`,
+          role: 'wali',
+          avatar: s.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+          title: `Wali Santri / Siswa (${s.parentName || s.name})`,
+          phone: s.parentPhone,
+          studentId: s.id
+        });
+        createdCount++;
+      } else if (!existing.studentId) {
+        existing.studentId = s.id;
+      }
+    });
+
+    setItem(STORAGE_KEYS.USERS, users);
+    return { totalCreated: createdCount, totalUsers: users.length };
+  },
   authenticate(identifier: string, passwordInput: string): { success: boolean; user?: User; message?: string } {
     const cleanId = (identifier || '').trim().toLowerCase();
     const cleanPass = (passwordInput || '').trim();
@@ -132,23 +212,45 @@ export const storageService = {
     }
 
     const users = this.getUsers();
-    const user = users.find(u => 
+    let user = users.find(u => 
       (u.username && u.username.toLowerCase() === cleanId) ||
       (u.email && u.email.toLowerCase() === cleanId) ||
       (u.phone && u.phone.replace(/[\s-]/g, '') === cleanId.replace(/[\s-]/g, '')) ||
       (u.id && u.id.toLowerCase() === cleanId)
     );
 
+    // If not found in users list, check if identifier is student NIS or teacher NIP
+    if (!user) {
+      const students = this.getStudents();
+      const studentMatch = students.find(s => s.nis.toLowerCase() === cleanId || s.nisn === cleanId);
+      if (studentMatch) {
+        // Auto-create user for this student
+        user = {
+          id: `usr-s-${studentMatch.id}`,
+          name: `${studentMatch.name} (${studentMatch.nickname || 'Santri'})`,
+          username: studentMatch.nis,
+          password: 'santri21',
+          email: studentMatch.parentEmail || `${studentMatch.nis}@santri.smpialazhar21.sch.id`,
+          role: 'wali',
+          avatar: studentMatch.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+          title: `Wali Santri (${studentMatch.parentName || studentMatch.name})`,
+          phone: studentMatch.parentPhone,
+          studentId: studentMatch.id
+        };
+        this.saveUser(user);
+      }
+    }
+
     if (!user) {
       return { 
         success: false, 
-        message: 'Akun dengan username / email tersebut tidak ditemukan dalam sistem.' 
+        message: 'Akun dengan username / NIS / email tersebut tidak ditemukan dalam sistem.' 
       };
     }
 
     // Default fallback passwords for demo accounts if password not set
     const expectedPass = user.password || (
-      user.role === 'admin' ? 'admin21' : user.role === 'guru' ? 'guru21' : 'wali21'
+      user.role === 'admin' ? 'admin21' : user.role === 'guru' ? 'guru21' : 'santri21'
     );
 
     // Accept exact password or admin master override or fallback
@@ -163,7 +265,7 @@ export const storageService = {
 
     return { 
       success: false, 
-      message: 'Kata sandi tidak sesuai. Silakan hubungi Admin untuk reset kata sandi.' 
+      message: 'Kata sandi tidak sesuai. Silakan periksa kembali atau hubungi Admin untuk reset kata sandi.' 
     };
   },
 
@@ -365,12 +467,14 @@ export const storageService = {
       // Juz rough calculation (1 juz ~ 200 ayahs average)
       const approxJuz = Number(Math.min(30, (totalAyahs / 200)).toFixed(1));
 
+      const lastSurahText = rEndSurah(record);
+
       const updatedStudent: Student = {
         ...student,
         totalAyahHafal: totalAyahs,
         totalSurahHafal: Math.max(student.totalSurahHafal, uniqueSurahs),
         totalJuzHafal: Math.max(student.totalJuzHafal, approxJuz),
-        lastHafalan: `${record.surahName}: ${record.startAyah}-${record.endAyah}`,
+        lastHafalan: lastSurahText,
         lastHafalanDate: record.date,
         avgScore: avgScore
       };
@@ -383,7 +487,7 @@ export const storageService = {
       this.addNotification({
         id: 'notif-' + Date.now(),
         title: `Setoran ${record.type}: ${student.name}`,
-        message: `Ananda ${student.nickname || student.name} berhasil menyetorkan Surat ${record.surahName} ayat ${record.startAyah}–${record.endAyah} dengan nilai ${record.finalScore} (${record.category}).`,
+        message: `Ananda ${student.nickname || student.name} berhasil menyetorkan ${lastSurahText} dengan nilai ${record.finalScore} (${record.category}).`,
         date: new Date().toISOString().replace('T', ' ').slice(0, 16),
         type: record.finalScore >= 80 ? 'success' : 'warning',
         read: false,
@@ -545,7 +649,7 @@ export const storageService = {
     const students = this.getStudents();
     const teachers = this.getTeachers();
 
-    const headers = ['Tanggal', 'NIS', 'Nama Siswa', 'Juz', 'Surat', 'Ayat Mulai', 'Ayat Selesai', 'Jumlah Ayat', 'Jenis Setoran', 'Kelancaran', 'Tajwid', 'Makhraj', 'Fashahah', 'Adab', 'Hafalan', 'Nilai Akhir', 'Predikat', 'Guru Penguji', 'Catatan'];
+    const headers = ['Tanggal', 'NIS', 'Nama Siswa', 'Juz', 'Surat Awal', 'Ayat Mulai', 'Surat Akhir', 'Ayat Selesai', 'Jumlah Ayat', 'Jenis Setoran', 'Kelancaran', 'Tajwid', 'Makhraj', 'Fashahah', 'Adab', 'Hafalan', 'Nilai Akhir', 'Predikat', 'Guru Penguji', 'Catatan'];
     const rows = records.map(r => {
       const std = students.find(s => s.id === r.studentId);
       const tch = teachers.find(t => t.id === r.teacherId)?.name || '-';
@@ -556,6 +660,7 @@ export const storageService = {
         r.juz,
         `"${r.surahName}"`,
         r.startAyah,
+        `"${r.endSurahName || r.surahName}"`,
         r.endAyah,
         r.totalAyah,
         `"${r.type}"`,
@@ -569,6 +674,73 @@ export const storageService = {
         `"${r.category}"`,
         `"${tch}"`,
         `"${(r.notes || '').replace(/"/g, '""')}"`
+      ].join(',');
+    });
+
+    return [headers.join(','), ...rows].join('\n');
+  },
+
+  // ==========================================
+  // PELANGGARAN TAHFIZH & KEDISIPLINAN
+  // ==========================================
+  getViolations(): TahfizhViolation[] {
+    let violations = getItem<TahfizhViolation[]>(STORAGE_KEYS.VIOLATIONS, []);
+    if (!violations || violations.length === 0) {
+      violations = [...INITIAL_VIOLATIONS];
+      setItem(STORAGE_KEYS.VIOLATIONS, violations);
+    }
+    return violations;
+  },
+
+  getViolationsByStudent(studentId: string): TahfizhViolation[] {
+    return this.getViolations().filter(v => v.studentId === studentId);
+  },
+
+  addViolation(violation: Omit<TahfizhViolation, 'id'> | TahfizhViolation): TahfizhViolation {
+    const violations = this.getViolations();
+    const newViolation: TahfizhViolation = {
+      ...violation,
+      id: 'id' in violation && violation.id ? violation.id : `vio-${Date.now()}`
+    };
+    violations.unshift(newViolation);
+    setItem(STORAGE_KEYS.VIOLATIONS, violations);
+    return newViolation;
+  },
+
+  updateViolation(violation: TahfizhViolation): void {
+    const violations = this.getViolations();
+    const idx = violations.findIndex(v => v.id === violation.id);
+    if (idx >= 0) {
+      violations[idx] = violation;
+      setItem(STORAGE_KEYS.VIOLATIONS, violations);
+    }
+  },
+
+  deleteViolation(id: string): void {
+    const violations = this.getViolations().filter(v => v.id !== id);
+    setItem(STORAGE_KEYS.VIOLATIONS, violations);
+  },
+
+  exportViolationsToCSV(): string {
+    const violations = this.getViolations();
+    const students = this.getStudents();
+    const teachers = this.getTeachers();
+
+    const headers = ['Tanggal', 'NIS', 'Nama Siswa', 'Jenis Pelanggaran', 'Poin', 'Detail/Kronologi', 'Tindakan Pembinaan', 'Status', 'Guru Pencatat', 'Catatan'];
+    const rows = violations.map(v => {
+      const std = students.find(s => s.id === v.studentId);
+      const tch = teachers.find(t => t.id === v.teacherId)?.name || '-';
+      return [
+        `"${v.date}"`,
+        `"${std?.nis || '-'}"`,
+        `"${std?.name || '-'}"`,
+        `"${v.typeName}"`,
+        v.point,
+        `"${(v.details || '').replace(/"/g, '""')}"`,
+        `"${(v.actionTaken || '').replace(/"/g, '""')}"`,
+        `"${v.status}"`,
+        `"${tch}"`,
+        `"${(v.notes || '').replace(/"/g, '""')}"`
       ].join(',');
     });
 

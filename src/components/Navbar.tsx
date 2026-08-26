@@ -80,8 +80,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="flex items-center space-x-3 cursor-pointer group" 
             onClick={() => setActiveView && setActiveView(currentUser.role === 'wali' ? 'parent-portal' : 'dashboard')}
           >
-            <div className="p-0.5 bg-white rounded-full border border-slate-200 shadow-xs group-hover:scale-105 transition">
-              <LogoAlAzhar size={36} />
+            <div className="p-1 bg-white rounded-full border border-slate-200 shadow-xs group-hover:scale-105 transition flex items-center justify-center">
+              <LogoAlAzhar size={44} />
             </div>
             <div>
               <div className="flex items-center gap-2">

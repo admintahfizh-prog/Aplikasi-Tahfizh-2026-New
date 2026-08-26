@@ -11,7 +11,8 @@ import {
   Award,
   ChevronRight,
   ShieldAlert,
-  Flame
+  Flame,
+  ArrowRightLeft
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -25,7 +26,15 @@ import {
   ScoreCategory,
   UmmiStatus
 } from '../types';
-import { SURAH_LIST, calculateAyahCount, validateAyahRange, calculateCategory } from '../data/quranData';
+import { 
+  SURAH_LIST, 
+  calculateAyahCount, 
+  calculateMultiSurahAyahCount,
+  validateAyahRange, 
+  validateMultiSurahRange,
+  formatHafalanRange,
+  calculateCategory 
+} from '../data/quranData';
 import { UMMI_JILIDS } from '../data/ummiData';
 
 interface DailyInputModalProps {
@@ -65,8 +74,9 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
   const [selectedStudentId, setSelectedStudentId] = useState<string>(effectiveInitialStudentId || students[0]?.id || '');
   const [recordDate, setRecordDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
-  // Quran Form State
-  const [selectedSurahNumber, setSelectedSurahNumber] = useState<number>(78); // Default An-Naba
+  // Quran Form State: Surat Awal & Surat Akhir
+  const [selectedStartSurahNumber, setSelectedStartSurahNumber] = useState<number>(78); // Default An-Naba
+  const [selectedEndSurahNumber, setSelectedEndSurahNumber] = useState<number>(78); // Default An-Naba
   const [startAyah, setStartAyah] = useState<number>(1);
   const [endAyah, setEndAyah] = useState<number>(10);
   const [setoranType, setSetoranType] = useState<SetoranType>('Hafalan Baru');
@@ -115,7 +125,10 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
 
   if (!isOpen) return null;
 
-  const currentSurah = SURAH_LIST.find(s => s.number === selectedSurahNumber) || SURAH_LIST[77];
+  const startSurah = SURAH_LIST.find(s => s.number === selectedStartSurahNumber) || SURAH_LIST[77];
+  const endSurah = SURAH_LIST.find(s => s.number === selectedEndSurahNumber) || startSurah;
+  const isMultiSurah = selectedStartSurahNumber !== selectedEndSurahNumber;
+
   const selectedStudent = students.find(s => s.id === selectedStudentId) || students[0];
   const selectedClass = classes.find(c => c.id === selectedClassId) || classes[0];
   const filteredStudents = students.filter(s => !selectedClassId || s.classId === selectedClassId);
@@ -134,7 +147,57 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
 
   const finalQuranScore = calculateFinalQuranScore();
   const scoreCategory: ScoreCategory = calculateCategory(finalQuranScore);
-  const totalAyahCalculated = calculateAyahCount(startAyah, endAyah);
+  const totalAyahCalculated = calculateMultiSurahAyahCount(
+    selectedStartSurahNumber, 
+    startAyah, 
+    selectedEndSurahNumber, 
+    endAyah
+  );
+
+  const handleStartSurahChange = (num: number) => {
+    setSelectedStartSurahNumber(num);
+    const surah = SURAH_LIST.find(s => s.number === num);
+    if (surah) {
+      setStartAyah(1);
+      // Auto adjust end surah if it was on same surah or prior
+      if (selectedEndSurahNumber === selectedStartSurahNumber || selectedEndSurahNumber < num) {
+        setSelectedEndSurahNumber(num);
+        setEndAyah(Math.min(surah.totalAyahs, 10));
+      }
+    }
+  };
+
+  const handleEndSurahChange = (num: number) => {
+    setSelectedEndSurahNumber(num);
+    const surah = SURAH_LIST.find(s => s.number === num);
+    if (surah) {
+      if (num === selectedStartSurahNumber) {
+        setEndAyah(Math.min(surah.totalAyahs, Math.max(startAyah, endAyah)));
+      } else {
+        setEndAyah(surah.totalAyahs);
+      }
+    }
+  };
+
+  const handleSetSameSurah = () => {
+    setSelectedEndSurahNumber(selectedStartSurahNumber);
+    setEndAyah(Math.min(startSurah.totalAyahs, 10));
+  };
+
+  const handleSetFullSurah = () => {
+    setSelectedEndSurahNumber(selectedStartSurahNumber);
+    setStartAyah(1);
+    setEndAyah(startSurah.totalAyahs);
+  };
+
+  const handleSetNextSurah = () => {
+    const nextNum = Math.min(114, selectedStartSurahNumber + 1);
+    setSelectedEndSurahNumber(nextNum);
+    const nxt = SURAH_LIST.find(s => s.number === nextNum);
+    if (nxt) {
+      setEndAyah(nxt.totalAyahs);
+    }
+  };
 
   const handleScorePreset = (val: number) => {
     setScores({
@@ -165,9 +228,14 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
     }
 
     if (activeTab === 'quran') {
-      const validation = validateAyahRange(selectedSurahNumber, startAyah, endAyah);
+      const validation = validateMultiSurahRange(
+        selectedStartSurahNumber, 
+        startAyah, 
+        selectedEndSurahNumber, 
+        endAyah
+      );
       if (!validation.valid) {
-        setValidationError(validation.error || 'Rentang ayat tidak valid.');
+        setValidationError(validation.error || 'Rentang surat dan ayat tidak valid.');
         return;
       }
       if (totalAyahCalculated <= 0) {
@@ -199,10 +267,12 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
         studentId: selectedStudent.id,
         teacherId: teacherId,
         date: recordDate,
-        juz: currentSurah.juzNumber,
-        surahNumber: currentSurah.number,
-        surahName: currentSurah.name,
+        juz: startSurah.juzNumber,
+        surahNumber: startSurah.number,
+        surahName: startSurah.name,
         startAyah: Number(startAyah),
+        endSurahNumber: endSurah.number,
+        endSurahName: endSurah.name,
         endAyah: Number(endAyah),
         totalAyah: totalAyahCalculated,
         type: setoranType,
@@ -446,93 +516,189 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                 </div>
               </div>
 
-              {/* Surah & Ayah Selection Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                {/* Surah dropdown */}
-                <div className="sm:col-span-1">
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Surat Al-Qur'an ({SURAH_LIST.length} Surat)
-                  </label>
-                  <select
-                    value={selectedSurahNumber}
-                    onChange={(e) => {
-                      const num = Number(e.target.value);
-                      setSelectedSurahNumber(num);
-                      const surah = SURAH_LIST.find(s => s.number === num);
-                      if (surah) {
-                        setStartAyah(1);
-                        setEndAyah(Math.min(surah.totalAyahs, 10));
-                      }
-                    }}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
-                  >
-                    {SURAH_LIST.map((s) => (
-                      <option key={s.number} value={s.number}>
-                        {s.number}. {s.name} ({s.arabicName}) - {s.totalAyahs} ayat [Juz {s.juzNumber}]
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Start Ayah */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold text-slate-700">Ayat Mulai</label>
+              {/* Surah Awal & Surah Akhir Selection Container */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3.5">
+                
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <BookOpen className="w-4 h-4 text-[#D4AF37]" />
+                    Pilihan Rentang Surat & Ayat Setoran
+                  </span>
+                  
+                  {/* Quick Preset Buttons */}
+                  <div className="flex items-center gap-1.5 text-[11px]">
                     <button
                       type="button"
-                      onClick={() => setStartAyah(1)}
-                      className="text-[10px] text-blue-600 hover:underline font-semibold"
+                      onClick={handleSetSameSurah}
+                      className={`px-2 py-0.5 rounded font-semibold transition cursor-pointer border ${
+                        !isMultiSurah 
+                          ? 'bg-amber-100 text-amber-900 border-amber-300' 
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                      title="Setoran dalam satu surat yang sama"
                     >
-                      Mulai 1
+                      Surat Sama
                     </button>
-                  </div>
-                  <input
-                    type="number"
-                    min={1}
-                    max={currentSurah.totalAyahs}
-                    value={startAyah}
-                    onChange={(e) => setStartAyah(Math.max(1, Number(e.target.value)))}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-900"
-                  />
-                </div>
-
-                {/* End Ayah */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold text-slate-700">Ayat Selesai</label>
                     <button
                       type="button"
-                      onClick={() => setEndAyah(currentSurah.totalAyahs)}
-                      className="text-[10px] text-[#8C7015] hover:underline font-semibold"
+                      onClick={handleSetFullSurah}
+                      className="px-2 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-700 font-semibold border border-slate-200 transition cursor-pointer"
+                      title="Setor 1 surat penuh dari ayat pertama sampai akhir"
                     >
-                      Penuh ({currentSurah.totalAyahs})
+                      1 Surat Penuh
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSetNextSurah}
+                      className="px-2 py-0.5 rounded bg-white hover:bg-slate-100 text-blue-700 font-semibold border border-slate-200 transition cursor-pointer flex items-center gap-1"
+                      title="Lanjut ke surat berikutnya (Setoran lintas surat)"
+                    >
+                      <ArrowRight className="w-3 h-3" />
+                      +1 Surat Lanjut
                     </button>
                   </div>
-                  <input
-                    type="number"
-                    min={1}
-                    max={currentSurah.totalAyahs}
-                    value={endAyah}
-                    onChange={(e) => setEndAyah(Math.min(currentSurah.totalAyahs, Number(e.target.value)))}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-900"
-                  />
                 </div>
-              </div>
 
-              {/* Real-time Calculation Badge */}
-              <div className="flex items-center justify-between p-3 rounded-xl bg-[#D4AF37]/10 border border-[#D4AF37]/30 text-xs">
-                <div className="flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-[#8C7015]" />
-                  <span className="font-bold text-slate-800">
-                    {currentSurah.name} ({currentSurah.arabicName}) • Ayat {startAyah} – {endAyah}
-                  </span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  
+                  {/* CARD 1: SURAT & AYAT AWAL */}
+                  <div className="bg-white p-3.5 rounded-lg border border-slate-200 space-y-2.5 shadow-2xs">
+                    <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+                      <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        Surat & Ayat Awal (Mulai)
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        Juz {startSurah.juzNumber}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          Surat Awal ({startSurah.totalAyahs} ayat)
+                        </label>
+                        <select
+                          value={selectedStartSurahNumber}
+                          onChange={(e) => handleStartSurahChange(Number(e.target.value))}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                        >
+                          {SURAH_LIST.map((s) => (
+                            <option key={`start-${s.number}`} value={s.number}>
+                              {s.number}. {s.name} ({s.arabicName}) - Juz {s.juzNumber}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-semibold text-slate-700">Ayat Mulai</label>
+                          <button
+                            type="button"
+                            onClick={() => setStartAyah(1)}
+                            className="text-[10px] text-emerald-700 hover:underline font-semibold"
+                          >
+                            Ayat 1
+                          </button>
+                        </div>
+                        <input
+                          type="number"
+                          min={1}
+                          max={startSurah.totalAyahs}
+                          value={startAyah}
+                          onChange={(e) => setStartAyah(Math.max(1, Number(e.target.value)))}
+                          className="w-full bg-slate-50 focus:bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-900"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* CARD 2: SURAT & AYAT AKHIR */}
+                  <div className={`p-3.5 rounded-lg border space-y-2.5 shadow-2xs transition ${
+                    isMultiSurah ? 'bg-amber-50/40 border-amber-300' : 'bg-white border-slate-200'
+                  }`}>
+                    <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+                      <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wider flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                        Surat & Ayat Akhir (Selesai)
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        Juz {endSurah.juzNumber}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          Surat Akhir ({endSurah.totalAyahs} ayat)
+                        </label>
+                        <select
+                          value={selectedEndSurahNumber}
+                          onChange={(e) => handleEndSurahChange(Number(e.target.value))}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                        >
+                          {SURAH_LIST.map((s) => (
+                            <option key={`end-${s.number}`} value={s.number}>
+                              {s.number}. {s.name} ({s.arabicName}) - Juz {s.juzNumber}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-semibold text-slate-700">Ayat Selesai</label>
+                          <button
+                            type="button"
+                            onClick={() => setEndAyah(endSurah.totalAyahs)}
+                            className="text-[10px] text-[#8C7015] hover:underline font-semibold"
+                          >
+                            Penuh ({endSurah.totalAyahs})
+                          </button>
+                        </div>
+                        <input
+                          type="number"
+                          min={1}
+                          max={endSurah.totalAyahs}
+                          value={endAyah}
+                          onChange={(e) => setEndAyah(Math.min(endSurah.totalAyahs, Number(e.target.value)))}
+                          className="w-full bg-slate-50 focus:bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-900"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-600 font-medium">Juz {currentSurah.juzNumber}</span>
-                  <span className="px-2.5 py-0.5 bg-[#D4AF37] text-slate-900 rounded-full font-bold text-xs shadow-xs">
-                    Total: {totalAyahCalculated} Ayat
-                  </span>
+
+                {/* Real-time Calculation Badge */}
+                <div className="flex flex-wrap items-center justify-between p-3 rounded-lg bg-[#D4AF37]/15 border border-[#D4AF37]/40 text-xs gap-2">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-[#8C7015] shrink-0" />
+                    {!isMultiSurah ? (
+                      <span className="font-bold text-slate-900">
+                        {startSurah.name} ({startSurah.arabicName}) • Ayat {startAyah} – {endAyah}
+                      </span>
+                    ) : (
+                      <span className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                        <span>QS. {startSurah.name} (Ayat {startAyah})</span>
+                        <ArrowRight className="w-3.5 h-3.5 text-[#8C7015]" />
+                        <span>QS. {endSurah.name} (Ayat {endAyah})</span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <span className="text-slate-700 font-semibold text-[11px]">
+                      {startSurah.juzNumber === endSurah.juzNumber 
+                        ? `Juz ${startSurah.juzNumber}` 
+                        : `Juz ${startSurah.juzNumber} – ${endSurah.juzNumber}`}
+                    </span>
+                    <span className="px-3 py-1 bg-[#D4AF37] text-slate-950 rounded-full font-extrabold text-xs shadow-xs">
+                      Total: {totalAyahCalculated} Ayat
+                    </span>
+                  </div>
                 </div>
+
               </div>
 
               {/* Tasmi' extra count */}
@@ -823,8 +989,10 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                 <>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Surat & Ayat:</span>
-                    <span className="font-bold text-slate-900">
-                      {currentSurah.name} : {startAyah} - {endAyah} ({totalAyahCalculated} Ayat)
+                    <span className="font-bold text-slate-900 text-right">
+                      {!isMultiSurah 
+                        ? `${startSurah.name} : Ayat ${startAyah} – ${endAyah} (${totalAyahCalculated} Ayat)`
+                        : `QS. ${startSurah.name} (${startAyah}) s.d. QS. ${endSurah.name} (${endAyah}) - ${totalAyahCalculated} Ayat`}
                     </span>
                   </div>
                   <div className="flex justify-between items-center pt-1 border-t border-slate-200">

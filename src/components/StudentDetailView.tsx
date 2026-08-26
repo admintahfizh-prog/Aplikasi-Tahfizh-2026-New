@@ -17,7 +17,9 @@ import {
   Check,
   ChevronRight,
   User,
-  ShieldCheck
+  ShieldCheck,
+  ShieldAlert,
+  AlertTriangle
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -28,8 +30,11 @@ import {
   Tooltip, 
   ResponsiveContainer 
 } from 'recharts';
-import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, AppSettings } from '../types';
+import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, AppSettings, TahfizhViolation } from '../types';
+import { StudentRaportCard } from './StudentRaportCard';
 import { JUZ_MAPPINGS } from '../data/quranData';
+import { storageService } from '../services/storageService';
+import { VIOLATION_PRESETS } from './ViolationsView';
 
 interface StudentDetailViewProps {
   studentId: string;
@@ -54,7 +59,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
   onBack,
   onOpenDailyInput
 }) => {
-  const [activeTab, setActiveTab] = useState<'hafalan' | 'ummi' | 'grafik' | 'raport'>('hafalan');
+  const [activeTab, setActiveTab] = useState<'hafalan' | 'ummi' | 'kedisiplinan' | 'grafik' | 'raport'>('hafalan');
 
   const student = students.find(s => s.id === studentId);
   if (!student) {
@@ -73,6 +78,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
 
   const studentRecords = records.filter(r => r.studentId === student.id);
   const studentUmmiRecords = ummiRecords.filter(r => r.studentId === student.id);
+  const studentViolations = storageService.getViolationsByStudent(student.id);
 
   const progressPercent = Math.min(100, Math.round((student.totalJuzHafal / student.targetJuz) * 100));
 
@@ -290,10 +296,11 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
       </div>
 
       {/* Tabs Switcher */}
-      <div className="flex items-center border-b border-slate-200 no-print">
+      <div className="flex items-center border-b border-slate-200 no-print overflow-x-auto">
         {[
           { id: 'hafalan', label: 'Riwayat Hafalan Al-Qur\'an', icon: BookOpen, count: studentRecords.length },
           { id: 'ummi', label: 'Riwayat Metode Ummi', icon: BookMarked, count: studentUmmiRecords.length },
+          { id: 'kedisiplinan', label: 'Pelanggaran & Kedisiplinan', icon: ShieldAlert, count: studentViolations.length },
           { id: 'grafik', label: 'Grafik Perkembangan Nilai', icon: TrendingUp },
           { id: 'raport', label: 'Cetak Raport & Sertifikat', icon: Printer },
         ].map((tab) => {
@@ -303,7 +310,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`py-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition cursor-pointer ${
+              className={`py-3 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition cursor-pointer whitespace-nowrap ${
                 isActive
                   ? 'border-[#D4AF37] text-slate-900 bg-amber-50/40'
                   : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -312,7 +319,11 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
               <Icon className={`w-4 h-4 ${isActive ? 'text-[#D4AF37]' : 'text-slate-400'}`} />
               <span>{tab.label}</span>
               {tab.count !== undefined && (
-                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 text-[10px]">
+                <span className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] ${
+                  tab.id === 'kedisiplinan' && tab.count > 0
+                    ? 'bg-rose-100 text-rose-800 font-bold'
+                    : 'bg-slate-200 text-slate-700'
+                }`}>
                   {tab.count}
                 </span>
               )}
@@ -356,8 +367,18 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                     <td className="py-3 px-3 whitespace-nowrap text-slate-500 font-mono">{r.date}</td>
                     <td className="py-3 px-3 font-bold text-slate-800">Juz {r.juz}</td>
                     <td className="py-3 px-3">
-                      <span className="font-bold text-slate-900">{r.surahName}</span>
-                      <span className="text-slate-500 ml-1">({r.startAyah}–{r.endAyah})</span>
+                      {r.endSurahName && r.endSurahName !== r.surahName ? (
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-900">{r.surahName} <span className="font-normal text-slate-500">({r.startAyah})</span></span>
+                          <span className="text-[10px] text-slate-400 font-semibold">s.d.</span>
+                          <span className="font-bold text-slate-900">{r.endSurahName} <span className="font-normal text-slate-500">({r.endAyah})</span></span>
+                        </div>
+                      ) : (
+                        <div>
+                          <span className="font-bold text-slate-900">{r.surahName}</span>
+                          <span className="text-slate-500 ml-1">({r.startAyah}–{r.endAyah})</span>
+                        </div>
+                      )}
                     </td>
                     <td className="py-3 px-3 font-semibold">{r.totalAyah} Ayat</td>
                     <td className="py-3 px-3">
@@ -443,6 +464,82 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         </div>
       )}
 
+      {/* TAB: PELANGGARAN & KEDISIPLINAN TAHFIZH */}
+      {activeTab === 'kedisiplinan' && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-600" />
+                Catatan Kedisiplinan & Pelanggaran Santri ({studentViolations.length} Catatan)
+              </h3>
+              <p className="text-xs text-slate-500">
+                Pencatatan pelanggaran setoran hafalan, ketuntasan baris/ayat, dan kelengkapan buku mutaba'ah/Ummi
+              </p>
+            </div>
+          </div>
+
+          {studentViolations.length === 0 ? (
+            <div className="p-8 text-center bg-emerald-50/50 rounded-xl border border-emerald-100">
+              <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
+              <p className="text-xs font-bold text-emerald-900">Alhamdulillah, Tidak Ada Catatan Pelanggaran</p>
+              <p className="text-[11px] text-emerald-700 mt-0.5">
+                Ananda {student.name} senantiasa tertib dan disiplin dalam mengikuti halaqah tahfizh.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-y border-slate-200 text-slate-600 font-semibold">
+                    <th className="py-2.5 px-3">Tanggal</th>
+                    <th className="py-2.5 px-3">Jenis Pelanggaran</th>
+                    <th className="py-2.5 px-3">Kronologi / Catatan</th>
+                    <th className="py-2.5 px-3">Tindakan Pembinaan</th>
+                    <th className="py-2.5 px-3 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {studentViolations.map((v) => {
+                    const preset = VIOLATION_PRESETS.find(p => p.type === v.type) || VIOLATION_PRESETS[0];
+                    return (
+                      <tr key={v.id} className="hover:bg-slate-50 transition">
+                        <td className="py-3 px-3 whitespace-nowrap text-slate-500 font-mono align-top">{v.date}</td>
+                        <td className="py-3 px-3 align-top whitespace-nowrap">
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${preset.badgeBg} ${preset.badgeText} ${preset.badgeBorder}`}>
+                            <AlertTriangle className="w-3 h-3 shrink-0" />
+                            {v.typeName}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 align-top text-slate-700 font-medium max-w-xs">
+                          {v.details || '-'}
+                        </td>
+                        <td className="py-3 px-3 align-top text-slate-600 max-w-xs">
+                          <span className="bg-slate-50 p-1.5 rounded border border-slate-200 block text-[11px]">
+                            {v.actionTaken || '-'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 align-top text-center whitespace-nowrap">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            v.status === 'Selesai / Dituntaskan'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : v.status === 'Dalam Pembinaan'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}>
+                            {v.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* TAB 3: GRAFIK PERKEMBANGAN NILAI */}
       {activeTab === 'grafik' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 space-y-4">
@@ -470,154 +567,18 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         </div>
       )}
 
-      {/* TAB 4: PRINTABLE RAPORT TAHFIZH & SERTIFIKAT */}
+      {/* TAB 4: OFFICIAL PRINTABLE RAPORT CARD (TAHFIZH & METODE UMMI) */}
       {activeTab === 'raport' && (
         <div className="space-y-4">
-          <div className="flex justify-end gap-2 no-print">
-            <button
-              onClick={handlePrintRaport}
-              className="px-5 py-2.5 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs shadow-xs transition flex items-center gap-2 cursor-pointer"
-            >
-              <Printer className="w-4 h-4 text-[#D4AF37]" />
-              <span>Cetak Raport Tahfizh (PDF / Print)</span>
-            </button>
-          </div>
-
-          {/* Official Printable Report Card */}
-          <div className="bg-white p-8 sm:p-10 rounded-xl border border-slate-200 shadow-xs text-slate-900 space-y-6 print:border-none print:shadow-none print:p-0">
-            
-            {/* Kop Surat Sekolah */}
-            <div className="text-center border-b-2 border-slate-900 pb-4 space-y-1">
-              <h2 className="text-xl sm:text-2xl font-bold uppercase tracking-wide">
-                {settings.schoolName}
-              </h2>
-              <p className="text-xs text-slate-700 font-medium">
-                {settings.schoolSubtitle}
-              </p>
-              <p className="text-[11px] text-slate-500 italic">
-                {settings.schoolAddress}
-              </p>
-            </div>
-
-            <div className="text-center space-y-1 pt-2">
-              <h3 className="text-base font-bold underline uppercase tracking-wider">
-                LAPORAN CAPAIAN TAHFIZH AL-QUR'AN & METODE UMMI
-              </h3>
-              <p className="text-xs text-slate-600">
-                Tahun Ajaran {settings.academicYear} • Semester {settings.semester}
-              </p>
-            </div>
-
-            {/* Identitas Santri Table */}
-            <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-lg border border-slate-200">
-              <div className="space-y-1.5">
-                <div className="flex">
-                  <span className="w-28 text-slate-500">Nama Santri:</span>
-                  <span className="font-bold text-slate-900">{student.name}</span>
-                </div>
-                <div className="flex">
-                  <span className="w-28 text-slate-500">NIS / NISN:</span>
-                  <span className="font-semibold">{student.nis} / {student.nisn}</span>
-                </div>
-                <div className="flex">
-                  <span className="w-28 text-slate-500">Kelas:</span>
-                  <span className="font-semibold">{studentClass?.name}</span>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex">
-                  <span className="w-28 text-slate-500">Program:</span>
-                  <span className="font-bold text-slate-900">{student.program}</span>
-                </div>
-                <div className="flex">
-                  <span className="w-28 text-slate-500">Guru Pembimbing:</span>
-                  <span className="font-semibold">{teacher?.name}</span>
-                </div>
-                <div className="flex">
-                  <span className="w-28 text-slate-500">Jilid Ummi:</span>
-                  <span className="font-bold text-slate-900">{student.currentUmmiJilid} (Hal. {student.currentUmmiPage})</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Table Hasil Evaluasi */}
-            <div className="space-y-2">
-              <h4 className="font-bold text-xs uppercase tracking-wider text-slate-800">
-                A. Hasil Capaian Hafalan Al-Qur'an
-              </h4>
-              <table className="w-full text-xs border border-slate-300">
-                <thead>
-                  <tr className="bg-slate-100 border-b border-slate-300 text-slate-700">
-                    <th className="p-2 text-left border-r border-slate-300">Target Semester</th>
-                    <th className="p-2 text-left border-r border-slate-300">Capaian Riil</th>
-                    <th className="p-2 text-left border-r border-slate-300">Persentase</th>
-                    <th className="p-2 text-left border-r border-slate-300">Rata-rata Nilai</th>
-                    <th className="p-2 text-left">Predikat Kelulusan</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="p-2 border-r border-slate-300 font-semibold">{student.targetJuz} Juz</td>
-                    <td className="p-2 border-r border-slate-300 font-bold text-[#8C7015]">{student.totalJuzHafal} Juz</td>
-                    <td className="p-2 border-r border-slate-300 font-bold text-emerald-700">{progressPercent}%</td>
-                    <td className="p-2 border-r border-slate-300 font-black">{student.avgScore} / 100</td>
-                    <td className="p-2 font-bold text-slate-900">
-                      {student.avgScore >= 90 ? 'MUMTAZ (Sangat Baik)' : student.avgScore >= 80 ? 'JAYYID JIDDAN (Baik)' : 'JAYYID (Cukup)'}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* Table Riwayat Setoran Terakhir */}
-            <div className="space-y-2">
-              <h4 className="font-bold text-xs uppercase tracking-wider text-slate-800">
-                B. Catatan Riwayat Setoran Terakhir
-              </h4>
-              <table className="w-full text-xs border border-slate-300">
-                <thead>
-                  <tr className="bg-slate-100 border-b border-slate-300 text-slate-700">
-                    <th className="p-2 text-left border-r border-slate-300">Tanggal</th>
-                    <th className="p-2 text-left border-r border-slate-300">Surat / Halaman</th>
-                    <th className="p-2 text-left border-r border-slate-300">Jenis</th>
-                    <th className="p-2 text-left border-r border-slate-300">Nilai</th>
-                    <th className="p-2 text-left">Catatan Guru Pembimbing</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {studentRecords.slice(0, 3).map((r) => (
-                    <tr key={r.id}>
-                      <td className="p-2 border-r border-slate-300">{r.date}</td>
-                      <td className="p-2 border-r border-slate-300 font-bold">{r.surahName} ({r.startAyah}–{r.endAyah})</td>
-                      <td className="p-2 border-r border-slate-300">{r.type}</td>
-                      <td className="p-2 border-r border-slate-300 font-bold">{r.finalScore}</td>
-                      <td className="p-2 text-slate-700">{r.notes}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Tanda Tangan */}
-            <div className="pt-8 grid grid-cols-2 text-center text-xs">
-              <div>
-                <p className="text-slate-500">Mengetahui,</p>
-                <p className="font-semibold text-slate-700">Orang Tua / Wali Santri</p>
-                <div className="h-16"></div>
-                <p className="font-bold text-slate-900 underline">{student.parentName}</p>
-              </div>
-
-              <div>
-                <p className="text-slate-500">Jakarta, 23 Agustus 2026</p>
-                <p className="font-semibold text-slate-700">Guru Pembimbing Tahfizh</p>
-                <div className="h-16"></div>
-                <p className="font-bold text-slate-900 underline">{teacher?.name}</p>
-                <p className="text-[10px] text-slate-500 font-mono">NIP. {teacher?.nip}</p>
-              </div>
-            </div>
-
-          </div>
+          <StudentRaportCard
+            student={student}
+            teacher={teacher}
+            studentClass={studentClass}
+            records={studentRecords}
+            ummiRecords={studentUmmiRecords}
+            settings={settings}
+            allStudents={students}
+          />
         </div>
       )}
 

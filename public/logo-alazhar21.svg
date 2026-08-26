@@ -1,40 +1,76 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500">
   <defs>
-    <path id="topTextPath" d="M 55,250 A 195,195 0 1,1 445,250" fill="none" />
-    <path id="bottomTextPath" d="M 445,250 A 195,195 0 0,1 55,250" fill="none" />
+    <!-- Circular path for top text: Starts at 8 o'clock (bottom-left) and arches over top to 4 o'clock (bottom-right) -->
+    <path id="topTextPath" d="M 90.26,361.85 A 195,195 0 1,1 409.74,361.85" fill="none" />
+    
+    <!-- Circular path for bottom text: Runs along bottom arc from right to left so text is right-side up -->
+    <path id="bottomTextPath" d="M 409.74,361.85 A 206,206 0 0,1 90.26,361.85" fill="none" />
+    
     <clipPath id="innerCircleClip">
-      <circle cx="250" cy="250" r="167" />
+      <circle cx="250" cy="250" r="166" />
     </clipPath>
   </defs>
+
+  <!-- Outermost Outer Circle Border & White Ring -->
   <circle cx="250" cy="250" r="242" fill="#FFFFFF" stroke="#000000" stroke-width="12" />
+
+  <!-- Inner Circle Border -->
   <circle cx="250" cy="250" r="172" fill="none" stroke="#000000" stroke-width="10" />
-  <circle cx="250" cy="250" r="167" fill="#0088D2" />
-  <text fill="#000000" font-family="'Arial Black', 'Montserrat', sans-serif" font-weight="900" font-size="30.5" letter-spacing="2.8">
+
+  <!-- Inner Blue Background -->
+  <circle cx="250" cy="250" r="166" fill="#0082C8" />
+
+  <!-- TOP TEXT: SEKOLAH MENENGAH PERTAMA ISLAM -->
+  <text fill="#000000" font-family="'Arial Black', 'Montserrat', 'Trebuchet MS', sans-serif" font-weight="900" font-size="28" letter-spacing="2.6">
     <textPath href="#topTextPath" startOffset="50%" text-anchor="middle">
       SEKOLAH MENENGAH PERTAMA ISLAM
     </textPath>
   </text>
-  <text fill="#000000" font-family="'Arial Black', 'Montserrat', sans-serif" font-weight="900" font-size="40" letter-spacing="4">
+
+  <!-- BOTTOM TEXT: AL AZHAR 21 -->
+  <text fill="#000000" font-family="'Arial Black', 'Montserrat', 'Trebuchet MS', sans-serif" font-weight="900" font-size="38" letter-spacing="4.2">
     <textPath href="#bottomTextPath" startOffset="50%" text-anchor="middle">
       AL AZHAR 21
     </textPath>
   </text>
+
+  <!-- MOSQUE GRAPHICS (MENARA & KUBAH) -->
   <g clip-path="url(#innerCircleClip)">
-    <path d="M 83,417 L 417,417 L 417,340 L 365,340 L 365,370 L 260,370 L 260,358 L 244,358 L 244,372 L 180,372 L 180,372 L 138,372 L 138,417 Z" fill="#FFFFFF" stroke="#000000" stroke-width="7" stroke-linejoin="round" />
-    <rect x="138" y="188" width="43" height="184" fill="#FFFFFF" stroke="#000000" stroke-width="7" />
-    <rect x="135" y="173" width="49" height="16" fill="#FFFFFF" stroke="#000000" stroke-width="7" />
-    <rect x="142" y="176" width="6.5" height="10" fill="#0088D2" stroke="#000000" stroke-width="2.5" />
-    <rect x="151.5" y="176" width="6.5" height="10" fill="#0088D2" stroke="#000000" stroke-width="2.5" />
-    <rect x="161" y="176" width="6.5" height="10" fill="#0088D2" stroke="#000000" stroke-width="2.5" />
-    <rect x="170.5" y="176" width="6.5" height="10" fill="#0088D2" stroke="#000000" stroke-width="2.5" />
-    <path d="M 139,173 C 139,145 159.5,125 159.5,125 C 159.5,125 180,145 180,173 Z" fill="#FFFFFF" stroke="#000000" stroke-width="7" stroke-linejoin="round" />
-    <line x1="159.5" y1="125" x2="159.5" y2="116" stroke="#000000" stroke-width="5" stroke-linecap="round" />
-    <path d="M 180,358 L 260,358 L 260,372 L 180,372 Z" fill="#FFFFFF" stroke="#000000" stroke-width="7" />
+    <!-- Base Bottom Fill -->
+    <path d="M 80,420 L 420,420 L 420,344 L 388,344 C 388,344 388,370 365,370 L 260,370 L 260,358 L 244,358 L 244,374 L 180,374 L 138,374 L 138,420 Z" fill="#FFFFFF" stroke="#000000" stroke-width="7" stroke-linejoin="round" />
+
+    <!-- Left Minaret Main Pillar Body -->
+    <rect x="138" y="186" width="43" height="188" fill="#FFFFFF" stroke="#000000" stroke-width="7" />
+
+    <!-- Minaret Balcony Platform -->
+    <rect x="134" y="171" width="51" height="16" fill="#FFFFFF" stroke="#000000" stroke-width="7" stroke-linejoin="round" />
+
+    <!-- Minaret 4 Window Slits -->
+    <rect x="140" y="174.5" width="6.5" height="9.5" fill="#0082C8" stroke="#000000" stroke-width="2.4" />
+    <rect x="149.5" y="174.5" width="6.5" height="9.5" fill="#0082C8" stroke="#000000" stroke-width="2.4" />
+    <rect x="159" y="174.5" width="6.5" height="9.5" fill="#0082C8" stroke="#000000" stroke-width="2.4" />
+    <rect x="168.5" y="174.5" width="6.5" height="9.5" fill="#0082C8" stroke="#000000" stroke-width="2.4" />
+
+    <!-- Minaret Pointed Teardrop Dome -->
+    <path d="M 138,171 C 138,142 159.5,122 159.5,122 C 159.5,122 181,142 181,171 Z" fill="#FFFFFF" stroke="#000000" stroke-width="7" stroke-linejoin="round" />
+    
+    <!-- Minaret Spire Pin -->
+    <line x1="159.5" y1="122" x2="159.5" y2="112" stroke="#000000" stroke-width="5" stroke-linecap="round" />
+
+    <!-- Horizontal Connecting Stepped Base -->
+    <path d="M 181,358 L 260,358 L 260,374 L 181,374 Z" fill="#FFFFFF" stroke="#000000" stroke-width="7" />
     <path d="M 244,342 L 260,342 L 260,358 L 244,358 Z" fill="#FFFFFF" stroke="#000000" stroke-width="7" />
-    <path d="M 244,342 C 244,228 314,204 314,204 C 314,204 384,228 384,342 Z" fill="#FFFFFF" stroke="#000000" stroke-width="7" stroke-linejoin="round" />
-    <g transform="translate(314, 182)">
-      <path d="M 2,-18 C -14,-18 -26,-6 -26,10 C -26,26 -14,38 2,38 C -7,32 -13,22 -13,10 C -13,-2 -7,-12 2,-18 Z" fill="#FFFFFF" stroke="#000000" stroke-width="5" stroke-linejoin="round" />
-      <path d="M 6,3 L 8.5,-4 L 14.5,-4 L 9.5,-8 L 11.5,-15 L 6,-11 L 0.5,-15 L 2.5,-8 L -2.5,-4 L 3.5,-4 Z" transform="translate(4, 8) scale(1.1)" fill="#FFFFFF" stroke="#000000" stroke-width="4" stroke-linejoin="round" />
+
+    <!-- Main Mosque Dome -->
+    <path d="M 244,342 C 244,228 313,202 313,202 C 313,202 386,228 386,342 Z" fill="#FFFFFF" stroke="#000000" stroke-width="7" stroke-linejoin="round" />
+
+    <!-- Crescent Moon & 5-Pointed Star Finial on Main Dome -->
+    <g transform="translate(313, 180)">
+      <!-- Crescent Moon -->
+      <path d="M 3,-18 C -14,-18 -26,-6 -26,10 C -26,26 -14,38 3,38 C -6,32 -13,22 -13,10 C -13,-2 -6,-12 3,-18 Z" fill="#FFFFFF" stroke="#000000" stroke-width="5" stroke-linejoin="round" />
+      
+      <!-- 5-Pointed Star -->
+      <path d="M 6,3 L 8.5,-4 L 14.5,-4 L 9.5,-8 L 11.5,-15 L 6,-11 L 0.5,-15 L 2.5,-8 L -2.5,-4 L 3.5,-4 Z" transform="translate(4, 8) scale(1.15)" fill="#FFFFFF" stroke="#000000" stroke-width="4" stroke-linejoin="round" />
     </g>
   </g>
 </svg>
