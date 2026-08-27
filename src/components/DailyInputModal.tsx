@@ -35,7 +35,7 @@ import {
   formatHafalanRange,
   calculateCategory 
 } from '../data/quranData';
-import { UMMI_JILIDS } from '../data/ummiData';
+import { UMMI_JILIDS, UMMI_SYLLABUS } from '../data/ummiData';
 
 interface DailyInputModalProps {
   isOpen: boolean;
@@ -95,9 +95,9 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
   const [notes, setNotes] = useState<string>('Alhamdulillah bacaan tartil dan lancar.');
 
   // Ummi Form State
-  const [ummiJilid, setUmmiJilid] = useState<string>('Jilid 4');
+  const [ummiJilid, setUmmiJilid] = useState<string>('Jilid 1');
   const [ummiPage, setUmmiPage] = useState<number>(1);
-  const [ummiMaterial, setUmmiMaterial] = useState<string>('Mad Thabi\'i & Qalqalah');
+  const [ummiMaterial, setUmmiMaterial] = useState<string>('Huruf Tunggal & Sambung Fathah (A - Ba)');
   const [ummiStatus, setUmmiStatus] = useState<UmmiStatus>('Lulus');
   const [ummiScore, setUmmiScore] = useState<number>(88);
   const [ummiNotes, setUmmiNotes] = useState<string>('Lancar dan memahami kaidah dengan baik.');
@@ -486,7 +486,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
               }`}
             >
               <BookMarked className="w-4 h-4 text-[#1E293B]" />
-              Pembelajaran Metode Ummi (Jilid 1-6 & Gharib)
+              Pembelajaran Metode Ummi Dewasa (Jilid 1-3)
             </button>
           </div>
 
@@ -876,13 +876,48 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
               </div>
 
               {/* Material Input */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Materi / Pokok Bahasan</label>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-700">Materi / Pokok Bahasan</label>
+                  <span className="text-[10px] text-slate-400 font-medium">Klik modul di bawah untuk mengisi cepat</span>
+                </div>
+                
+                {/* Syllabus Modules Quick Selector */}
+                {(() => {
+                  const currSyllabus = UMMI_SYLLABUS.find(s => s.jilid === ummiJilid);
+                  if (!currSyllabus || !currSyllabus.modules) return null;
+                  return (
+                    <div className="flex flex-wrap gap-1.5 p-2.5 bg-amber-50/60 rounded-lg border border-amber-200/80">
+                      <span className="text-[10px] font-bold text-amber-900 w-full mb-0.5 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-[#D4AF37]" />
+                        Modul Kurikulum {ummiJilid}:
+                      </span>
+                      {currSyllabus.modules.map((m, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setUmmiMaterial(`${m.topicTitle} (${m.pageRange})`);
+                            const pageMatch = m.pageRange.match(/\d+/);
+                            if (pageMatch) {
+                              setUmmiPage(Number(pageMatch[0]));
+                            }
+                          }}
+                          className="text-[11px] text-left px-2.5 py-1 rounded bg-white hover:bg-amber-100 text-slate-800 font-semibold border border-amber-300 transition cursor-pointer shadow-2xs"
+                        >
+                          <span className="font-bold text-amber-800 mr-1">{m.pageRange}:</span>
+                          {m.topicTitle}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+
                 <input
                   type="text"
                   value={ummiMaterial}
                   onChange={(e) => setUmmiMaterial(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
                   placeholder="Contoh: Mad Thabi'i Alif & Wawu Sukun, Tanwin & Qalqalah"
                 />
               </div>

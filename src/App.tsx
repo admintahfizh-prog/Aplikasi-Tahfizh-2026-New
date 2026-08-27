@@ -13,6 +13,7 @@ import { ParentPortalView } from './components/ParentPortalView';
 import { TeachersClassesView } from './components/TeachersClassesView';
 import { MaterialsView } from './components/MaterialsView';
 import { ViolationsView } from './components/ViolationsView';
+import { MatrikulasiView } from './components/MatrikulasiView';
 import { SettingsView } from './components/SettingsView';
 import { DailyInputModal } from './components/DailyInputModal';
 import { LoginView } from './components/LoginView';
@@ -27,6 +28,8 @@ import {
   TargetProgress, 
   LearningMaterial, 
   TahfizhViolation,
+  MatrikulasiStudent,
+  MatrikulasiRecord,
   AppSettings, 
   UserProfile, 
   Role 
@@ -53,6 +56,8 @@ export default function App() {
   const [records, setRecords] = useState<MemorizationRecord[]>(() => storageService.getMemorizationRecords());
   const [ummiRecords, setUmmiRecords] = useState<UmmiRecord[]>(() => storageService.getUmmiRecords());
   const [violations, setViolations] = useState<TahfizhViolation[]>(() => storageService.getViolations());
+  const [matrikulasiStudents, setMatrikulasiStudents] = useState<MatrikulasiStudent[]>(() => storageService.getMatrikulasiStudents());
+  const [matrikulasiRecords, setMatrikulasiRecords] = useState<MatrikulasiRecord[]>(() => storageService.getMatrikulasiRecords());
   const [targets, setTargets] = useState<TargetProgress[]>(() => storageService.getTargets());
   const [materials, setMaterials] = useState<LearningMaterial[]>(() => storageService.getMaterials());
   const [settings, setSettings] = useState<AppSettings>(() => storageService.getSettings());
@@ -65,6 +70,8 @@ export default function App() {
     setRecords(storageService.getMemorizationRecords());
     setUmmiRecords(storageService.getUmmiRecords());
     setViolations(storageService.getViolations());
+    setMatrikulasiStudents(storageService.getMatrikulasiStudents());
+    setMatrikulasiRecords(storageService.getMatrikulasiRecords());
     setTargets(storageService.getTargets());
     setMaterials(storageService.getMaterials());
     setSettings(storageService.getSettings());
@@ -207,6 +214,21 @@ export default function App() {
               classes={classes}
               userRole={currentUser.role}
               onOpenDailyInput={() => handleOpenDailyInput()}
+              onRefreshData={loadAllData}
+              onOpenStudentDetail={handleOpenStudentDetail}
+            />
+          )}
+
+          {/* VIEW: MATRIKULASI METODE IQRO (KELAS 8 & 9 - SELASA, RABU, KAMIS) */}
+          {currentView === 'matrikulasi' && (
+            <MatrikulasiView
+              students={students}
+              teachers={teachers}
+              classes={classes}
+              matrikulasiStudents={matrikulasiStudents}
+              matrikulasiRecords={matrikulasiRecords}
+              userRole={currentUser.role}
+              settings={settings}
               onRefreshData={loadAllData}
               onOpenStudentDetail={handleOpenStudentDetail}
             />

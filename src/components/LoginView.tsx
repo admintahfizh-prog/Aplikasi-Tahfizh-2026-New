@@ -24,7 +24,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [showAccountGuide, setShowAccountGuide] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,12 +40,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
         setErrorMessage(result.message || 'Username atau kata sandi tidak valid.');
       }
     }, 250);
-  };
-
-  const handleFillDemo = (demoUser: string, demoPass: string) => {
-    setUsername(demoUser);
-    setPassword(demoPass);
-    setErrorMessage(null);
   };
 
   return (
@@ -157,49 +150,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
               )}
             </button>
           </form>
-
-          {/* Collapsible Helper for Default System Credentials */}
-          <div className="pt-2 border-t border-slate-100 text-center">
-            <button
-              type="button"
-              onClick={() => setShowAccountGuide(!showAccountGuide)}
-              className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 underline decoration-slate-300 underline-offset-4 cursor-pointer"
-            >
-              {showAccountGuide ? 'Sembunyikan Info Akun Bawaan' : 'Lihat Akun & Kata Sandi Bawaan Sistem'}
-            </button>
-
-            {showAccountGuide && (
-              <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl text-left text-[11px] space-y-2 animate-in fade-in">
-                <p className="font-bold text-slate-700">Daftar Contoh Akun Bawaan:</p>
-                <div className="grid grid-cols-1 gap-1.5 font-mono">
-                  <div 
-                    onClick={() => handleFillDemo('admin', 'admin21')}
-                    className="p-1.5 bg-white rounded border border-slate-200 flex justify-between items-center cursor-pointer hover:border-[#D4AF37] transition"
-                  >
-                    <span><strong>Admin:</strong> admin</span>
-                    <span className="text-slate-500 font-sans text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">Pass: admin21</span>
-                  </div>
-                  <div 
-                    onClick={() => handleFillDemo('fauzan', 'guru21')}
-                    className="p-1.5 bg-white rounded border border-slate-200 flex justify-between items-center cursor-pointer hover:border-[#D4AF37] transition"
-                  >
-                    <span><strong>Guru:</strong> fauzan</span>
-                    <span className="text-slate-500 font-sans text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">Pass: guru21</span>
-                  </div>
-                  <div 
-                    onClick={() => handleFillDemo('2607001', 'santri21')}
-                    className="p-1.5 bg-white rounded border border-slate-200 flex justify-between items-center cursor-pointer hover:border-[#D4AF37] transition"
-                  >
-                    <span><strong>Siswa (NIS):</strong> 2607001</span>
-                    <span className="text-slate-500 font-sans text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">Pass: santri21</span>
-                  </div>
-                </div>
-                <p className="text-[10px] text-slate-500 mt-1 font-sans">
-                  * Siswa/Wali dapat login menggunakan <strong>NIS</strong> (contoh: 2607001). Admin dapat membuat & mengubah password guru/siswa di menu Pengaturan.
-                </p>
-              </div>
-            )}
-          </div>
 
         </div>
 

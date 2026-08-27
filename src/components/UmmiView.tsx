@@ -13,10 +13,16 @@ import {
   ChevronRight,
   UserCheck,
   ArrowUpDown,
-  GraduationCap
+  GraduationCap,
+  Layers,
+  HelpCircle,
+  X,
+  FileText,
+  ChevronDown,
+  Info
 } from 'lucide-react';
 import { UmmiRecord, Student, Teacher, ClassItem, Role } from '../types';
-import { UMMI_SYLLABUS, UMMI_JILIDS } from '../data/ummiData';
+import { UMMI_SYLLABUS, UMMI_JILIDS, UmmiTopicDetail } from '../data/ummiData';
 import { storageService } from '../services/storageService';
 
 interface UmmiViewProps {
@@ -40,11 +46,17 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
   onRefreshData,
   onOpenStudentDetail
 }) => {
-  const [selectedJilidTab, setSelectedJilidTab] = useState<string>('Semua Jilid');
+  const [selectedJilidTab, setSelectedJilidTab] = useState<string>('Jilid 1');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClassFilter, setSelectedClassFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sortBy, setSortBy] = useState<'class-asc' | 'class-desc' | 'date-desc' | 'date-asc' | 'name-asc' | 'jilid-asc' | 'score-desc'>('class-asc');
+  
+  // Active selected module for modal detail popup
+  const [selectedModuleDetail, setSelectedModuleDetail] = useState<{
+    jilid: string;
+    module: UmmiTopicDetail;
+  } | null>(null);
 
   // Calculate students count per jilid
   const studentDistribution = UMMI_JILIDS.map(j => ({
@@ -104,6 +116,10 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
     return 0;
   });
 
+  const selectedSyllabusList = UMMI_SYLLABUS.filter(
+    s => selectedJilidTab === 'Semua Jilid' || s.jilid === selectedJilidTab
+  );
+
   return (
     <div className="space-y-6 animate-in fade-in">
       
@@ -112,10 +128,10 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
             <BookMarked className="w-5 h-5 text-[#D4AF37]" />
-            Pembelajaran & Evaluasi Metode Ummi
+            Kurikulum & Pembelajaran Metode Ummi Dewasa (Jilid 1–3)
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Sistem berjenjang Jilid 1–6, Al-Qur'an Dewasa, Gharib Al-Qur'an, dan Teori Kaidah Tajwid Ummi Foundation terorganisir per kelas
+            Katalog materi resmi Buku Ummi Dewasa Jilid 1 sampai 3, Tilawah Mushaf Al-Qur'an, Ayat Gharib, dan Teori Kaidah Tajwid Ummi Foundation
           </p>
         </div>
 
@@ -130,16 +146,26 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
         )}
       </div>
 
-      {/* Jilid Distribution Bar */}
+      {/* Jilid Navigation Tabs with Student Distribution */}
       <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
-        <div className="flex justify-between items-center">
-          <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-            Distribusi Jenjang Metode Ummi Santri Saat Ini
+        <div className="flex justify-between items-center flex-wrap gap-2">
+          <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+            <Layers className="w-4 h-4 text-[#D4AF37]" />
+            Pilih Jenjang / Jilid Pembelajaran
           </h3>
-          <span className="text-xs font-semibold text-slate-600">Total {students.length} Santri Terdaftar</span>
+          <button
+            onClick={() => setSelectedJilidTab('Semua Jilid')}
+            className={`text-xs px-2.5 py-1 rounded-md font-semibold transition cursor-pointer ${
+              selectedJilidTab === 'Semua Jilid'
+                ? 'bg-[#1E293B] text-white shadow-xs'
+                : 'text-slate-600 bg-slate-100 hover:bg-slate-200'
+            }`}
+          >
+            Tampilkan Semua Jilid
+          </button>
         </div>
 
-        <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
           {studentDistribution.map((item) => (
             <button
               key={item.jilid}
@@ -150,57 +176,131 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
                   : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
               }`}
             >
-              <span className="text-[10px] block opacity-80 truncate">{item.jilid}</span>
-              <span className="text-lg font-bold mt-0.5 block">{item.count}</span>
-              <span className="text-[9px] opacity-75">Santri</span>
+              <span className="text-[11px] font-bold block truncate">{item.jilid}</span>
+              <span className="text-base font-extrabold mt-0.5 block">{item.count}</span>
+              <span className="text-[9px] opacity-75">Santri Aktif</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Jilid Syllabus Cards */}
-      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
-        <div className="flex justify-between items-center">
-          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-            <BookOpen className="w-4 h-4 text-[#D4AF37]" />
-            Struktur Kurikulum & Silabus Materi Metode Ummi
-          </h3>
-          {selectedJilidTab !== 'Semua Jilid' && (
-            <button
-              onClick={() => setSelectedJilidTab('Semua Jilid')}
-              className="text-xs text-[#8C7015] font-semibold hover:underline cursor-pointer"
-            >
-              Tampilkan Semua Jilid
-            </button>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-          {UMMI_SYLLABUS
-            .filter(s => selectedJilidTab === 'Semua Jilid' || s.jilid === selectedJilidTab)
-            .map((s) => (
-              <div 
-                key={s.jilid}
-                className="p-4 rounded-lg bg-slate-50/70 border border-slate-200 space-y-2"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="px-2.5 py-0.5 rounded bg-slate-200 text-slate-800 font-bold text-xs">
-                    {s.jilid}
+      {/* KOMPREHENSIF: MODUL & MATERI DETAIL JILID 1 - 6 */}
+      <div className="space-y-4">
+        {selectedSyllabusList.map((syllabus) => (
+          <div 
+            key={syllabus.jilid}
+            className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden"
+          >
+            {/* Header Jilid */}
+            <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 to-slate-800 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-[#D4AF37] text-slate-950 font-extrabold text-xs">
+                    {syllabus.jilid}
                   </span>
-                  <span className="text-[11px] text-slate-500 font-mono">{s.totalPages} Halaman</span>
+                  <span className="text-xs text-slate-300 font-mono">
+                    Total {syllabus.totalPages} Halaman
+                  </span>
                 </div>
-                <h4 className="font-bold text-xs text-slate-800">{s.title}</h4>
-                <ul className="space-y-1 text-[11px] text-slate-600 pt-1 border-t border-slate-200">
-                  {s.keyTopics.slice(0, 3).map((topic, i) => (
-                    <li key={i} className="flex items-start gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] mt-1 shrink-0"></span>
-                      <span>{topic}</span>
-                    </li>
-                  ))}
-                </ul>
+                <h3 className="text-base sm:text-lg font-bold text-white">
+                  {syllabus.title}
+                </h3>
+                <p className="text-xs text-slate-300 max-w-3xl leading-relaxed">
+                  {syllabus.description}
+                </p>
               </div>
-            ))}
-        </div>
+
+              {userRole !== 'wali' && (
+                <button
+                  onClick={onOpenDailyInput}
+                  className="shrink-0 px-3.5 py-1.5 rounded-lg bg-[#D4AF37] hover:bg-[#c49f2e] text-slate-950 font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>Input Setoran {syllabus.jilid}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Key Topics Badges */}
+            <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-2 text-xs">
+              <span className="font-bold text-slate-700 text-[11px] uppercase tracking-wider">
+                Pokok Bahasan Utama:
+              </span>
+              {syllabus.keyTopics.map((topic, i) => (
+                <span 
+                  key={i}
+                  className="px-2.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700 text-[11px] font-medium shadow-2xs"
+                >
+                  • {topic}
+                </span>
+              ))}
+            </div>
+
+            {/* Modules Grid (Breakdown Per Halaman) */}
+            <div className="p-5">
+              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <BookOpen className="w-4 h-4 text-[#D4AF37]" />
+                Rincian Materi & Modul Per Rentang Halaman:
+              </h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {syllabus.modules.map((mod, idx) => (
+                  <div 
+                    key={idx}
+                    className="p-4 rounded-xl bg-slate-50 border border-slate-200 hover:border-amber-300 hover:shadow-xs transition space-y-3 flex flex-col justify-between"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2.5 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs font-mono">
+                          {mod.pageRange}
+                        </span>
+                        <button
+                          onClick={() => setSelectedModuleDetail({ jilid: syllabus.jilid, module: mod })}
+                          className="text-[11px] text-[#8C7015] hover:text-slate-900 font-semibold flex items-center gap-1 cursor-pointer"
+                        >
+                          <Info className="w-3.5 h-3.5" />
+                          <span>Lihat Panduan Talaqqi</span>
+                        </button>
+                      </div>
+
+                      <h5 className="font-bold text-slate-900 text-sm">
+                        {mod.topicTitle}
+                      </h5>
+
+                      {/* Arabic Example Box */}
+                      <div className="p-3 bg-white rounded-lg border border-slate-200 text-center shadow-2xs">
+                        <span className="text-[10px] text-slate-400 font-semibold block mb-1 uppercase tracking-wider">
+                          Contoh Lafadz / Bacaan:
+                        </span>
+                        <p className="font-arabic text-xl text-slate-900 leading-relaxed font-bold dir-rtl">
+                          {mod.arabicExample}
+                        </p>
+                      </div>
+
+                      {/* Kaidah & Target */}
+                      <div className="space-y-1.5 text-xs">
+                        <p className="text-slate-700 leading-relaxed">
+                          <strong className="text-slate-900">Kaidah:</strong> {mod.rules}
+                        </p>
+                        <p className="text-slate-600 text-[11px] leading-relaxed">
+                          <strong className="text-slate-800">Target Kelulusan:</strong> {mod.competency}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Teaching Tips Footer */}
+                    <div className="pt-2 border-t border-slate-200/80 flex items-start gap-1.5 text-[11px] text-slate-500 bg-amber-50/50 p-2 rounded-lg">
+                      <Sparkles className="w-3.5 h-3.5 text-[#D4AF37] shrink-0 mt-0.5" />
+                      <span>
+                        <strong className="text-slate-700">Tips Pengajaran Guru:</strong> {mod.teachingTips}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Ummi Records Log Table */}
@@ -208,7 +308,7 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-bold text-slate-800">
-              Log Evaluasi & Ujian Kenaikan Jilid Ummi
+              Log Evaluasi & Setoran Pembelajaran Ummi Santri
             </h3>
             <p className="text-xs text-slate-500">Catatan perkembangan jilid, halaman, dan status kelulusan diurutkan per kelas</p>
           </div>
@@ -369,6 +469,96 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
           <p className="text-center py-10 text-slate-400 text-xs">Belum ada catatan evaluasi Ummi yang cocok.</p>
         )}
       </div>
+
+      {/* MODAL DETAIL MATERI TALAQQI */}
+      {selectedModuleDetail && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200">
+            <div className="flex justify-between items-start pb-3 border-b border-slate-200">
+              <div>
+                <span className="px-2.5 py-0.5 rounded bg-slate-900 text-white font-extrabold text-[11px]">
+                  {selectedModuleDetail.jilid} • {selectedModuleDetail.module.pageRange}
+                </span>
+                <h3 className="font-bold text-slate-900 text-base mt-1">
+                  {selectedModuleDetail.module.topicTitle}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setSelectedModuleDetail(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Arabic Big Box */}
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center space-y-1">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                Contoh Lafadz & Praktik Bacaan:
+              </span>
+              <p className="font-arabic text-2xl text-slate-950 font-bold py-2 dir-rtl leading-loose">
+                {selectedModuleDetail.module.arabicExample}
+              </p>
+            </div>
+
+            {/* Rules & Competencies */}
+            <div className="space-y-3 text-xs">
+              <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-1">
+                <span className="font-bold text-slate-800 text-[11px] block flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  Kaidah Pokok Pembelajaran:
+                </span>
+                <p className="text-slate-700 leading-relaxed">
+                  {selectedModuleDetail.module.rules}
+                </p>
+              </div>
+
+              <div className="p-3 bg-emerald-50/70 rounded-lg border border-emerald-200 space-y-1">
+                <span className="font-bold text-emerald-900 text-[11px] block flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  Target Capaian & Standar Kelulusan Santri:
+                </span>
+                <p className="text-emerald-800 leading-relaxed">
+                  {selectedModuleDetail.module.competency}
+                </p>
+              </div>
+
+              <div className="p-3 bg-amber-50/70 rounded-lg border border-amber-200 space-y-1">
+                <span className="font-bold text-amber-950 text-[11px] block flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  Panduan Talaqqi & Petunjuk Mengajar Guru:
+                </span>
+                <p className="text-amber-900 leading-relaxed">
+                  {selectedModuleDetail.module.teachingTips}
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-3 flex justify-end gap-2 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setSelectedModuleDetail(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-lg cursor-pointer"
+              >
+                Tutup
+              </button>
+              {userRole !== 'wali' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedModuleDetail(null);
+                    onOpenDailyInput();
+                  }}
+                  className="px-4 py-2 bg-[#1E293B] hover:bg-slate-700 text-white font-bold text-xs rounded-lg shadow-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <PlusCircle className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  <span>Catat Setoran Sekarang</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

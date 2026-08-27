@@ -142,6 +142,55 @@ export interface LearningMaterial {
   audioExampleUrl?: string;
 }
 
+// ===================================================
+// PROGRAM MATRIKULASI METODE IQRO (KELAS 8 & 9)
+// Jadwal: Setiap Hari Selasa, Rabu, dan Kamis
+// Catatan: Non-Raport (Khusus Laporan Perkembangan & Monitoring)
+// ===================================================
+export type IqroJilid = 'Iqro 1' | 'Iqro 2' | 'Iqro 3' | 'Iqro 4' | 'Iqro 5' | 'Iqro 6';
+export type MatrikulasiDay = 'Selasa' | 'Rabu' | 'Kamis';
+export type MatrikulasiStatus = 'Aktif' | 'Lulus / Selesai' | 'Nonaktif';
+export type MatrikulasiSessionStatus = 'Lulus' | 'Ulang';
+
+export interface MatrikulasiStudent {
+  id: string;
+  studentId: string;
+  enrolledDate: string; // YYYY-MM-DD
+  status: MatrikulasiStatus;
+  currentIqroJilid: IqroJilid;
+  currentIqroPage: number;
+  assignedTeacherId: string;
+  scheduleDays: MatrikulasiDay[]; // Default: ['Selasa', 'Rabu', 'Kamis']
+  initialReason?: string; // Alasan penempatan: misal perbaikan kelancaran / makhraj
+  notes?: string;
+  completedDate?: string;
+}
+
+export interface MatrikulasiRecord {
+  id: string;
+  matrikulasiStudentId: string;
+  studentId: string;
+  teacherId: string;
+  date: string; // YYYY-MM-DD
+  day: MatrikulasiDay; // 'Selasa' | 'Rabu' | 'Kamis'
+  jilid: IqroJilid;
+  page: number;
+  materialFocus: string;
+  score: number; // 0 - 100 (Nilai tunggal)
+  status: MatrikulasiSessionStatus; // 'Lulus' | 'Ulang'
+  notes: string;
+}
+
+export interface IqroSyllabusItem {
+  jilid: IqroJilid;
+  title: string;
+  totalPages: number;
+  description: string;
+  keyTopics: string[];
+  guidanceTips: string[];
+  arabicExample: string;
+}
+
 export type TargetPeriod = 'Bulanan' | 'Semester' | 'Tahunan';
 export type TargetStatus = 'Sesuai Target' | 'Perlu Ditingkatkan' | 'Tertinggal' | 'on-track' | 'needs-attention' | 'behind';
 

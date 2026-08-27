@@ -13,7 +13,8 @@ import {
   Settings, 
   School,
   HeartHandshake,
-  ShieldAlert
+  ShieldAlert,
+  Sparkles
 } from 'lucide-react';
 import { Role } from '../types';
 
@@ -46,6 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'parent-portal', label: 'Dashboard Ananda', icon: HeartHandshake },
         { id: 'hafalan', label: 'Riwayat Hafalan', icon: BookOpen },
         { id: 'ummi', label: 'Perkembangan Ummi', icon: BookMarked },
+        { id: 'matrikulasi', label: 'Matrikulasi Iqro', icon: Sparkles, badge: 'Sel-Kam' },
         { id: 'violations', label: 'Catatan Kedisiplinan', icon: ShieldAlert },
         { id: 'reports', label: 'Raport Tahfizh', icon: BarChart3 },
       ];
@@ -57,6 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       { id: 'teachers', label: 'Guru & Kelas', icon: Users },
       { id: 'hafalan', label: 'Hafalan Al-Qur\'an', icon: BookOpen },
       { id: 'ummi', label: 'Pembelajaran Ummi', icon: BookMarked },
+      { id: 'matrikulasi', label: 'Matrikulasi Iqro', icon: Sparkles, badge: 'Kls 8-9' },
       { id: 'violations', label: 'Pelanggaran Tahfizh', icon: ShieldAlert },
       { id: 'materials', label: 'Materi & Kurikulum', icon: FileText },
       { id: 'scores', label: 'Penilaian & Nilai', icon: Star },
@@ -104,14 +107,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 key={item.id}
                 id={`nav-item-${item.id}`}
                 onClick={() => handleSelectView(item.id)}
-                className={`w-full flex items-center gap-3 p-2.5 rounded-lg text-xs transition cursor-pointer text-left ${
+                className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs transition cursor-pointer text-left ${
                   isActive
                     ? 'bg-[#D4AF37] text-white font-medium shadow-md shadow-[#D4AF37]/20'
                     : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                 }`}
               >
-                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                <span className="truncate">{item.label}</span>
+                <div className="flex items-center gap-3 min-w-0">
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                  <span className="truncate">{item.label}</span>
+                </div>
+                {item.badge && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
+                    isActive ? 'bg-white/20 text-white' : 'bg-slate-700/80 text-amber-300'
+                  }`}>
+                    {item.badge}
+                  </span>
+                )}
               </button>
             );
           })}

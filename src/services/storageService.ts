@@ -8,6 +8,8 @@ import {
   TargetProgress, 
   NotificationItem, 
   TahfizhViolation,
+  MatrikulasiStudent,
+  MatrikulasiRecord,
   AppSettings, 
   User 
 } from '../types';
@@ -25,6 +27,7 @@ import {
 } from '../data/initialData';
 import { INITIAL_MATERIALS } from '../data/ummiData';
 import { calculateCategory } from '../data/quranData';
+import { INITIAL_MATRIKULASI_STUDENTS, INITIAL_MATRIKULASI_RECORDS } from '../data/iqroData';
 
 const STORAGE_KEYS = {
   SETTINGS: 'tahfizh_smpia21_settings',
@@ -38,7 +41,9 @@ const STORAGE_KEYS = {
   TARGETS: 'tahfizh_smpia21_targets',
   NOTIFICATIONS: 'tahfizh_smpia21_notifications',
   CURRENT_USER: 'tahfizh_smpia21_current_user',
-  VIOLATIONS: 'tahfizh_smpia21_violations'
+  VIOLATIONS: 'tahfizh_smpia21_violations',
+  MATRIKULASI_STUDENTS: 'tahfizh_smpia21_matrikulasi_students',
+  MATRIKULASI_RECORDS: 'tahfizh_smpia21_matrikulasi_records'
 };
 
 function getItem<T>(key: string, defaultVal: T): T {
@@ -309,7 +314,24 @@ export const storageService = {
 
   // Students
   getStudents(): Student[] {
-    return getItem(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
+    const list = getItem(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
+    // Sanitize any legacy Jilid 4-6 to Ummi Dewasa Jilid 1-3
+    let modified = false;
+    const sanitized = list.map(s => {
+      let updatedJilid = s.currentUmmiJilid;
+      if (s.currentUmmiJilid === 'Jilid 4') updatedJilid = 'Jilid 2';
+      else if (s.currentUmmiJilid === 'Jilid 5') updatedJilid = 'Jilid 2';
+      else if (s.currentUmmiJilid === 'Jilid 6') updatedJilid = 'Jilid 3';
+      if (updatedJilid !== s.currentUmmiJilid) {
+        modified = true;
+        return { ...s, currentUmmiJilid: updatedJilid };
+      }
+      return s;
+    });
+    if (modified) {
+      setItem(STORAGE_KEYS.STUDENTS, sanitized);
+    }
+    return sanitized;
   },
   getStudentById(id: string): Student | undefined {
     return this.getStudents().find(s => s.id === id);
@@ -423,7 +445,7 @@ export const storageService = {
           ? 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80'
           : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
         entryYear: '2026',
-        currentUmmiJilid: cols[ummiJilidIdx] || 'Jilid 4',
+        currentUmmiJilid: cols[ummiJilidIdx] || 'Jilid 1',
         currentUmmiPage: 1,
         totalJuzHafal: 0,
         totalSurahHafal: 0,
@@ -502,7 +524,23 @@ export const storageService = {
 
   // Ummi Records
   getUmmiRecords(): UmmiRecord[] {
-    return getItem(STORAGE_KEYS.UMMI, INITIAL_UMMI_RECORDS);
+    const list = getItem(STORAGE_KEYS.UMMI, INITIAL_UMMI_RECORDS);
+    let modified = false;
+    const sanitized = list.map(r => {
+      let updatedJilid = r.jilid;
+      if (r.jilid === 'Jilid 4') updatedJilid = 'Jilid 2';
+      else if (r.jilid === 'Jilid 5') updatedJilid = 'Jilid 2';
+      else if (r.jilid === 'Jilid 6') updatedJilid = 'Jilid 3';
+      if (updatedJilid !== r.jilid) {
+        modified = true;
+        return { ...r, jilid: updatedJilid };
+      }
+      return r;
+    });
+    if (modified) {
+      setItem(STORAGE_KEYS.UMMI, sanitized);
+    }
+    return sanitized;
   },
   addUmmiRecord(record: UmmiRecord): void {
     const list = this.getUmmiRecords();
@@ -539,7 +577,22 @@ export const storageService = {
 
   // Learning Materials
   getMaterials(): LearningMaterial[] {
-    return getItem(STORAGE_KEYS.MATERIALS, INITIAL_MATERIALS);
+    const list = getItem<LearningMaterial[]>(STORAGE_KEYS.MATERIALS, INITIAL_MATERIALS);
+    // If list contains legacy Jilid 4-6 materials, filter them out and replace with Ummi Dewasa Jilid 1-3
+    const hasLegacy = list && list.some(m => m.jilid === 'Jilid 4' || m.jilid === 'Jilid 5' || m.jilid === 'Jilid 6');
+    if (!list || list.length === 0 || hasLegacy) {
+      setItem(STORAGE_KEYS.MATERIALS, INITIAL_MATERIALS);
+      return INITIAL_MATERIALS;
+    }
+    // Ensure all standard curriculum modules from INITIAL_MATERIALS are available
+    const existingIds = new Set(list.map(m => m.id));
+    const missing = INITIAL_MATERIALS.filter(m => !existingIds.has(m.id));
+    if (missing.length > 0) {
+      const combined = [...list, ...missing];
+      setItem(STORAGE_KEYS.MATERIALS, combined);
+      return combined;
+    }
+    return list;
   },
   saveMaterial(mat: LearningMaterial): void {
     const list = this.getMaterials();
@@ -608,8 +661,8 @@ export const storageService = {
   // CSV Generator for sample template
   generateStudentCSVTemplate(): string {
     return `NIS,NISN,Nama Lengkap,Nama Panggilan,Jenis Kelamin,Kelas,Program,Target Juz,Nama Orang Tua,No HP WA,Jilid Ummi
-2607020,0112345689,Muhammad Fatih Al-Ayyubi,Fatih,L,7A Tahfizh,Tahfizh Unggulan,4.0,Bpk. H. Iskandar,081234567890,Jilid 5
-2607021,0112345690,Aisyah Zahira Putri,Aisyah,P,7B Tahfizh Putri,Reguler Tahfizh,3.0,Ibu Wardatun Nisa,081298765432,Jilid 4`;
+2607020,0112345689,Muhammad Fatih Al-Ayyubi,Fatih,L,7A Tahfizh,Tahfizh Unggulan,4.0,Bpk. H. Iskandar,081234567890,Jilid 2
+2607021,0112345690,Aisyah Zahira Putri,Aisyah,P,7B Tahfizh Putri,Reguler Tahfizh,3.0,Ibu Wardatun Nisa,081298765432,Jilid 1`;
   },
 
   // Export data as CSV
@@ -741,6 +794,140 @@ export const storageService = {
         `"${v.status}"`,
         `"${tch}"`,
         `"${(v.notes || '').replace(/"/g, '""')}"`
+      ].join(',');
+    });
+
+    return [headers.join(','), ...rows].join('\n');
+  },
+
+  // ==========================================
+  // PROGRAM MATRIKULASI METODE IQRO (KELAS 8 & 9)
+  // Jadwal: Selasa, Rabu, Kamis (Non-Raport / Khusus Laporan)
+  // ==========================================
+  getMatrikulasiStudents(): MatrikulasiStudent[] {
+    let list = getItem<MatrikulasiStudent[]>(STORAGE_KEYS.MATRIKULASI_STUDENTS, []);
+    if (!list || list.length === 0) {
+      list = [...INITIAL_MATRIKULASI_STUDENTS];
+      setItem(STORAGE_KEYS.MATRIKULASI_STUDENTS, list);
+    }
+    return list;
+  },
+
+  saveMatrikulasiStudents(list: MatrikulasiStudent[]): void {
+    setItem(STORAGE_KEYS.MATRIKULASI_STUDENTS, list);
+  },
+
+  addMatrikulasiStudent(item: Omit<MatrikulasiStudent, 'id'> | MatrikulasiStudent): MatrikulasiStudent {
+    const list = this.getMatrikulasiStudents();
+    const newStudent: MatrikulasiStudent = {
+      ...item,
+      id: 'id' in item && item.id ? item.id : `mat-std-${Date.now()}`
+    };
+    list.unshift(newStudent);
+    this.saveMatrikulasiStudents(list);
+    return newStudent;
+  },
+
+  updateMatrikulasiStudent(item: MatrikulasiStudent): void {
+    const list = this.getMatrikulasiStudents();
+    const idx = list.findIndex(s => s.id === item.id);
+    if (idx >= 0) {
+      list[idx] = item;
+      this.saveMatrikulasiStudents(list);
+    }
+  },
+
+  deleteMatrikulasiStudent(id: string): void {
+    const list = this.getMatrikulasiStudents().filter(s => s.id !== id);
+    this.saveMatrikulasiStudents(list);
+  },
+
+  getMatrikulasiRecords(): MatrikulasiRecord[] {
+    let list = getItem<MatrikulasiRecord[]>(STORAGE_KEYS.MATRIKULASI_RECORDS, []);
+    if (!list || list.length === 0) {
+      list = [...INITIAL_MATRIKULASI_RECORDS];
+      setItem(STORAGE_KEYS.MATRIKULASI_RECORDS, list);
+    }
+    return list;
+  },
+
+  saveMatrikulasiRecords(list: MatrikulasiRecord[]): void {
+    setItem(STORAGE_KEYS.MATRIKULASI_RECORDS, list);
+  },
+
+  addMatrikulasiRecord(record: Omit<MatrikulasiRecord, 'id'> | MatrikulasiRecord): MatrikulasiRecord {
+    const list = this.getMatrikulasiRecords();
+    const newRec: MatrikulasiRecord = {
+      ...record,
+      id: 'id' in record && record.id ? record.id : `mat-rec-${Date.now()}`
+    };
+    list.unshift(newRec);
+    this.saveMatrikulasiRecords(list);
+
+    // Auto-update student current Iqro jilid and page if applicable
+    const matStudents = this.getMatrikulasiStudents();
+    const targetMatStudent = matStudents.find(ms => ms.id === newRec.matrikulasiStudentId || ms.studentId === newRec.studentId);
+    if (targetMatStudent) {
+      targetMatStudent.currentIqroJilid = newRec.jilid;
+      targetMatStudent.currentIqroPage = newRec.page;
+      this.updateMatrikulasiStudent(targetMatStudent);
+    }
+
+    return newRec;
+  },
+
+  updateMatrikulasiRecord(record: MatrikulasiRecord): void {
+    const list = this.getMatrikulasiRecords();
+    const idx = list.findIndex(r => r.id === record.id);
+    if (idx >= 0) {
+      list[idx] = record;
+      this.saveMatrikulasiRecords(list);
+    }
+  },
+
+  deleteMatrikulasiRecord(id: string): void {
+    const list = this.getMatrikulasiRecords().filter(r => r.id !== id);
+    this.saveMatrikulasiRecords(list);
+  },
+
+  exportMatrikulasiToCSV(): string {
+    const records = this.getMatrikulasiRecords();
+    const students = this.getStudents();
+    const teachers = this.getTeachers();
+    const classes = this.getClasses();
+
+    const headers = [
+      'Tanggal',
+      'Hari',
+      'NIS',
+      'Nama Santri',
+      'Kelas',
+      'Jilid Iqro',
+      'Halaman',
+      'Fokus Materi',
+      'Nilai (0-100)',
+      'Keterangan (Lulus/Ulang)',
+      'Guru Pembimbing',
+      'Catatan Evaluasi'
+    ];
+
+    const rows = records.map(r => {
+      const std = students.find(s => s.id === r.studentId);
+      const cls = classes.find(c => c.id === std?.classId)?.name || '-';
+      const tch = teachers.find(t => t.id === r.teacherId)?.name || '-';
+      return [
+        `"${r.date}"`,
+        `"${r.day}"`,
+        `"${std?.nis || '-'}"`,
+        `"${std?.name || '-'}"`,
+        `"${cls}"`,
+        `"${r.jilid}"`,
+        r.page,
+        `"${(r.materialFocus || '').replace(/"/g, '""')}"`,
+        r.score,
+        `"${r.status}"`,
+        `"${tch}"`,
+        `"${(r.notes || '').replace(/"/g, '""')}"`
       ].join(',');
     });
 

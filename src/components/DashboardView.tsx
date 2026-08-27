@@ -216,7 +216,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 Ringkasan Capaian & Akselerasi Santri
               </h2>
               <p className="text-xs text-slate-300 max-w-xl mt-1 leading-relaxed">
-                Evaluasi progres kumulatif target 1–3 Juz Al-Qur'an dan kelulusan Jilid 1–6 Metode Ummi.
+                Evaluasi progres kumulatif target 1–3 Juz Al-Qur'an dan kelulusan Jilid 1–3 Buku Ummi Dewasa.
               </p>
             </div>
             <div className="hidden sm:flex flex-col items-end">
@@ -249,10 +249,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Quick Highlights / Shortcuts */}
-        <div className="space-y-3 flex flex-col justify-between">
+        <div className="space-y-2 flex flex-col justify-between">
           <div 
             onClick={() => onNavigate('hafalan')}
-            className="bg-[#D4AF37]/10 border border-[#D4AF37]/30 p-3.5 rounded-xl hover:bg-[#D4AF37]/15 transition cursor-pointer flex items-center justify-between"
+            className="bg-[#D4AF37]/10 border border-[#D4AF37]/30 p-2.5 rounded-xl hover:bg-[#D4AF37]/15 transition cursor-pointer flex items-center justify-between"
           >
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-[#D4AF37] text-white flex items-center justify-center font-bold text-sm shrink-0">
@@ -260,7 +260,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-800">Riwayat Hafalan Qur'an</p>
-                <p className="text-[11px] text-slate-500">Log mutaba'ah & evaluasi tajwid</p>
+                <p className="text-[10px] text-slate-500">Log mutaba'ah & evaluasi tajwid</p>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-slate-400" />
@@ -268,7 +268,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div 
             onClick={() => onNavigate('ummi')}
-            className="bg-white p-3.5 rounded-xl border border-slate-200 hover:border-slate-300 shadow-xs transition cursor-pointer flex items-center justify-between"
+            className="bg-white p-2.5 rounded-xl border border-slate-200 hover:border-slate-300 shadow-xs transition cursor-pointer flex items-center justify-between"
           >
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm shrink-0">
@@ -276,15 +276,34 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-800">Pembelajaran Ummi</p>
-                <p className="text-[11px] text-slate-500">Munaqasyah Jilid 1–6 & Al-Qur'an</p>
+                <p className="text-[10px] text-slate-500">Munaqasyah Jilid 1–3 Dewasa</p>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-slate-400" />
           </div>
 
           <div 
+            onClick={() => onNavigate('matrikulasi')}
+            className="bg-amber-50/70 border border-amber-200 p-2.5 rounded-xl hover:bg-amber-100/70 transition cursor-pointer flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-[#1E293B] text-[#D4AF37] flex items-center justify-center font-bold text-sm shrink-0">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-bold text-slate-900">Matrikulasi Iqro (Kls 8 & 9)</p>
+                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-200 text-amber-900">Sel-Rab-Kam</span>
+                </div>
+                <p className="text-[10px] text-slate-600">Bimbingan khusus & laporan non-raport</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-amber-700" />
+          </div>
+
+          <div 
             onClick={() => onNavigate('targets')}
-            className="bg-white p-3.5 rounded-xl border border-slate-200 hover:border-slate-300 shadow-xs transition cursor-pointer flex items-center justify-between"
+            className="bg-white p-2.5 rounded-xl border border-slate-200 hover:border-slate-300 shadow-xs transition cursor-pointer flex items-center justify-between"
           >
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm shrink-0">
@@ -292,7 +311,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-800">Target & Capaian</p>
-                <p className="text-[11px] text-slate-500">Monitoring progres target tahunan</p>
+                <p className="text-[10px] text-slate-500">Monitoring target semester</p>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-slate-400" />
