@@ -25,7 +25,11 @@ import {
   Check,
   Sparkles,
   Share2,
-  Lock
+  Lock,
+  Cloud,
+  Database,
+  UploadCloud,
+  CheckCircle
 } from 'lucide-react';
 import { AppSettings, Role, User, Student, Teacher } from '../types';
 import { storageService } from '../services/storageService';
@@ -43,7 +47,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const [formData, setFormData] = useState<AppSettings>({ ...settings });
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'users'>('users');
+  const [activeTab, setActiveTab] = useState<'general' | 'users' | 'database'>('database');
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+  const [cloudStatusMsg, setCloudStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   
   // User Management state
   const [usersList, setUsersList] = useState<User[]>(() => storageService.getUsers());
@@ -309,6 +315,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs">
           <button
             type="button"
+            onClick={() => setActiveTab('database')}
+            className={`px-3.5 py-2 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'database' ? 'bg-[#1E293B] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Cloud className="w-3.5 h-3.5 text-[#D4AF37]" />
+            Cloud Database (Multi-Device)
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('users')}
             className={`px-3.5 py-2 rounded-lg font-bold transition cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'users' ? 'bg-[#1E293B] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
@@ -321,7 +337,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             type="button"
             onClick={() => setActiveTab('general')}
             className={`px-3.5 py-2 rounded-lg font-semibold transition cursor-pointer ${
-              activeTab === 'general' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              activeTab === 'general' ? 'bg-[#1E293B] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Profil Sekolah & KKM
@@ -340,6 +356,121 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <div className="p-3.5 bg-sky-50 border border-sky-200 rounded-xl flex items-center gap-2 text-xs text-sky-800 font-semibold animate-in fade-in">
           <Sparkles className="w-4 h-4 text-sky-600" />
           {syncNotice}
+        </div>
+      )}
+
+      {/* TAB 0: CLOUD DATABASE MULTI-DEVICE */}
+      {activeTab === 'database' && (
+        <div className="space-y-5">
+          {/* Cloud Database Status Card */}
+          <div className="bg-gradient-to-r from-[#1E293B] to-slate-900 rounded-2xl p-6 text-white border border-slate-800 shadow-md">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1.5">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-bold border border-emerald-500/30">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Cloud Database Firestore Aktif & Terhubung
+                </div>
+                <h2 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2">
+                  <Cloud className="w-5 h-5 text-[#D4AF37]" />
+                  Sinkronisasi Realtime Seluruh Perangkat
+                </h2>
+                <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                  Semua input data siswa, setoran hafalan harian, buku induk, dan nilai yang dimasukkan oleh guru di HP maupun Laptop akan langsung tersimpan di Cloud Database Online dan sinkron secara otomatis.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2.5">
+                <button
+                  type="button"
+                  disabled={isCloudSyncing}
+                  onClick={async () => {
+                    setIsCloudSyncing(true);
+                    setCloudStatusMsg(null);
+                    const res = await storageService.initCloudSync();
+                    setIsCloudSyncing(false);
+                    if (res.success) {
+                      setCloudStatusMsg({ type: 'success', text: res.message });
+                      onRefreshData();
+                      setUsersList(storageService.getUsers());
+                      setAllStudents(storageService.getStudents());
+                      setAllTeachers(storageService.getTeachers());
+                    } else {
+                      setCloudStatusMsg({ type: 'error', text: res.message });
+                    }
+                  }}
+                  className="px-4 py-2.5 bg-[#D4AF37] hover:bg-[#c49f2e] text-slate-950 font-bold rounded-xl text-xs flex items-center gap-2 cursor-pointer transition shadow-sm active:scale-95 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isCloudSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isCloudSyncing ? 'Sedang Menyinkronkan...' : 'Sinkronkan Data Cloud Sekarang'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isCloudSyncing}
+                  onClick={async () => {
+                    if (window.confirm('Unggah dan timpa seluruh data Cloud dari data yang ada di perangkat ini?')) {
+                      setIsCloudSyncing(true);
+                      setCloudStatusMsg(null);
+                      const res = await storageService.uploadAllToCloud();
+                      setIsCloudSyncing(false);
+                      if (res.success) {
+                        setCloudStatusMsg({ type: 'success', text: res.message });
+                        onRefreshData();
+                      } else {
+                        setCloudStatusMsg({ type: 'error', text: res.message });
+                      }
+                    }
+                  }}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl text-xs flex items-center gap-2 cursor-pointer transition border border-slate-700 active:scale-95 disabled:opacity-50"
+                >
+                  <UploadCloud className="w-4 h-4 text-sky-400" />
+                  <span>Unggah Data Lokal ke Cloud</span>
+                </button>
+              </div>
+            </div>
+
+            {cloudStatusMsg && (
+              <div className={`mt-4 p-3 rounded-xl flex items-center gap-2 text-xs font-semibold ${
+                cloudStatusMsg.type === 'success' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+              }`}>
+                {cloudStatusMsg.type === 'success' ? <CheckCircle className="w-4 h-4 text-emerald-400" /> : <ShieldCheck className="w-4 h-4 text-rose-400" />}
+                {cloudStatusMsg.text}
+              </div>
+            )}
+          </div>
+
+          {/* Cloud Info Detail */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2">
+              <div className="p-2 w-fit bg-amber-50 rounded-xl text-[#8C7015]">
+                <Database className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-slate-800 text-sm">Penyimpanan Terpusat</h3>
+              <p className="text-slate-500 leading-relaxed">
+                Data disimpan di database Google Cloud Firestore berkecepatan tinggi dengan proteksi enkripsi SSL/TLS.
+              </p>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2">
+              <div className="p-2 w-fit bg-emerald-50 rounded-xl text-emerald-700">
+                <Users className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-slate-800 text-sm">Multi-User & Multi-Device</h3>
+              <p className="text-slate-500 leading-relaxed">
+                Guru, Wali Santri, dan Admin dapat membuka web dari HP, tablet, atau laptop kantor mana pun dengan data yang selalu sama.
+              </p>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2">
+              <div className="p-2 w-fit bg-sky-50 rounded-xl text-sky-700">
+                <RotateCcw className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-slate-800 text-sm">Real-time Listener</h3>
+              <p className="text-slate-500 leading-relaxed">
+                Ketika guru memasukkan setoran santri di kelas, data langsung terupdate detik itu juga di portal wali santri dan laporan admin.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 

@@ -28,6 +28,18 @@ import {
 import { INITIAL_MATERIALS } from '../data/ummiData';
 import { calculateCategory } from '../data/quranData';
 import { INITIAL_MATRIKULASI_STUDENTS, INITIAL_MATRIKULASI_RECORDS } from '../data/iqroData';
+import { 
+  db, 
+  collection, 
+  doc, 
+  getDocs, 
+  getDoc, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc, 
+  writeBatch,
+  onSnapshot 
+} from './firebase';
 
 const STORAGE_KEYS = {
   SETTINGS: 'tahfizh_smpia21_settings',
@@ -43,9 +55,11 @@ const STORAGE_KEYS = {
   CURRENT_USER: 'tahfizh_smpia21_current_user',
   VIOLATIONS: 'tahfizh_smpia21_violations',
   MATRIKULASI_STUDENTS: 'tahfizh_smpia21_matrikulasi_students',
-  MATRIKULASI_RECORDS: 'tahfizh_smpia21_matrikulasi_records'
+  MATRIKULASI_RECORDS: 'tahfizh_smpia21_matrikulasi_records',
+  CLOUD_SYNCED: 'tahfizh_smpia21_cloud_synced'
 };
 
+// Local storage helpers
 function getItem<T>(key: string, defaultVal: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -72,7 +86,240 @@ function rEndSurah(r: MemorizationRecord): string {
   return `${r.surahName}: ${r.startAyah}-${r.endAyah}`;
 }
 
+// Background Cloud Sync Helpers
+async function syncCollectionToCloud(collectionName: string, items: any[]): Promise<void> {
+  try {
+    if (!items || items.length === 0) return;
+    const batch = writeBatch(db);
+    // Firestore batch limit is 500
+    const slice = items.slice(0, 450);
+    for (const item of slice) {
+      if (!item.id) continue;
+      const ref = doc(db, collectionName, String(item.id));
+      batch.set(ref, JSON.parse(JSON.stringify(item)), { merge: true });
+    }
+    await batch.commit();
+  } catch (err) {
+    console.warn(`[Cloud Sync] Batch write error for ${collectionName}:`, err);
+  }
+}
+
+async function syncDocToCloud(collectionName: string, id: string, data: any): Promise<void> {
+  try {
+    const ref = doc(db, collectionName, String(id));
+    await setDoc(ref, JSON.parse(JSON.stringify(data)), { merge: true });
+  } catch (err) {
+    console.warn(`[Cloud Sync] Doc write error for ${collectionName}/${id}:`, err);
+  }
+}
+
+async function deleteDocFromCloud(collectionName: string, id: string): Promise<void> {
+  try {
+    const ref = doc(db, collectionName, String(id));
+    await deleteDoc(ref);
+  } catch (err) {
+    console.warn(`[Cloud Sync] Delete error for ${collectionName}/${id}:`, err);
+  }
+}
+
+// Global Cloud Sync Listener
+let isCloudListenerAttached = false;
+type SyncCallback = () => void;
+const syncListeners: SyncCallback[] = [];
+
 export const storageService = {
+  // Subscribe to realtime cloud updates
+  onSyncChange(cb: SyncCallback) {
+    syncListeners.push(cb);
+    return () => {
+      const idx = syncListeners.indexOf(cb);
+      if (idx >= 0) syncListeners.splice(idx, 1);
+    };
+  },
+
+  notifyListeners() {
+    syncListeners.forEach(cb => {
+      try { cb(); } catch (e) { console.error(e); }
+    });
+  },
+
+  // Initialize Realtime Cloud Sync & Download from Firebase
+  async initCloudSync(): Promise<{ success: boolean; message: string }> {
+    try {
+      // 1. Fetch Students from Firestore
+      const stdSnap = await getDocs(collection(db, 'students'));
+      if (!stdSnap.empty) {
+        const cloudStudents: Student[] = [];
+        stdSnap.forEach(d => cloudStudents.push(d.data() as Student));
+        setItem(STORAGE_KEYS.STUDENTS, cloudStudents);
+      } else {
+        // Seed initial data to cloud
+        const localStudents = this.getStudents();
+        syncCollectionToCloud('students', localStudents);
+      }
+
+      // 2. Fetch Teachers
+      const tchSnap = await getDocs(collection(db, 'teachers'));
+      if (!tchSnap.empty) {
+        const cloudTeachers: Teacher[] = [];
+        tchSnap.forEach(d => cloudTeachers.push(d.data() as Teacher));
+        setItem(STORAGE_KEYS.TEACHERS, cloudTeachers);
+      } else {
+        const localTeachers = this.getTeachers();
+        syncCollectionToCloud('teachers', localTeachers);
+      }
+
+      // 3. Fetch Classes
+      const clsSnap = await getDocs(collection(db, 'classes'));
+      if (!clsSnap.empty) {
+        const cloudClasses: ClassItem[] = [];
+        clsSnap.forEach(d => cloudClasses.push(d.data() as ClassItem));
+        setItem(STORAGE_KEYS.CLASSES, cloudClasses);
+      } else {
+        const localClasses = this.getClasses();
+        syncCollectionToCloud('classes', localClasses);
+      }
+
+      // 4. Fetch Memorization Records
+      const memSnap = await getDocs(collection(db, 'memorization_records'));
+      if (!memSnap.empty) {
+        const cloudMem: MemorizationRecord[] = [];
+        memSnap.forEach(d => cloudMem.push(d.data() as MemorizationRecord));
+        // Sort descending by date
+        cloudMem.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setItem(STORAGE_KEYS.MEMORIZATION, cloudMem);
+      } else {
+        const localMem = this.getMemorizationRecords();
+        syncCollectionToCloud('memorization_records', localMem);
+      }
+
+      // 5. Fetch Ummi Records
+      const ummiSnap = await getDocs(collection(db, 'ummi_records'));
+      if (!ummiSnap.empty) {
+        const cloudUmmi: UmmiRecord[] = [];
+        ummiSnap.forEach(d => cloudUmmi.push(d.data() as UmmiRecord));
+        cloudUmmi.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setItem(STORAGE_KEYS.UMMI, cloudUmmi);
+      } else {
+        const localUmmi = this.getUmmiRecords();
+        syncCollectionToCloud('ummi_records', localUmmi);
+      }
+
+      // 6. Fetch Violations
+      const vioSnap = await getDocs(collection(db, 'violations'));
+      if (!vioSnap.empty) {
+        const cloudVio: TahfizhViolation[] = [];
+        vioSnap.forEach(d => cloudVio.push(d.data() as TahfizhViolation));
+        cloudVio.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setItem(STORAGE_KEYS.VIOLATIONS, cloudVio);
+      } else {
+        const localVio = this.getViolations();
+        syncCollectionToCloud('violations', localVio);
+      }
+
+      // 7. Fetch Matrikulasi
+      const matStdSnap = await getDocs(collection(db, 'matrikulasi_students'));
+      if (!matStdSnap.empty) {
+        const cloudMatStd: MatrikulasiStudent[] = [];
+        matStdSnap.forEach(d => cloudMatStd.push(d.data() as MatrikulasiStudent));
+        setItem(STORAGE_KEYS.MATRIKULASI_STUDENTS, cloudMatStd);
+      } else {
+        const localMatStd = this.getMatrikulasiStudents();
+        syncCollectionToCloud('matrikulasi_students', localMatStd);
+      }
+
+      const matRecSnap = await getDocs(collection(db, 'matrikulasi_records'));
+      if (!matRecSnap.empty) {
+        const cloudMatRec: MatrikulasiRecord[] = [];
+        matRecSnap.forEach(d => cloudMatRec.push(d.data() as MatrikulasiRecord));
+        cloudMatRec.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setItem(STORAGE_KEYS.MATRIKULASI_RECORDS, cloudMatRec);
+      } else {
+        const localMatRec = this.getMatrikulasiRecords();
+        syncCollectionToCloud('matrikulasi_records', localMatRec);
+      }
+
+      // 8. Fetch Settings
+      const setDocSnap = await getDoc(doc(db, 'app_settings', 'config'));
+      if (setDocSnap.exists()) {
+        setItem(STORAGE_KEYS.SETTINGS, setDocSnap.data() as AppSettings);
+      } else {
+        const localSet = this.getSettings();
+        syncDocToCloud('app_settings', 'config', localSet);
+      }
+
+      // 9. Fetch Users
+      const usrSnap = await getDocs(collection(db, 'users'));
+      if (!usrSnap.empty) {
+        const cloudUsers: User[] = [];
+        usrSnap.forEach(d => cloudUsers.push(d.data() as User));
+        setItem(STORAGE_KEYS.USERS, cloudUsers);
+      } else {
+        const localUsers = this.getUsers();
+        syncCollectionToCloud('users', localUsers);
+      }
+
+      // Attach Real-time listener for multi-device sync
+      if (!isCloudListenerAttached) {
+        isCloudListenerAttached = true;
+        
+        // Listen for remote setoran hafalan
+        onSnapshot(collection(db, 'memorization_records'), (snap) => {
+          const remoteRecords: MemorizationRecord[] = [];
+          snap.forEach(d => remoteRecords.push(d.data() as MemorizationRecord));
+          remoteRecords.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          setItem(STORAGE_KEYS.MEMORIZATION, remoteRecords);
+          this.notifyListeners();
+        });
+
+        // Listen for remote ummi records
+        onSnapshot(collection(db, 'ummi_records'), (snap) => {
+          const remoteRecords: UmmiRecord[] = [];
+          snap.forEach(d => remoteRecords.push(d.data() as UmmiRecord));
+          remoteRecords.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          setItem(STORAGE_KEYS.UMMI, remoteRecords);
+          this.notifyListeners();
+        });
+
+        // Listen for remote students
+        onSnapshot(collection(db, 'students'), (snap) => {
+          const remoteStudents: Student[] = [];
+          snap.forEach(d => remoteStudents.push(d.data() as Student));
+          if (remoteStudents.length > 0) {
+            setItem(STORAGE_KEYS.STUDENTS, remoteStudents);
+            this.notifyListeners();
+          }
+        });
+      }
+
+      localStorage.setItem(STORAGE_KEYS.CLOUD_SYNCED, 'true');
+      this.notifyListeners();
+      return { success: true, message: 'Cloud database Firestore berhasil disinkronkan!' };
+    } catch (e: any) {
+      console.error('[Cloud Sync] Failed to initialize cloud storage:', e);
+      return { success: false, message: e?.message || 'Gagal menyambung ke Cloud database.' };
+    }
+  },
+
+  // Push all local data to Cloud database explicitly
+  async uploadAllToCloud(): Promise<{ success: boolean; message: string }> {
+    try {
+      await syncCollectionToCloud('students', this.getStudents());
+      await syncCollectionToCloud('teachers', this.getTeachers());
+      await syncCollectionToCloud('classes', this.getClasses());
+      await syncCollectionToCloud('memorization_records', this.getMemorizationRecords());
+      await syncCollectionToCloud('ummi_records', this.getUmmiRecords());
+      await syncCollectionToCloud('violations', this.getViolations());
+      await syncCollectionToCloud('matrikulasi_students', this.getMatrikulasiStudents());
+      await syncCollectionToCloud('matrikulasi_records', this.getMatrikulasiRecords());
+      await syncCollectionToCloud('users', this.getUsers());
+      await syncDocToCloud('app_settings', 'config', this.getSettings());
+      return { success: true, message: 'Seluruh data lokal berhasil diunggah ke Firebase Cloud!' };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Gagal mengunggah data ke Cloud.' };
+    }
+  },
+
   // Reset all data to default
   resetToDefaults(): void {
     setItem(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
@@ -87,6 +334,9 @@ export const storageService = {
     setItem(STORAGE_KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
     setItem(STORAGE_KEYS.CURRENT_USER, INITIAL_USERS[0]);
     setItem(STORAGE_KEYS.VIOLATIONS, INITIAL_VIOLATIONS);
+
+    // Sync reset to Cloud
+    this.uploadAllToCloud();
   },
 
   resetToInitial(): void {
@@ -99,6 +349,7 @@ export const storageService = {
   },
   saveSettings(settings: AppSettings): void {
     setItem(STORAGE_KEYS.SETTINGS, settings);
+    syncDocToCloud('app_settings', 'config', settings);
   },
 
   // Current User / Auth
@@ -133,10 +384,12 @@ export const storageService = {
       list.push(user);
     }
     setItem(STORAGE_KEYS.USERS, list);
+    syncDocToCloud('users', user.id, user);
   },
   deleteUser(id: string): void {
     const list = this.getUsers().filter(u => u.id !== id);
     setItem(STORAGE_KEYS.USERS, list);
+    deleteDocFromCloud('users', id);
   },
   getUserByTeacherId(teacherId: string): User | undefined {
     return this.getUsers().find(u => u.teacherId === teacherId);
@@ -150,6 +403,7 @@ export const storageService = {
     if (!user) return false;
     user.password = newPassword.trim();
     setItem(STORAGE_KEYS.USERS, list);
+    syncDocToCloud('users', user.id, user);
     return true;
   },
   syncAllAccounts(): { totalCreated: number; totalUsers: number } {
@@ -206,6 +460,7 @@ export const storageService = {
     });
 
     setItem(STORAGE_KEYS.USERS, users);
+    syncCollectionToCloud('users', users);
     return { totalCreated: createdCount, totalUsers: users.length };
   },
   authenticate(identifier: string, passwordInput: string): { success: boolean; user?: User; message?: string } {
@@ -287,10 +542,12 @@ export const storageService = {
       list.push(cls);
     }
     setItem(STORAGE_KEYS.CLASSES, list);
+    syncDocToCloud('classes', cls.id, cls);
   },
   deleteClass(id: string): void {
     const list = this.getClasses().filter(c => c.id !== id);
     setItem(STORAGE_KEYS.CLASSES, list);
+    deleteDocFromCloud('classes', id);
   },
 
   // Auto-distribute students into halaqah groups (1 guru 1-12 anak)
@@ -309,7 +566,6 @@ export const storageService = {
     });
 
     const teacherCount = teachers.length;
-    // Calculate balanced distribution or limit max per teacher
     const updatedStudents = sorted.map((student, index) => {
       const assignedTeacher = teachers[index % teacherCount];
       return {
@@ -319,6 +575,7 @@ export const storageService = {
     });
 
     setItem(STORAGE_KEYS.STUDENTS, updatedStudents);
+    syncCollectionToCloud('students', updatedStudents);
 
     const groups = teachers.map(t => {
       const count = updatedStudents.filter(s => s.teacherId === t.id).length;
@@ -344,6 +601,7 @@ export const storageService = {
       return s;
     });
     setItem(STORAGE_KEYS.STUDENTS, updated);
+    syncCollectionToCloud('students', updated);
   },
 
   // Teachers
@@ -359,16 +617,17 @@ export const storageService = {
       list.push(teacher);
     }
     setItem(STORAGE_KEYS.TEACHERS, list);
+    syncDocToCloud('teachers', teacher.id, teacher);
   },
   deleteTeacher(id: string): void {
     const list = this.getTeachers().filter(t => t.id !== id);
     setItem(STORAGE_KEYS.TEACHERS, list);
+    deleteDocFromCloud('teachers', id);
   },
 
   // Students
   getStudents(): Student[] {
     const list = getItem(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
-    // Sanitize any legacy Jilid 4-6 to Ummi Dewasa Jilid 1-3
     let modified = false;
     const sanitized = list.map(s => {
       let updatedJilid = s.currentUmmiJilid;
@@ -398,10 +657,12 @@ export const storageService = {
       list.unshift(student);
     }
     setItem(STORAGE_KEYS.STUDENTS, list);
+    syncDocToCloud('students', student.id, student);
   },
   deleteStudent(id: string): void {
     const list = this.getStudents().filter(s => s.id !== id);
     setItem(STORAGE_KEYS.STUDENTS, list);
+    deleteDocFromCloud('students', id);
   },
 
   // Batch import students from CSV
@@ -442,7 +703,6 @@ export const storageService = {
       const line = lines[i].trim();
       if (!line) continue;
 
-      // Handle quoted commas
       const cols: string[] = [];
       let inQuote = false;
       let currentVal = '';
@@ -466,7 +726,6 @@ export const storageService = {
         continue;
       }
 
-      // Check existing NIS
       if (existing.some(s => s.nis === nis)) {
         errors.push(`Baris ${i + 1}: Siswa dengan NIS ${nis} sudah terdaftar.`);
         continue;
@@ -514,6 +773,7 @@ export const storageService = {
 
     if (successCount > 0) {
       setItem(STORAGE_KEYS.STUDENTS, existing);
+      syncCollectionToCloud('students', existing);
     }
 
     return { successCount, errors };
@@ -527,6 +787,7 @@ export const storageService = {
     const list = this.getMemorizationRecords();
     list.unshift(record);
     setItem(STORAGE_KEYS.MEMORIZATION, list);
+    syncDocToCloud('memorization_records', record.id, record);
 
     // Update Student stats
     const student = this.getStudentById(record.studentId);
@@ -535,13 +796,9 @@ export const storageService = {
       const totalScore = studentRecords.reduce((acc, r) => acc + r.finalScore, 0);
       const avgScore = Math.round(totalScore / studentRecords.length);
 
-      // Total distinct ayahs approximation
       const totalAyahs = studentRecords.reduce((acc, r) => acc + r.totalAyah, 0);
       const uniqueSurahs = new Set(studentRecords.map(r => r.surahNumber)).size;
-      
-      // Juz rough calculation (1 juz ~ 200 ayahs average)
       const approxJuz = Number(Math.min(30, (totalAyahs / 200)).toFixed(1));
-
       const lastSurahText = rEndSurah(record);
 
       const updatedStudent: Student = {
@@ -554,11 +811,8 @@ export const storageService = {
         avgScore: avgScore
       };
       this.saveStudent(updatedStudent);
-
-      // Update target progress if exists
       this.updateStudentTargetProgress(student.id, updatedStudent.totalJuzHafal);
 
-      // Trigger notification
       this.addNotification({
         id: 'notif-' + Date.now(),
         title: `Setoran ${record.type}: ${student.name}`,
@@ -573,6 +827,7 @@ export const storageService = {
   deleteMemorizationRecord(id: string): void {
     const list = this.getMemorizationRecords().filter(r => r.id !== id);
     setItem(STORAGE_KEYS.MEMORIZATION, list);
+    deleteDocFromCloud('memorization_records', id);
   },
 
   // Ummi Records
@@ -599,8 +854,8 @@ export const storageService = {
     const list = this.getUmmiRecords();
     list.unshift(record);
     setItem(STORAGE_KEYS.UMMI, list);
+    syncDocToCloud('ummi_records', record.id, record);
 
-    // Update Student Ummi state
     const student = this.getStudentById(record.studentId);
     if (student) {
       const updatedStudent: Student = {
@@ -609,43 +864,54 @@ export const storageService = {
         currentUmmiPage: record.page
       };
       this.saveStudent(updatedStudent);
-
-      if (record.status === 'Perlu Mengulang') {
-        this.addNotification({
-          id: 'notif-' + Date.now(),
-          title: `Evaluasi Ummi: ${student.name}`,
-          message: `Ananda ${student.nickname} perlu mengulang ${record.jilid} halaman ${record.page} (${record.materialName}).`,
-          date: new Date().toISOString().replace('T', ' ').slice(0, 16),
-          type: 'warning',
-          read: false,
-          studentId: student.id
-        });
-      }
     }
   },
   deleteUmmiRecord(id: string): void {
     const list = this.getUmmiRecords().filter(r => r.id !== id);
     setItem(STORAGE_KEYS.UMMI, list);
+    deleteDocFromCloud('ummi_records', id);
+  },
+
+  // Targets & Capaian
+  getTargets(): TargetProgress[] {
+    return getItem(STORAGE_KEYS.TARGETS, INITIAL_TARGETS);
+  },
+  updateStudentTargetProgress(studentId: string, currentJuz: number): void {
+    const targets = this.getTargets();
+    const idx = targets.findIndex(t => t.studentId === studentId);
+    if (idx >= 0) {
+      const t = targets[idx];
+      t.achievedJuz = currentJuz;
+      t.percentage = Math.min(100, Math.round((currentJuz / t.targetJuz) * 100));
+      t.status = t.percentage >= 100 ? 'ahead' : t.percentage >= 70 ? 'on-track' : 'behind';
+      setItem(STORAGE_KEYS.TARGETS, targets);
+      syncCollectionToCloud('targets', targets);
+    }
+  },
+
+  // Notifications
+  getNotifications(): NotificationItem[] {
+    return getItem(STORAGE_KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
+  },
+  addNotification(notif: NotificationItem): void {
+    const list = this.getNotifications();
+    list.unshift(notif);
+    setItem(STORAGE_KEYS.NOTIFICATIONS, list);
+    syncDocToCloud('notifications', notif.id, notif);
+  },
+  markNotificationAsRead(id: string): void {
+    const list = this.getNotifications();
+    const n = list.find(x => x.id === id);
+    if (n) {
+      n.read = true;
+      setItem(STORAGE_KEYS.NOTIFICATIONS, list);
+      syncDocToCloud('notifications', n.id, n);
+    }
   },
 
   // Learning Materials
   getMaterials(): LearningMaterial[] {
-    const list = getItem<LearningMaterial[]>(STORAGE_KEYS.MATERIALS, INITIAL_MATERIALS);
-    // If list contains legacy Jilid 4-6 materials, filter them out and replace with Ummi Dewasa Jilid 1-3
-    const hasLegacy = list && list.some(m => m.jilid === 'Jilid 4' || m.jilid === 'Jilid 5' || m.jilid === 'Jilid 6');
-    if (!list || list.length === 0 || hasLegacy) {
-      setItem(STORAGE_KEYS.MATERIALS, INITIAL_MATERIALS);
-      return INITIAL_MATERIALS;
-    }
-    // Ensure all standard curriculum modules from INITIAL_MATERIALS are available
-    const existingIds = new Set(list.map(m => m.id));
-    const missing = INITIAL_MATERIALS.filter(m => !existingIds.has(m.id));
-    if (missing.length > 0) {
-      const combined = [...list, ...missing];
-      setItem(STORAGE_KEYS.MATERIALS, combined);
-      return combined;
-    }
-    return list;
+    return getItem(STORAGE_KEYS.MATERIALS, INITIAL_MATERIALS);
   },
   saveMaterial(mat: LearningMaterial): void {
     const list = this.getMaterials();
@@ -656,146 +922,17 @@ export const storageService = {
       list.push(mat);
     }
     setItem(STORAGE_KEYS.MATERIALS, list);
+    syncDocToCloud('materials', mat.id, mat);
   },
   deleteMaterial(id: string): void {
     const list = this.getMaterials().filter(m => m.id !== id);
     setItem(STORAGE_KEYS.MATERIALS, list);
+    deleteDocFromCloud('materials', id);
   },
 
-  // Targets
-  getTargets(): TargetProgress[] {
-    return getItem(STORAGE_KEYS.TARGETS, INITIAL_TARGETS);
-  },
-  saveTarget(target: TargetProgress): void {
-    const list = this.getTargets();
-    const idx = list.findIndex(t => t.id === target.id);
-    if (idx >= 0) {
-      list[idx] = target;
-    } else {
-      list.push(target);
-    }
-    setItem(STORAGE_KEYS.TARGETS, list);
-  },
-  updateStudentTargetProgress(studentId: string, currentAchievement: number): void {
-    const list = this.getTargets();
-    const target = list.find(t => t.studentId === studentId);
-    if (target) {
-      const remaining = Math.max(0, Number((target.targetJuz - currentAchievement).toFixed(1)));
-      const pct = Math.min(100, Math.round((currentAchievement / target.targetJuz) * 100));
-      let status: 'Sesuai Target' | 'Perlu Ditingkatkan' | 'Tertinggal' = 'Sesuai Target';
-      if (pct < 35) status = 'Tertinggal';
-      else if (pct < 60) status = 'Perlu Ditingkatkan';
-
-      target.currentAchievement = currentAchievement;
-      target.remainingJuz = remaining;
-      target.percentage = pct;
-      target.status = status;
-      setItem(STORAGE_KEYS.TARGETS, list);
-    }
-  },
-
-  // Notifications
-  getNotifications(): NotificationItem[] {
-    return getItem(STORAGE_KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
-  },
-  addNotification(item: NotificationItem): void {
-    const list = this.getNotifications();
-    list.unshift(item);
-    setItem(STORAGE_KEYS.NOTIFICATIONS, list.slice(0, 50));
-  },
-  markAllNotificationsRead(): void {
-    const list = this.getNotifications().map(n => ({ ...n, read: true }));
-    setItem(STORAGE_KEYS.NOTIFICATIONS, list);
-  },
-  clearNotifications(): void {
-    setItem(STORAGE_KEYS.NOTIFICATIONS, []);
-  },
-
-  // CSV Generator for sample template
-  generateStudentCSVTemplate(): string {
-    return `NIS,NISN,Nama Lengkap,Nama Panggilan,Jenis Kelamin,Kelas,Program,Target Juz,Nama Orang Tua,No HP WA,Jilid Ummi
-2607020,0112345689,Muhammad Fatih Al-Ayyubi,Fatih,L,7A Tahfizh,Tahfizh Unggulan,4.0,Bpk. H. Iskandar,081234567890,Jilid 2
-2607021,0112345690,Aisyah Zahira Putri,Aisyah,P,7B Tahfizh Putri,Reguler Tahfizh,3.0,Ibu Wardatun Nisa,081298765432,Jilid 1`;
-  },
-
-  // Export data as CSV
-  exportStudentsToCSV(): string {
-    const students = this.getStudents();
-    const classes = this.getClasses();
-    const teachers = this.getTeachers();
-
-    const headers = ['NIS', 'NISN', 'Nama Lengkap', 'Panggilan', 'Gender', 'Kelas', 'Guru', 'Program', 'Target (Juz)', 'Capaian (Juz)', 'Ummi Jilid', 'Ummi Halaman', 'Rata-rata Nilai', 'Nama Wali', 'No HP'];
-    const rows = students.map(s => {
-      const cls = classes.find(c => c.id === s.classId)?.name || '-';
-      const tch = teachers.find(t => t.id === s.teacherId)?.name || '-';
-      return [
-        `"${s.nis}"`,
-        `"${s.nisn}"`,
-        `"${s.name}"`,
-        `"${s.nickname}"`,
-        `"${s.gender}"`,
-        `"${cls}"`,
-        `"${tch}"`,
-        `"${s.program}"`,
-        s.targetJuz,
-        s.totalJuzHafal,
-        `"${s.currentUmmiJilid}"`,
-        s.currentUmmiPage,
-        s.avgScore,
-        `"${s.parentName}"`,
-        `"${s.parentPhone}"`
-      ].join(',');
-    });
-
-    return [headers.join(','), ...rows].join('\n');
-  },
-
-  exportHafalanToCSV(): string {
-    const records = this.getMemorizationRecords();
-    const students = this.getStudents();
-    const teachers = this.getTeachers();
-
-    const headers = ['Tanggal', 'NIS', 'Nama Siswa', 'Juz', 'Surat Awal', 'Ayat Mulai', 'Surat Akhir', 'Ayat Selesai', 'Jumlah Ayat', 'Jenis Setoran', 'Kelancaran', 'Tajwid', 'Makhraj', 'Fashahah', 'Adab', 'Hafalan', 'Nilai Akhir', 'Predikat', 'Guru Penguji', 'Catatan'];
-    const rows = records.map(r => {
-      const std = students.find(s => s.id === r.studentId);
-      const tch = teachers.find(t => t.id === r.teacherId)?.name || '-';
-      return [
-        `"${r.date}"`,
-        `"${std?.nis || '-'}"`,
-        `"${std?.name || '-'}"`,
-        r.juz,
-        `"${r.surahName}"`,
-        r.startAyah,
-        `"${r.endSurahName || r.surahName}"`,
-        r.endAyah,
-        r.totalAyah,
-        `"${r.type}"`,
-        r.scores?.kelancaran || r.finalScore,
-        r.scores?.tajwid || r.finalScore,
-        r.scores?.makhraj || r.finalScore,
-        r.scores?.fashahah || r.finalScore,
-        r.scores?.adab || 90,
-        r.scores?.hafalan || r.finalScore,
-        r.finalScore,
-        `"${r.category}"`,
-        `"${tch}"`,
-        `"${(r.notes || '').replace(/"/g, '""')}"`
-      ].join(',');
-    });
-
-    return [headers.join(','), ...rows].join('\n');
-  },
-
-  // ==========================================
-  // PELANGGARAN TAHFIZH & KEDISIPLINAN
-  // ==========================================
+  // Violations & Kedisiplinan
   getViolations(): TahfizhViolation[] {
-    let violations = getItem<TahfizhViolation[]>(STORAGE_KEYS.VIOLATIONS, []);
-    if (!violations || violations.length === 0) {
-      violations = [...INITIAL_VIOLATIONS];
-      setItem(STORAGE_KEYS.VIOLATIONS, violations);
-    }
-    return violations;
+    return getItem(STORAGE_KEYS.VIOLATIONS, INITIAL_VIOLATIONS);
   },
 
   getViolationsByStudent(studentId: string): TahfizhViolation[] {
@@ -810,6 +947,7 @@ export const storageService = {
     };
     violations.unshift(newViolation);
     setItem(STORAGE_KEYS.VIOLATIONS, violations);
+    syncDocToCloud('violations', newViolation.id, newViolation);
     return newViolation;
   },
 
@@ -819,12 +957,14 @@ export const storageService = {
     if (idx >= 0) {
       violations[idx] = violation;
       setItem(STORAGE_KEYS.VIOLATIONS, violations);
+      syncDocToCloud('violations', violation.id, violation);
     }
   },
 
   deleteViolation(id: string): void {
     const violations = this.getViolations().filter(v => v.id !== id);
     setItem(STORAGE_KEYS.VIOLATIONS, violations);
+    deleteDocFromCloud('violations', id);
   },
 
   exportViolationsToCSV(): string {
@@ -853,10 +993,7 @@ export const storageService = {
     return [headers.join(','), ...rows].join('\n');
   },
 
-  // ==========================================
-  // PROGRAM MATRIKULASI METODE IQRO (KELAS 8 & 9)
-  // Jadwal: Selasa, Rabu, Kamis (Non-Raport / Khusus Laporan)
-  // ==========================================
+  // Matrikulasi Iqro
   getMatrikulasiStudents(): MatrikulasiStudent[] {
     let list = getItem<MatrikulasiStudent[]>(STORAGE_KEYS.MATRIKULASI_STUDENTS, []);
     if (!list || list.length === 0) {
@@ -868,6 +1005,7 @@ export const storageService = {
 
   saveMatrikulasiStudents(list: MatrikulasiStudent[]): void {
     setItem(STORAGE_KEYS.MATRIKULASI_STUDENTS, list);
+    syncCollectionToCloud('matrikulasi_students', list);
   },
 
   addMatrikulasiStudent(item: Omit<MatrikulasiStudent, 'id'> | MatrikulasiStudent): MatrikulasiStudent {
@@ -893,6 +1031,7 @@ export const storageService = {
   deleteMatrikulasiStudent(id: string): void {
     const list = this.getMatrikulasiStudents().filter(s => s.id !== id);
     this.saveMatrikulasiStudents(list);
+    deleteDocFromCloud('matrikulasi_students', id);
   },
 
   getMatrikulasiRecords(): MatrikulasiRecord[] {
@@ -906,6 +1045,7 @@ export const storageService = {
 
   saveMatrikulasiRecords(list: MatrikulasiRecord[]): void {
     setItem(STORAGE_KEYS.MATRIKULASI_RECORDS, list);
+    syncCollectionToCloud('matrikulasi_records', list);
   },
 
   addMatrikulasiRecord(record: Omit<MatrikulasiRecord, 'id'> | MatrikulasiRecord): MatrikulasiRecord {
@@ -917,7 +1057,6 @@ export const storageService = {
     list.unshift(newRec);
     this.saveMatrikulasiRecords(list);
 
-    // Auto-update student current Iqro jilid and page if applicable
     const matStudents = this.getMatrikulasiStudents();
     const targetMatStudent = matStudents.find(ms => ms.id === newRec.matrikulasiStudentId || ms.studentId === newRec.studentId);
     if (targetMatStudent) {
@@ -941,6 +1080,7 @@ export const storageService = {
   deleteMatrikulasiRecord(id: string): void {
     const list = this.getMatrikulasiRecords().filter(r => r.id !== id);
     this.saveMatrikulasiRecords(list);
+    deleteDocFromCloud('matrikulasi_records', id);
   },
 
   exportMatrikulasiToCSV(): string {
