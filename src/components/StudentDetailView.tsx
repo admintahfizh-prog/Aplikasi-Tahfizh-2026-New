@@ -593,6 +593,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
             ummiRecords={studentUmmiRecords}
             settings={settings}
             allStudents={students}
+            classes={classes}
           />
         </div>
       )}

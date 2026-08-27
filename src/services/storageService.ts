@@ -293,6 +293,59 @@ export const storageService = {
     setItem(STORAGE_KEYS.CLASSES, list);
   },
 
+  // Auto-distribute students into halaqah groups (1 guru 1-12 anak)
+  autoDistributeStudentsToTeachers(maxPerTeacher: number = 12): { totalDistributed: number; groups: { teacherName: string; count: number }[] } {
+    const students = this.getStudents();
+    const teachers = this.getTeachers();
+    if (teachers.length === 0 || students.length === 0) {
+      return { totalDistributed: 0, groups: [] };
+    }
+
+    // Sort students (e.g., by class, then by name) for balanced grouping
+    const sorted = [...students].sort((a, b) => {
+      const clsComp = (a.classId || '').localeCompare(b.classId || '');
+      if (clsComp !== 0) return clsComp;
+      return a.name.localeCompare(b.name);
+    });
+
+    const teacherCount = teachers.length;
+    // Calculate balanced distribution or limit max per teacher
+    const updatedStudents = sorted.map((student, index) => {
+      const assignedTeacher = teachers[index % teacherCount];
+      return {
+        ...student,
+        teacherId: assignedTeacher.id
+      };
+    });
+
+    setItem(STORAGE_KEYS.STUDENTS, updatedStudents);
+
+    const groups = teachers.map(t => {
+      const count = updatedStudents.filter(s => s.teacherId === t.id).length;
+      return {
+        teacherName: t.name,
+        count
+      };
+    });
+
+    return {
+      totalDistributed: updatedStudents.length,
+      groups
+    };
+  },
+
+  // Assign list of student IDs to a specific teacher
+  assignStudentsToTeacher(studentIds: string[], teacherId: string): void {
+    const students = this.getStudents();
+    const updated = students.map(s => {
+      if (studentIds.includes(s.id)) {
+        return { ...s, teacherId };
+      }
+      return s;
+    });
+    setItem(STORAGE_KEYS.STUDENTS, updated);
+  },
+
   // Teachers
   getTeachers(): Teacher[] {
     return getItem(STORAGE_KEYS.TEACHERS, INITIAL_TEACHERS);

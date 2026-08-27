@@ -30,6 +30,7 @@ interface StudentRaportCardProps {
   ummiRecords: UmmiRecord[];
   settings: AppSettings;
   allStudents?: Student[];
+  classes?: ClassItem[];
   onSelectStudent?: (studentId: string) => void;
   onClose?: () => void;
 }
@@ -42,9 +43,37 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
   ummiRecords,
   settings,
   allStudents = [],
+  classes = [],
   onSelectStudent,
   onClose
 }) => {
+  // Class Filter & Sort for Quick Student Navigation
+  const [selectedClassFilter, setSelectedClassFilter] = useState<string>(student.classId || '');
+  const [sortBy, setSortBy] = useState<'class-asc' | 'name-asc' | 'nis-asc'>('class-asc');
+
+  // Sorted and filtered students list for switcher
+  const sortedNavStudents = useMemo(() => {
+    const list = selectedClassFilter 
+      ? allStudents.filter(s => s.classId === selectedClassFilter) 
+      : allStudents;
+
+    return [...list].sort((a, b) => {
+      if (sortBy === 'class-asc') {
+        const clsA = classes.find(c => c.id === a.classId)?.name || '';
+        const clsB = classes.find(c => c.id === b.classId)?.name || '';
+        const clsComp = clsA.localeCompare(clsB);
+        if (clsComp !== 0) return clsComp;
+        return a.name.localeCompare(b.name);
+      }
+      if (sortBy === 'name-asc') {
+        return a.name.localeCompare(b.name);
+      }
+      if (sortBy === 'nis-asc') {
+        return (a.nis || '').localeCompare(b.nis || '');
+      }
+      return 0;
+    });
+  }, [allStudents, selectedClassFilter, sortBy, classes]);
   // Period state
   const [periodTitle, setPeriodTitle] = useState<string>('TENGAH SEMESTER 1');
   const [academicYear, setAcademicYear] = useState<string>(settings.academicYear || '2026/2027');
@@ -185,10 +214,10 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
     window.open(`https://wa.me/${cleanPhone}?text=${msg}`, '_blank');
   };
 
-  // Find next and prev student index
-  const currentIndex = allStudents.findIndex(s => s.id === student.id);
-  const prevStudent = currentIndex > 0 ? allStudents[currentIndex - 1] : null;
-  const nextStudent = currentIndex >= 0 && currentIndex < allStudents.length - 1 ? allStudents[currentIndex + 1] : null;
+  // Find next and prev student index within sortedNavStudents
+  const currentIndex = sortedNavStudents.findIndex(s => s.id === student.id);
+  const prevStudent = currentIndex > 0 ? sortedNavStudents[currentIndex - 1] : null;
+  const nextStudent = currentIndex >= 0 && currentIndex < sortedNavStudents.length - 1 ? sortedNavStudents[currentIndex + 1] : null;
 
   return (
     <div className="space-y-6">
@@ -214,7 +243,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
               </h2>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              NIS: <strong className="text-slate-700">{student.nis}</strong> • Kelas: <strong className="text-slate-700">{studentClass?.name || '8 E'}</strong> • Wali: {student.parentName}
+              NIS: <strong className="text-slate-700">{student.nis}</strong> • Kelas: <strong className="text-slate-700">{studentClass?.name || 'Kelas'}</strong> • Wali: {student.parentName}
             </p>
           </div>
         </div>
@@ -222,34 +251,61 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
         {/* Student Switcher & Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
           {allStudents.length > 1 && onSelectStudent && (
-            <div className="flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200">
-              <button
-                disabled={!prevStudent}
-                onClick={() => prevStudent && onSelectStudent(prevStudent.id)}
-                className="p-1.5 rounded-lg text-slate-600 hover:bg-white disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer"
-                title="Siswa Sebelumnya"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              
-              <select
-                value={student.id}
-                onChange={(e) => onSelectStudent(e.target.value)}
-                className="bg-transparent text-xs font-bold text-slate-800 px-2 py-1 focus:outline-none max-w-[160px] truncate"
-              >
-                {allStudents.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+            <div className="flex items-center gap-1.5 bg-slate-100 rounded-xl p-1.5 border border-slate-200">
+              {/* Filter Rombel Kelas */}
+              {classes.length > 0 && (
+                <select
+                  value={selectedClassFilter}
+                  onChange={(e) => {
+                    const newClassId = e.target.value;
+                    setSelectedClassFilter(newClassId);
+                    const firstInClass = allStudents.find(s => !newClassId || s.classId === newClassId);
+                    if (firstInClass) onSelectStudent(firstInClass.id);
+                  }}
+                  className="bg-white text-[11px] font-bold text-slate-800 px-2 py-1 rounded-lg border border-slate-200 focus:outline-none max-w-[130px]"
+                >
+                  <option value="">Semua Kelas</option>
+                  {classes.map(c => (
+                    <option key={c.id} value={c.id}>Kelas {c.name}</option>
+                  ))}
+                </select>
+              )}
 
-              <button
-                disabled={!nextStudent}
-                onClick={() => nextStudent && onSelectStudent(nextStudent.id)}
-                className="p-1.5 rounded-lg text-slate-600 hover:bg-white disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer"
-                title="Siswa Selanjutnya"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              {/* Prev / Next & Student Select */}
+              <div className="flex items-center bg-white rounded-lg border border-slate-200">
+                <button
+                  disabled={!prevStudent}
+                  onClick={() => prevStudent && onSelectStudent(prevStudent.id)}
+                  className="p-1 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer"
+                  title="Siswa Sebelumnya"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                
+                <select
+                  value={student.id}
+                  onChange={(e) => onSelectStudent(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-slate-800 px-2 py-1 focus:outline-none max-w-[170px] truncate"
+                >
+                  {sortedNavStudents.map(s => {
+                    const cls = classes.find(c => c.id === s.classId);
+                    return (
+                      <option key={s.id} value={s.id}>
+                        {s.name} {cls ? `(${cls.name})` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+
+                <button
+                  disabled={!nextStudent}
+                  onClick={() => nextStudent && onSelectStudent(nextStudent.id)}
+                  className="p-1 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer"
+                  title="Siswa Selanjutnya"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           )}
 

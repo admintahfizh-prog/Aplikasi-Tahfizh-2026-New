@@ -42,12 +42,41 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   const [selectedClass, setSelectedClass] = useState<string>('');
   const [selectedTeacher, setSelectedTeacher] = useState<string>('');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [sortBy, setSortBy] = useState<'class-asc' | 'class-desc' | 'name-asc' | 'score-desc' | 'juz-desc'>('class-asc');
   const [selectedIndividualStudentId, setSelectedIndividualStudentId] = useState<string>(students[0]?.id || '');
 
   const filteredStudents = students.filter(s => {
     const matchClass = !selectedClass || s.classId === selectedClass;
     const matchTeacher = !selectedTeacher || s.teacherId === selectedTeacher;
-    return matchClass && matchTeacher;
+    const matchSearch = !searchTerm || s.name.toLowerCase().includes(searchTerm.toLowerCase()) || (s.nis || '').includes(searchTerm);
+    return matchClass && matchTeacher && matchSearch;
+  });
+
+  const sortedStudents = [...filteredStudents].sort((a, b) => {
+    const clsA = classes.find(c => c.id === a.classId)?.name || '';
+    const clsB = classes.find(c => c.id === b.classId)?.name || '';
+
+    if (sortBy === 'class-asc') {
+      const clsCompare = clsA.localeCompare(clsB);
+      if (clsCompare !== 0) return clsCompare;
+      return a.name.localeCompare(b.name);
+    }
+    if (sortBy === 'class-desc') {
+      const clsCompare = clsB.localeCompare(clsA);
+      if (clsCompare !== 0) return clsCompare;
+      return a.name.localeCompare(b.name);
+    }
+    if (sortBy === 'name-asc') {
+      return a.name.localeCompare(b.name);
+    }
+    if (sortBy === 'score-desc') {
+      return b.avgScore - a.avgScore;
+    }
+    if (sortBy === 'juz-desc') {
+      return b.totalJuzHafal - a.totalJuzHafal;
+    }
+    return 0;
   });
 
   const currentIndividualStudent = students.find(s => s.id === selectedIndividualStudentId) || students[0];
@@ -148,7 +177,21 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         </div>
 
         {reportType !== 'raport_individu' && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">Cari Santri / NIS:</label>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Ketik nama atau NIS..."
+                  className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                />
+              </div>
+            </div>
+
             <div>
               <label className="block text-[11px] font-bold text-slate-600 mb-1">Filter Kelas:</label>
               <select
@@ -160,6 +203,21 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 {classes.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">Urutkan Data (Sort):</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="w-full py-1.5 px-3 bg-amber-50/70 border border-amber-200 rounded-lg text-xs font-bold text-amber-900 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+              >
+                <option value="class-asc">Urut Berdasarkan Kelas (A → Z)</option>
+                <option value="class-desc">Urut Berdasarkan Kelas (Z → A)</option>
+                <option value="name-asc">Urut Nama Santri (A → Z)</option>
+                <option value="score-desc">Urut Nilai Tertinggi</option>
+                <option value="juz-desc">Urut Capaian Juz Terbanyak</option>
               </select>
             </div>
 
@@ -176,13 +234,6 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 ))}
               </select>
             </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">Tahun Ajaran / Semester:</label>
-              <div className="py-1.5 px-3 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-700">
-                {settings.academicYear} • Semester {settings.semester}
-              </div>
-            </div>
           </div>
         )}
       </div>
@@ -197,6 +248,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           ummiRecords={ummiRecords}
           settings={settings}
           allStudents={students}
+          classes={classes}
           onSelectStudent={(id) => setSelectedIndividualStudentId(id)}
         />
       )}
@@ -281,7 +333,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredStudents.map((std, idx) => {
+                {sortedStudents.map((std, idx) => {
                   const cls = classes.find(c => c.id === std.classId);
                   const teacher = teachers.find(t => t.id === std.teacherId);
                   const percent = Math.min(100, Math.round((std.totalJuzHafal / std.targetJuz) * 100));

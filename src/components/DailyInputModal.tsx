@@ -70,6 +70,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
   const effectiveInitialStudentId = preSelectedStudentId || initialStudentId;
 
   // Step 1: Selection
+  const [filterMode, setFilterMode] = useState<'class' | 'halaqah' | 'all'>('class');
   const [selectedClassId, setSelectedClassId] = useState<string>(classes[0]?.id || '');
   const [selectedStudentId, setSelectedStudentId] = useState<string>(effectiveInitialStudentId || students[0]?.id || '');
   const [recordDate, setRecordDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -131,7 +132,15 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
 
   const selectedStudent = students.find(s => s.id === selectedStudentId) || students[0];
   const selectedClass = classes.find(c => c.id === selectedClassId) || classes[0];
-  const filteredStudents = students.filter(s => !selectedClassId || s.classId === selectedClassId);
+  const filteredStudents = students.filter(s => {
+    if (filterMode === 'halaqah' && currentTeacher) {
+      return s.teacherId === currentTeacher.id;
+    }
+    if (filterMode === 'all') {
+      return true;
+    }
+    return !selectedClassId || s.classId === selectedClassId;
+  });
 
   // Calculate final score for Quran
   const calculateFinalQuranScore = (): number => {
@@ -384,38 +393,84 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
 
           {/* Step 1: Select Class, Student & Date */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-700 uppercase tracking-wider">
-              <span className="flex items-center gap-1.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2">
+              <span className="flex items-center gap-1.5 font-bold text-slate-700 uppercase tracking-wider">
                 <UserCheck className="w-4 h-4 text-[#D4AF37]" />
-                1. Pilih Kelas & Siswa
+                1. Pilih Sasaran & Siswa
               </span>
-              <span className="text-slate-500 font-normal capitalize">
-                Guru Penguji: <strong className="text-slate-800">{currentTeacher?.name || 'Ustadz Ahmad Fauzan, Lc.'}</strong>
-              </span>
+
+              {/* Mode Filter Toggle */}
+              <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setFilterMode('class')}
+                  className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
+                    filterMode === 'class' ? 'bg-[#1E293B] text-white' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Per Kelas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterMode('halaqah')}
+                  className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
+                    filterMode === 'halaqah' ? 'bg-[#1E293B] text-white' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Halaqah Saya ({students.filter(s => s.teacherId === currentTeacher?.id).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterMode('all')}
+                  className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
+                    filterMode === 'all' ? 'bg-[#1E293B] text-white' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Semua Siswa
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {/* Class Selector */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Kelas</label>
-                <select
-                  value={selectedClassId}
-                  onChange={(e) => {
-                    setSelectedClassId(e.target.value);
-                    const firstInClass = students.find(s => s.classId === e.target.value);
-                    if (firstInClass) setSelectedStudentId(firstInClass.id);
-                  }}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
-                >
-                  {classes.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} ({c.grade})</option>
-                  ))}
-                </select>
-              </div>
+              {/* Class Selector (Active when filterMode === 'class') */}
+              {filterMode === 'class' ? (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Rombel Kelas</label>
+                  <select
+                    value={selectedClassId}
+                    onChange={(e) => {
+                      setSelectedClassId(e.target.value);
+                      const firstInClass = students.find(s => s.classId === e.target.value);
+                      if (firstInClass) setSelectedStudentId(firstInClass.id);
+                    }}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                  >
+                    {classes.map(c => (
+                      <option key={c.id} value={c.id}>{c.name} ({c.grade})</option>
+                    ))}
+                  </select>
+                </div>
+              ) : filterMode === 'halaqah' ? (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Kelompok Halaqah</label>
+                  <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-xs font-bold text-emerald-800 truncate">
+                    Binaan: {currentTeacher?.name || 'Ustadz Pengampu'}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Cakupan Penilaian</label>
+                  <div className="p-2 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 truncate">
+                    Semua Siswa / Lintas Kelas
+                  </div>
+                </div>
+              )}
 
               {/* Student Selector */}
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Nama Siswa</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Nama Santri ({filteredStudents.length})
+                </label>
                 <select
                   value={selectedStudentId}
                   onChange={(e) => {
@@ -426,11 +481,14 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                   }}
                   className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
                 >
-                  {filteredStudents.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.nis} - {s.name} ({s.nickname})
-                    </option>
-                  ))}
+                  {filteredStudents.map(s => {
+                    const cls = classes.find(c => c.id === s.classId);
+                    return (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({cls?.name || 'Rombel'})
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
