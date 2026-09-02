@@ -564,9 +564,7 @@ export const storageService = {
           password: 'guru21',
           email: t.email || `${username}@smpialazhar21.sch.id`,
           role: 'guru',
-          avatar: t.photo || (t.gender === 'P'
-            ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80'
-            : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'),
+          avatar: t.photo || '',
           title: `Guru Pengampu Tahfizh (${t.specialization})`,
           phone: t.phone,
           teacherId: t.id
@@ -588,7 +586,7 @@ export const storageService = {
           password: 'santri21',
           email: s.parentEmail || `${s.nis}@santri.smpialazhar21.sch.id`,
           role: 'wali',
-          avatar: s.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+          avatar: s.photo || '',
           title: `Wali Santri / Siswa (${s.parentName || s.name})`,
           phone: s.parentPhone,
           studentId: s.id
@@ -632,7 +630,7 @@ export const storageService = {
           password: 'santri21',
           email: studentMatch.parentEmail || `${studentMatch.nis}@santri.smpialazhar21.sch.id`,
           role: 'wali',
-          avatar: studentMatch.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+          avatar: studentMatch.photo || '',
           title: `Wali Santri (${studentMatch.parentName || studentMatch.name})`,
           phone: studentMatch.parentPhone,
           studentId: studentMatch.id

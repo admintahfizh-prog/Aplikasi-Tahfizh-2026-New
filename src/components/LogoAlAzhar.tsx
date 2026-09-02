@@ -1,48 +1,67 @@
 import React from 'react';
+import { storageService } from '../services/storageService';
 
 interface LogoProps {
   className?: string;
   size?: number;
   showText?: boolean;
+  customLogoUrl?: string;
 }
 
 export const LogoAlAzhar: React.FC<LogoProps> = ({ 
   className = "w-10 h-10", 
   size = 48,
-  showText = false 
+  showText = false,
+  customLogoUrl
 }) => {
+  // If customLogoUrl not provided in props, try getting from storage settings
+  const logoSrc = customLogoUrl !== undefined 
+    ? customLogoUrl 
+    : (storageService.getSettings()?.customLogoUrl || '');
+
   return (
     <div className={`inline-flex items-center gap-2.5 ${className}`}>
-      <svg
-        viewBox="0 0 500 500"
-        width={size}
-        height={size}
-        className="shrink-0 select-none drop-shadow-xs"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <defs>
-          {/* Top text curved path */}
-          <path
-            id="topTextPath"
-            d="M 90.26,361.85 A 195,195 0 1,1 409.74,361.85"
-            fill="none"
-          />
-          {/* Bottom text curved path */}
-          <path
-            id="bottomTextPath"
-            d="M 409.74,361.85 A 206,206 0 0,1 90.26,361.85"
-            fill="none"
-          />
-          <clipPath id="innerCircleClip">
-            <circle cx="250" cy="250" r="166" />
-          </clipPath>
-        </defs>
+      {logoSrc ? (
+        <img
+          src={logoSrc}
+          alt="Logo Sekolah"
+          width={size}
+          height={size}
+          className="shrink-0 select-none object-contain rounded-lg drop-shadow-xs"
+          style={{ width: size, height: size }}
+        />
+      ) : (
+        <svg
+          viewBox="0 0 500 500"
+          width={size}
+          height={size}
+          className="shrink-0 select-none drop-shadow-xs"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            {/* Top text curved path */}
+            <path
+              id="topTextPath"
+              d="M 90.26,361.85 A 195,195 0 1,1 409.74,361.85"
+              fill="none"
+            />
+            {/* Bottom text curved path */}
+            <path
+              id="bottomTextPath"
+              d="M 409.74,361.85 A 206,206 0 0,1 90.26,361.85"
+              fill="none"
+            />
+            <clipPath id="innerCircleClip">
+              <circle cx="250" cy="250" r="166" />
+            </clipPath>
+          </defs>
 
-        {/* Outer White Background Ring & Outermost Black Border */}
-        <circle cx="250" cy="250" r="242" fill="#FFFFFF" stroke="#000000" strokeWidth="12" />
+          {/* Outer White Background Ring & Outermost Black Border */}
+          <circle cx="250" cy="250" r="242" fill="#FFFFFF" stroke="#000000" strokeWidth="12" />
 
-        {/* Inner Border Ring */}
-        <circle cx="250" cy="250" r="172" fill="none" stroke="#000000" strokeWidth="10" />
+          {/* Inner Border Ring */}
+          <circle cx="250" cy="250" r="172" fill="none" stroke="#000000" strokeWidth="10" />
+
 
         {/* Inner Sky Blue Circle */}
         <circle cx="250" cy="250" r="166" fill="#0082C8" />
@@ -180,6 +199,7 @@ export const LogoAlAzhar: React.FC<LogoProps> = ({
           </g>
         </g>
       </svg>
+      )}
 
       {showText && (
         <div className="flex flex-col">

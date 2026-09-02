@@ -247,8 +247,11 @@ export interface AppSettings {
   schoolAddress: string;
   academicYear: string;
   semester: 'Ganjil' | 'Genap';
+  activeSemester?: 'Ganjil' | 'Genap';
   headmasterName?: string;
+  principalName?: string;
   tahfizhCoordinator?: string;
   minScoreKKM?: number;
   defaultTargetJuz?: number;
+  customLogoUrl?: string;
 }
