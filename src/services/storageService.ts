@@ -90,35 +90,45 @@ function rEndSurah(r: MemorizationRecord): string {
 async function syncCollectionToCloud(collectionName: string, items: any[]): Promise<void> {
   try {
     if (!items || items.length === 0) return;
-    const batch = writeBatch(db);
-    // Firestore batch limit is 500
-    const slice = items.slice(0, 450);
-    for (const item of slice) {
-      if (!item.id) continue;
-      const ref = doc(db, collectionName, String(item.id));
-      batch.set(ref, JSON.parse(JSON.stringify(item)), { merge: true });
+    // Chunk items into batches of 300 (Firestore limit is 500)
+    for (let i = 0; i < items.length; i += 300) {
+      const chunk = items.slice(i, i + 300);
+      const batch = writeBatch(db);
+      for (const item of chunk) {
+        if (!item || !item.id) continue;
+        const ref = doc(db, collectionName, String(item.id));
+        const sanitized = JSON.parse(JSON.stringify(item));
+        batch.set(ref, sanitized, { merge: true });
+      }
+      await batch.commit();
     }
-    await batch.commit();
+    console.log(`[Cloud Sync] Synced ${items.length} docs to collection '${collectionName}'`);
   } catch (err) {
-    console.warn(`[Cloud Sync] Batch write error for ${collectionName}:`, err);
+    console.error(`[Cloud Sync] Batch write error for ${collectionName}:`, err);
+    throw err;
   }
 }
 
 async function syncDocToCloud(collectionName: string, id: string, data: any): Promise<void> {
   try {
+    if (!id || !data) return;
     const ref = doc(db, collectionName, String(id));
-    await setDoc(ref, JSON.parse(JSON.stringify(data)), { merge: true });
+    const sanitized = JSON.parse(JSON.stringify(data));
+    await setDoc(ref, sanitized, { merge: true });
+    console.log(`[Cloud Sync] Synced doc '${collectionName}/${id}'`);
   } catch (err) {
-    console.warn(`[Cloud Sync] Doc write error for ${collectionName}/${id}:`, err);
+    console.error(`[Cloud Sync] Doc write error for ${collectionName}/${id}:`, err);
   }
 }
 
 async function deleteDocFromCloud(collectionName: string, id: string): Promise<void> {
   try {
+    if (!id) return;
     const ref = doc(db, collectionName, String(id));
     await deleteDoc(ref);
+    console.log(`[Cloud Sync] Deleted doc '${collectionName}/${id}'`);
   } catch (err) {
-    console.warn(`[Cloud Sync] Delete error for ${collectionName}/${id}:`, err);
+    console.error(`[Cloud Sync] Delete error for ${collectionName}/${id}:`, err);
   }
 }
 
@@ -143,9 +153,147 @@ export const storageService = {
     });
   },
 
-  // Initialize Realtime Cloud Sync & Download from Firebase
+  // Attach Realtime Multi-Device Listeners
+  startRealtimeSync() {
+    if (isCloudListenerAttached) return;
+    isCloudListenerAttached = true;
+    console.log('[Cloud Sync] Starting realtime multi-device listeners...');
+
+    try {
+      // 1. Memorization Records
+      onSnapshot(collection(db, 'memorization_records'), (snap) => {
+        const list: MemorizationRecord[] = [];
+        snap.forEach(d => list.push(d.data() as MemorizationRecord));
+        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.MEMORIZATION)) {
+          setItem(STORAGE_KEYS.MEMORIZATION, list);
+          this.notifyListeners();
+        }
+      }, (err) => console.warn('[Cloud Sync] Memorization listener warning:', err));
+
+      // 2. Ummi Records
+      onSnapshot(collection(db, 'ummi_records'), (snap) => {
+        const list: UmmiRecord[] = [];
+        snap.forEach(d => list.push(d.data() as UmmiRecord));
+        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.UMMI)) {
+          setItem(STORAGE_KEYS.UMMI, list);
+          this.notifyListeners();
+        }
+      }, (err) => console.warn('[Cloud Sync] Ummi listener warning:', err));
+
+      // 3. Students
+      onSnapshot(collection(db, 'students'), (snap) => {
+        const list: Student[] = [];
+        snap.forEach(d => list.push(d.data() as Student));
+        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.STUDENTS)) {
+          setItem(STORAGE_KEYS.STUDENTS, list);
+          this.notifyListeners();
+        }
+      }, (err) => console.warn('[Cloud Sync] Students listener warning:', err));
+
+      // 4. Teachers
+      onSnapshot(collection(db, 'teachers'), (snap) => {
+        const list: Teacher[] = [];
+        snap.forEach(d => list.push(d.data() as Teacher));
+        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.TEACHERS)) {
+          setItem(STORAGE_KEYS.TEACHERS, list);
+          this.notifyListeners();
+        }
+      }, (err) => console.warn('[Cloud Sync] Teachers listener warning:', err));
+
+      // 5. Classes
+      onSnapshot(collection(db, 'classes'), (snap) => {
+        const list: ClassItem[] = [];
+        snap.forEach(d => list.push(d.data() as ClassItem));
+        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.CLASSES)) {
+          setItem(STORAGE_KEYS.CLASSES, list);
+          this.notifyListeners();
+        }
+      }, (err) => console.warn('[Cloud Sync] Classes listener warning:', err));
+
+      // 6. Targets
+      onSnapshot(collection(db, 'targets'), (snap) => {
+        const list: TargetProgress[] = [];
+        snap.forEach(d => list.push(d.data() as TargetProgress));
+        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.TARGETS)) {
+          setItem(STORAGE_KEYS.TARGETS, list);
+          this.notifyListeners();
+        }
+      }, (err) => console.warn('[Cloud Sync] Targets listener warning:', err));
+
+      // 7. Materials
+      onSnapshot(collection(db, 'materials'), (snap) => {
+        const list: LearningMaterial[] = [];
+        snap.forEach(d => list.push(d.data() as LearningMaterial));
+        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.MATERIALS)) {
+          setItem(STORAGE_KEYS.MATERIALS, list);
+          this.notifyListeners();
+        }
+      }, (err) => console.warn('[Cloud Sync] Materials listener warning:', err));
+
+      // 8. Violations
+      onSnapshot(collection(db, 'violations'), (snap) => {
+        const list: TahfizhViolation[] = [];
+        snap.forEach(d => list.push(d.data() as TahfizhViolation));
+        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.VIOLATIONS)) {
+          setItem(STORAGE_KEYS.VIOLATIONS, list);
+          this.notifyListeners();
+        }
+      }, (err) => console.warn('[Cloud Sync] Violations listener warning:', err));
+
+      // 9. Matrikulasi Students
+      onSnapshot(collection(db, 'matrikulasi_students'), (snap) => {
+        const list: MatrikulasiStudent[] = [];
+        snap.forEach(d => list.push(d.data() as MatrikulasiStudent));
+        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.MATRIKULASI_STUDENTS)) {
+          setItem(STORAGE_KEYS.MATRIKULASI_STUDENTS, list);
+          this.notifyListeners();
+        }
+      }, (err) => console.warn('[Cloud Sync] Matrikulasi students listener warning:', err));
+
+      // 10. Matrikulasi Records
+      onSnapshot(collection(db, 'matrikulasi_records'), (snap) => {
+        const list: MatrikulasiRecord[] = [];
+        snap.forEach(d => list.push(d.data() as MatrikulasiRecord));
+        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.MATRIKULASI_RECORDS)) {
+          setItem(STORAGE_KEYS.MATRIKULASI_RECORDS, list);
+          this.notifyListeners();
+        }
+      }, (err) => console.warn('[Cloud Sync] Matrikulasi records listener warning:', err));
+
+      // 11. Users
+      onSnapshot(collection(db, 'users'), (snap) => {
+        const list: User[] = [];
+        snap.forEach(d => list.push(d.data() as User));
+        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.USERS)) {
+          setItem(STORAGE_KEYS.USERS, list);
+          this.notifyListeners();
+        }
+      }, (err) => console.warn('[Cloud Sync] Users listener warning:', err));
+
+      // 12. App Settings
+      onSnapshot(doc(db, 'app_settings', 'config'), (snap) => {
+        if (snap.exists()) {
+          setItem(STORAGE_KEYS.SETTINGS, snap.data() as AppSettings);
+          this.notifyListeners();
+        }
+      }, (err) => console.warn('[Cloud Sync] Settings listener warning:', err));
+    } catch (err) {
+      console.warn('[Cloud Sync] Realtime listener error:', err);
+    }
+  },
+
+  // Initialize Realtime Cloud Sync & Download / Seed to Firebase
   async initCloudSync(): Promise<{ success: boolean; message: string }> {
     try {
+      console.log('[Cloud Sync] Initializing Firestore Sync across devices...');
+
+      // Start Real-time snapshot listeners immediately
+      this.startRealtimeSync();
+
       // 1. Fetch Students from Firestore
       const stdSnap = await getDocs(collection(db, 'students'));
       if (!stdSnap.empty) {
@@ -153,9 +301,8 @@ export const storageService = {
         stdSnap.forEach(d => cloudStudents.push(d.data() as Student));
         setItem(STORAGE_KEYS.STUDENTS, cloudStudents);
       } else {
-        // Seed initial data to cloud
         const localStudents = this.getStudents();
-        syncCollectionToCloud('students', localStudents);
+        await syncCollectionToCloud('students', localStudents);
       }
 
       // 2. Fetch Teachers
@@ -166,7 +313,7 @@ export const storageService = {
         setItem(STORAGE_KEYS.TEACHERS, cloudTeachers);
       } else {
         const localTeachers = this.getTeachers();
-        syncCollectionToCloud('teachers', localTeachers);
+        await syncCollectionToCloud('teachers', localTeachers);
       }
 
       // 3. Fetch Classes
@@ -177,7 +324,7 @@ export const storageService = {
         setItem(STORAGE_KEYS.CLASSES, cloudClasses);
       } else {
         const localClasses = this.getClasses();
-        syncCollectionToCloud('classes', localClasses);
+        await syncCollectionToCloud('classes', localClasses);
       }
 
       // 4. Fetch Memorization Records
@@ -185,12 +332,11 @@ export const storageService = {
       if (!memSnap.empty) {
         const cloudMem: MemorizationRecord[] = [];
         memSnap.forEach(d => cloudMem.push(d.data() as MemorizationRecord));
-        // Sort descending by date
         cloudMem.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setItem(STORAGE_KEYS.MEMORIZATION, cloudMem);
       } else {
         const localMem = this.getMemorizationRecords();
-        syncCollectionToCloud('memorization_records', localMem);
+        await syncCollectionToCloud('memorization_records', localMem);
       }
 
       // 5. Fetch Ummi Records
@@ -202,10 +348,32 @@ export const storageService = {
         setItem(STORAGE_KEYS.UMMI, cloudUmmi);
       } else {
         const localUmmi = this.getUmmiRecords();
-        syncCollectionToCloud('ummi_records', localUmmi);
+        await syncCollectionToCloud('ummi_records', localUmmi);
       }
 
-      // 6. Fetch Violations
+      // 6. Fetch Targets
+      const tgtSnap = await getDocs(collection(db, 'targets'));
+      if (!tgtSnap.empty) {
+        const cloudTargets: TargetProgress[] = [];
+        tgtSnap.forEach(d => cloudTargets.push(d.data() as TargetProgress));
+        setItem(STORAGE_KEYS.TARGETS, cloudTargets);
+      } else {
+        const localTargets = this.getTargets();
+        await syncCollectionToCloud('targets', localTargets);
+      }
+
+      // 7. Fetch Materials
+      const matSnap = await getDocs(collection(db, 'materials'));
+      if (!matSnap.empty) {
+        const cloudMat: LearningMaterial[] = [];
+        matSnap.forEach(d => cloudMat.push(d.data() as LearningMaterial));
+        setItem(STORAGE_KEYS.MATERIALS, cloudMat);
+      } else {
+        const localMat = this.getMaterials();
+        await syncCollectionToCloud('materials', localMat);
+      }
+
+      // 8. Fetch Violations
       const vioSnap = await getDocs(collection(db, 'violations'));
       if (!vioSnap.empty) {
         const cloudVio: TahfizhViolation[] = [];
@@ -214,10 +382,10 @@ export const storageService = {
         setItem(STORAGE_KEYS.VIOLATIONS, cloudVio);
       } else {
         const localVio = this.getViolations();
-        syncCollectionToCloud('violations', localVio);
+        await syncCollectionToCloud('violations', localVio);
       }
 
-      // 7. Fetch Matrikulasi
+      // 9. Fetch Matrikulasi
       const matStdSnap = await getDocs(collection(db, 'matrikulasi_students'));
       if (!matStdSnap.empty) {
         const cloudMatStd: MatrikulasiStudent[] = [];
@@ -225,7 +393,7 @@ export const storageService = {
         setItem(STORAGE_KEYS.MATRIKULASI_STUDENTS, cloudMatStd);
       } else {
         const localMatStd = this.getMatrikulasiStudents();
-        syncCollectionToCloud('matrikulasi_students', localMatStd);
+        await syncCollectionToCloud('matrikulasi_students', localMatStd);
       }
 
       const matRecSnap = await getDocs(collection(db, 'matrikulasi_records'));
@@ -236,19 +404,19 @@ export const storageService = {
         setItem(STORAGE_KEYS.MATRIKULASI_RECORDS, cloudMatRec);
       } else {
         const localMatRec = this.getMatrikulasiRecords();
-        syncCollectionToCloud('matrikulasi_records', localMatRec);
+        await syncCollectionToCloud('matrikulasi_records', localMatRec);
       }
 
-      // 8. Fetch Settings
+      // 10. Fetch Settings
       const setDocSnap = await getDoc(doc(db, 'app_settings', 'config'));
       if (setDocSnap.exists()) {
         setItem(STORAGE_KEYS.SETTINGS, setDocSnap.data() as AppSettings);
       } else {
         const localSet = this.getSettings();
-        syncDocToCloud('app_settings', 'config', localSet);
+        await syncDocToCloud('app_settings', 'config', localSet);
       }
 
-      // 9. Fetch Users
+      // 11. Fetch Users
       const usrSnap = await getDocs(collection(db, 'users'));
       if (!usrSnap.empty) {
         const cloudUsers: User[] = [];
@@ -256,54 +424,22 @@ export const storageService = {
         setItem(STORAGE_KEYS.USERS, cloudUsers);
       } else {
         const localUsers = this.getUsers();
-        syncCollectionToCloud('users', localUsers);
-      }
-
-      // Attach Real-time listener for multi-device sync
-      if (!isCloudListenerAttached) {
-        isCloudListenerAttached = true;
-        
-        // Listen for remote setoran hafalan
-        onSnapshot(collection(db, 'memorization_records'), (snap) => {
-          const remoteRecords: MemorizationRecord[] = [];
-          snap.forEach(d => remoteRecords.push(d.data() as MemorizationRecord));
-          remoteRecords.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-          setItem(STORAGE_KEYS.MEMORIZATION, remoteRecords);
-          this.notifyListeners();
-        });
-
-        // Listen for remote ummi records
-        onSnapshot(collection(db, 'ummi_records'), (snap) => {
-          const remoteRecords: UmmiRecord[] = [];
-          snap.forEach(d => remoteRecords.push(d.data() as UmmiRecord));
-          remoteRecords.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-          setItem(STORAGE_KEYS.UMMI, remoteRecords);
-          this.notifyListeners();
-        });
-
-        // Listen for remote students
-        onSnapshot(collection(db, 'students'), (snap) => {
-          const remoteStudents: Student[] = [];
-          snap.forEach(d => remoteStudents.push(d.data() as Student));
-          if (remoteStudents.length > 0) {
-            setItem(STORAGE_KEYS.STUDENTS, remoteStudents);
-            this.notifyListeners();
-          }
-        });
+        await syncCollectionToCloud('users', localUsers);
       }
 
       localStorage.setItem(STORAGE_KEYS.CLOUD_SYNCED, 'true');
       this.notifyListeners();
-      return { success: true, message: 'Cloud database Firestore berhasil disinkronkan!' };
+      return { success: true, message: 'Database Firebase Firestore aktif & tersinkronisasi realtime!' };
     } catch (e: any) {
       console.error('[Cloud Sync] Failed to initialize cloud storage:', e);
-      return { success: false, message: e?.message || 'Gagal menyambung ke Cloud database.' };
+      return { success: false, message: e?.message || 'Gagal menyambung ke database Firestore.' };
     }
   },
 
   // Push all local data to Cloud database explicitly
   async uploadAllToCloud(): Promise<{ success: boolean; message: string }> {
     try {
+      console.log('[Cloud Sync] Uploading all records to Firebase...');
       await syncCollectionToCloud('students', this.getStudents());
       await syncCollectionToCloud('teachers', this.getTeachers());
       await syncCollectionToCloud('classes', this.getClasses());
@@ -313,9 +449,13 @@ export const storageService = {
       await syncCollectionToCloud('matrikulasi_students', this.getMatrikulasiStudents());
       await syncCollectionToCloud('matrikulasi_records', this.getMatrikulasiRecords());
       await syncCollectionToCloud('users', this.getUsers());
+      await syncCollectionToCloud('targets', this.getTargets());
+      await syncCollectionToCloud('materials', this.getMaterials());
       await syncDocToCloud('app_settings', 'config', this.getSettings());
-      return { success: true, message: 'Seluruh data lokal berhasil diunggah ke Firebase Cloud!' };
+      localStorage.setItem(STORAGE_KEYS.CLOUD_SYNCED, 'true');
+      return { success: true, message: 'Seluruh data berhasil tersimpan di database Firebase Cloud!' };
     } catch (err: any) {
+      console.error('[Cloud Sync] Upload failed:', err);
       return { success: false, message: err?.message || 'Gagal mengunggah data ke Cloud.' };
     }
   },
@@ -527,6 +667,34 @@ export const storageService = {
       success: false, 
       message: 'Kata sandi tidak sesuai. Silakan periksa kembali atau hubungi Admin untuk reset kata sandi.' 
     };
+  },
+
+  async authenticateAsync(identifier: string, passwordInput: string): Promise<{ success: boolean; user?: User; message?: string }> {
+    // 1. Try local authentication
+    let res = this.authenticate(identifier, passwordInput);
+    if (res.success) return res;
+
+    // 2. Fallback: Fetch fresh users and students from Firestore in case created/modified on another device
+    try {
+      const usrSnap = await getDocs(collection(db, 'users'));
+      if (!usrSnap.empty) {
+        const cloudUsers: User[] = [];
+        usrSnap.forEach(d => cloudUsers.push(d.data() as User));
+        setItem(STORAGE_KEYS.USERS, cloudUsers);
+      }
+
+      const stdSnap = await getDocs(collection(db, 'students'));
+      if (!stdSnap.empty) {
+        const cloudStudents: Student[] = [];
+        stdSnap.forEach(d => cloudStudents.push(d.data() as Student));
+        setItem(STORAGE_KEYS.STUDENTS, cloudStudents);
+      }
+
+      res = this.authenticate(identifier, passwordInput);
+    } catch (err) {
+      console.warn('[Auth] Remote check fallback warning:', err);
+    }
+    return res;
   },
 
   // Classes
@@ -779,6 +947,82 @@ export const storageService = {
     return { successCount, errors };
   },
 
+  // Generate CSV template for student import
+  generateStudentCSVTemplate(): string {
+    const headers = ['nis', 'nisn', 'name', 'nickname', 'gender', 'class', 'program', 'target', 'parentName', 'parentPhone', 'ummiJilid'];
+    const sampleRows = [
+      '2026001,0198273645,Ahmad Fauzan Pratama,Fauzan,L,7A,Tahfizh Unggulan,4.0,Bambang Pratama,081234567890,Jilid 2',
+      '2026002,0198273646,Siti Aisyah Rahma,Aisyah,P,7B,Takhassus 30 Juz,6.0,Hendra Gunawan,081298765432,Jilid 3'
+    ];
+    return [headers.join(','), ...sampleRows].join('\n');
+  },
+
+  // Export all students to CSV
+  exportStudentsToCSV(): string {
+    const students = this.getStudents();
+    const classes = this.getClasses();
+    const teachers = this.getTeachers();
+
+    const headers = ['NIS', 'NISN', 'Nama Lengkap', 'Panggilan', 'Gender', 'Kelas', 'Guru Pembimbing', 'Program', 'Target Juz', 'Juz Hafal', 'Surah Hafal', 'Ayat Hafal', 'Jilid Ummi', 'Halaman Ummi', 'Nama Wali', 'No HP Wali'];
+    const rows = students.map(s => {
+      const cls = classes.find(c => c.id === s.classId)?.name || '-';
+      const tch = teachers.find(t => t.id === s.teacherId)?.name || '-';
+      return [
+        `"${s.nis}"`,
+        `"${s.nisn || '-'}"`,
+        `"${s.name}"`,
+        `"${s.nickname || '-'}"`,
+        `"${s.gender}"`,
+        `"${cls}"`,
+        `"${tch}"`,
+        `"${s.program}"`,
+        s.targetJuz,
+        s.totalJuzHafal,
+        s.totalSurahHafal,
+        s.totalAyahHafal,
+        `"${s.currentUmmiJilid || '-'}"`,
+        s.currentUmmiPage || 1,
+        `"${s.parentName || '-'}"`,
+        `"${s.parentPhone || '-'}"`
+      ].join(',');
+    });
+    return [headers.join(','), ...rows].join('\n');
+  },
+
+  // Export all memorization records to CSV
+  exportHafalanToCSV(): string {
+    const records = this.getMemorizationRecords();
+    const students = this.getStudents();
+    const teachers = this.getTeachers();
+    const classes = this.getClasses();
+
+    const headers = ['Tanggal', 'NIS', 'Nama Santri', 'Kelas', 'Guru Pengampu', 'Jenis Setoran', 'Surah', 'Ayat Mulai', 'Ayat Selesai', 'Total Ayat', 'Nilai Kelancaran', 'Nilai Tajwid', 'Nilai Makhraj', 'Nilai Akhir', 'Kategori', 'Catatan'];
+    const rows = records.map(r => {
+      const std = students.find(s => s.id === r.studentId);
+      const cls = classes.find(c => c.id === std?.classId)?.name || '-';
+      const tch = teachers.find(t => t.id === r.teacherId)?.name || '-';
+      return [
+        `"${r.date}"`,
+        `"${std?.nis || '-'}"`,
+        `"${std?.name || '-'}"`,
+        `"${cls}"`,
+        `"${tch}"`,
+        `"${r.type}"`,
+        `"${r.surahName}"`,
+        r.startAyah,
+        r.endAyah,
+        r.totalAyah,
+        r.fluencyScore,
+        r.tajweedScore,
+        r.makhrajScore,
+        r.finalScore,
+        `"${r.category}"`,
+        `"${(r.notes || '').replace(/"/g, '""')}"`
+      ].join(',');
+    });
+    return [headers.join(','), ...rows].join('\n');
+  },
+
   // Memorization Records
   getMemorizationRecords(): MemorizationRecord[] {
     return getItem(STORAGE_KEYS.MEMORIZATION, INITIAL_MEMORIZATION_RECORDS);
@@ -875,6 +1119,22 @@ export const storageService = {
   // Targets & Capaian
   getTargets(): TargetProgress[] {
     return getItem(STORAGE_KEYS.TARGETS, INITIAL_TARGETS);
+  },
+  saveTarget(target: TargetProgress): void {
+    const targets = this.getTargets();
+    const idx = targets.findIndex(t => t.id === target.id || t.studentId === target.studentId);
+    if (idx >= 0) {
+      targets[idx] = target;
+    } else {
+      targets.push(target);
+    }
+    setItem(STORAGE_KEYS.TARGETS, targets);
+    syncDocToCloud('targets', target.id, target);
+  },
+  deleteTarget(id: string): void {
+    const list = this.getTargets().filter(t => t.id !== id);
+    setItem(STORAGE_KEYS.TARGETS, list);
+    deleteDocFromCloud('targets', id);
   },
   updateStudentTargetProgress(studentId: string, currentJuz: number): void {
     const targets = this.getTargets();

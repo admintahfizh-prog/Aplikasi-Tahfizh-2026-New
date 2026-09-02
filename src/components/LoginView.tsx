@@ -25,13 +25,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setIsLoading(true);
 
-    setTimeout(() => {
-      const result = storageService.authenticate(username, password);
+    try {
+      const result = await storageService.authenticateAsync(username, password);
       setIsLoading(false);
 
       if (result.success && result.user) {
@@ -39,7 +39,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
       } else {
         setErrorMessage(result.message || 'Username atau kata sandi tidak valid.');
       }
-    }, 250);
+    } catch (err: any) {
+      setIsLoading(false);
+      setErrorMessage(err?.message || 'Terjadi kesalahan saat masuk.');
+    }
   };
 
   return (

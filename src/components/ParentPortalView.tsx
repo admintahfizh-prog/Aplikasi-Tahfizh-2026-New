@@ -28,6 +28,7 @@ interface ParentPortalViewProps {
   ummiRecords: UmmiRecord[];
   settings: AppSettings;
   onOpenStudentDetail: (studentId: string) => void;
+  currentUser?: { id: string; role: string; studentId?: string; name: string } | null;
 }
 
 export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
@@ -37,11 +38,23 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
   records,
   ummiRecords,
   settings,
-  onOpenStudentDetail
+  onOpenStudentDetail,
+  currentUser
 }) => {
-  // In parent mode, allow selecting child (default to first student)
-  const [selectedStudentId, setSelectedStudentId] = useState<string>(students[0]?.id || '');
+  // In parent mode, allow selecting child (default to current user's child if linked, or first student)
+  const defaultStudentId = (currentUser?.studentId && students.some(s => s.id === currentUser.studentId))
+    ? currentUser.studentId
+    : students[0]?.id || '';
+
+  const [selectedStudentId, setSelectedStudentId] = useState<string>(defaultStudentId);
   const [viewMode, setViewMode] = useState<'dashboard' | 'raport'>('dashboard');
+
+  // Update selection if currentUser.studentId becomes available
+  React.useEffect(() => {
+    if (currentUser?.studentId && students.some(s => s.id === currentUser.studentId)) {
+      setSelectedStudentId(currentUser.studentId);
+    }
+  }, [currentUser?.studentId, students]);
 
   const student = students.find(s => s.id === selectedStudentId) || students[0];
   const teacher = teachers.find(t => t.id === student?.teacherId);

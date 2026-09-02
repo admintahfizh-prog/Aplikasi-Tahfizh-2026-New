@@ -79,11 +79,27 @@ export default function App() {
 
   useEffect(() => {
     loadAllData();
+
+    // Auto-init and sync data with Firestore Cloud Database
+    storageService.initCloudSync().then((res) => {
+      console.log('[App] Cloud sync response:', res.message);
+      loadAllData();
+    });
+
+    // Subscribe to realtime changes across devices
+    const unsubscribe = storageService.onSyncChange(() => {
+      loadAllData();
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [loadAllData]);
 
   const handleLogin = (user: UserProfile) => {
     storageService.setCurrentUser(user);
     setCurrentUser(user);
+    loadAllData();
     if (user.role === 'wali') {
       setCurrentView('parent-portal');
     } else {
@@ -293,6 +309,7 @@ export default function App() {
               ummiRecords={ummiRecords}
               settings={settings}
               onOpenStudentDetail={handleOpenStudentDetail}
+              currentUser={currentUser}
             />
           )}
 

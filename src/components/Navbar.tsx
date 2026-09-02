@@ -7,10 +7,13 @@ import {
   ShieldCheck, 
   GraduationCap, 
   Users, 
-  CheckCheck
+  CheckCheck,
+  Cloud,
+  RefreshCw
 } from 'lucide-react';
 import { User, NotificationItem } from '../types';
 import { LogoAlAzhar } from './LogoAlAzhar';
+import { storageService } from '../services/storageService';
 
 interface NavbarProps {
   currentUser: User;
@@ -98,10 +101,24 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
 
-          {/* Center Info Badge (T.A. 2026/2027) */}
-          <div className="hidden lg:flex items-center space-x-2 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span className="font-medium text-[11px]">T.A. 2026/2027 • Semester Ganjil</span>
+          {/* Center Info Badge (T.A. 2026/2027) & Cloud Sync Badge */}
+          <div className="hidden lg:flex items-center space-x-2.5">
+            <div className="flex items-center space-x-2 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span className="font-medium text-[11px]">T.A. 2026/2027 • Semester Ganjil</span>
+            </div>
+
+            <button
+              onClick={async () => {
+                const res = await storageService.initCloudSync();
+                storageService.notifyListeners();
+              }}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-semibold border border-emerald-200 transition cursor-pointer"
+              title="Cloud Database Aktif - Klik untuk sinkronisasi paksa"
+            >
+              <Cloud className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Cloud Realtime</span>
+            </button>
           </div>
 
           {/* Right Actions Toolbar */}

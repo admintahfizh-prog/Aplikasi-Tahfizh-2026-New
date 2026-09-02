@@ -1,0 +1,139 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Tahfizh student data",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nis": { "type": "string" },
+        "nisn": { "type": "string" },
+        "name": { "type": "string" },
+        "gender": { "type": "string" },
+        "classId": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "program": { "type": "string" },
+        "targetJuz": { "type": "number" },
+        "totalJuzHafal": { "type": "number" },
+        "currentUmmiJilid": { "type": "string" },
+        "currentUmmiPage": { "type": "number" }
+      },
+      "required": ["id", "nis", "name", "gender", "classId"]
+    },
+    "Teacher": {
+      "title": "Teacher",
+      "description": "Tahfizh teacher data",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nip": { "type": "string" },
+        "name": { "type": "string" },
+        "specialization": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "ClassItem": {
+      "title": "ClassItem",
+      "description": "School class entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "level": { "type": "string" },
+        "homeroomTeacherId": { "type": "string" }
+      },
+      "required": ["id", "name", "level"]
+    },
+    "MemorizationRecord": {
+      "title": "MemorizationRecord",
+      "description": "Daily Quran memorization deposit",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string" },
+        "surahNumber": { "type": "number" },
+        "surahName": { "type": "string" },
+        "startAyah": { "type": "number" },
+        "endAyah": { "type": "number" },
+        "finalScore": { "type": "number" },
+        "category": { "type": "string" }
+      },
+      "required": ["id", "studentId", "teacherId", "date", "surahName"]
+    },
+    "UmmiRecord": {
+      "title": "UmmiRecord",
+      "description": "Ummi method reading record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "date": { "type": "string" },
+        "jilid": { "type": "string" },
+        "page": { "type": "number" },
+        "score": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "studentId", "teacherId", "date", "jilid", "page"]
+    },
+    "User": {
+      "title": "User",
+      "description": "App user credential and role profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "password": { "type": "string" }
+      },
+      "required": ["id", "username", "role"]
+    },
+    "AppSettings": {
+      "title": "AppSettings",
+      "description": "Application settings and school identity",
+      "type": "object",
+      "properties": {
+        "schoolName": { "type": "string" },
+        "kkmHafalan": { "type": "number" },
+        "academicYear": { "type": "string" }
+      },
+      "required": ["schoolName"]
+    }
+  },
+  "firestore": {
+    "/students/{studentId}": {
+      "schema": { "$ref": "#/entities/Student" },
+      "description": "Collection of students"
+    },
+    "/teachers/{teacherId}": {
+      "schema": { "$ref": "#/entities/Teacher" },
+      "description": "Collection of teachers"
+    },
+    "/classes/{classId}": {
+      "schema": { "$ref": "#/entities/ClassItem" },
+      "description": "Collection of classes"
+    },
+    "/memorization_records/{recordId}": {
+      "schema": { "$ref": "#/entities/MemorizationRecord" },
+      "description": "Collection of memorization records"
+    },
+    "/ummi_records/{recordId}": {
+      "schema": { "$ref": "#/entities/UmmiRecord" },
+      "description": "Collection of Ummi records"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Collection of system users"
+    },
+    "/app_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/AppSettings" },
+      "description": "Application configuration"
+    }
+  }
+}
