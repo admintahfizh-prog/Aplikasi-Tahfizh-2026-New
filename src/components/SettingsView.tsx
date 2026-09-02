@@ -29,7 +29,10 @@ import {
   Cloud,
   Database,
   UploadCloud,
-  CheckCircle
+  CheckCircle,
+  Upload,
+  Image as ImageIcon,
+  X
 } from 'lucide-react';
 import { AppSettings, Role, User, Student, Teacher } from '../types';
 import { storageService } from '../services/storageService';
@@ -94,6 +97,60 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     storageService.saveSettings(formData);
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
+    onRefreshData();
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const rawDataUrl = event.target?.result as string;
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 320;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/png', 0.9);
+          const updated = { ...formData, customLogoUrl: compressed };
+          setFormData(updated);
+          storageService.saveSettings(updated);
+          setSavedSuccess(true);
+          setTimeout(() => setSavedSuccess(false), 3000);
+          onRefreshData();
+        }
+      };
+      img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveLogo = () => {
+    const updated = { ...formData, customLogoUrl: '' };
+    setFormData(updated);
+    storageService.saveSettings(updated);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
     onRefreshData();
@@ -207,13 +264,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       password: userForm.password.trim(),
       email: userForm.email || `${userForm.username.toLowerCase()}@smpialazhar21.sch.id`,
       role: userForm.role,
-      avatar: editingUser?.avatar || (
-        userForm.role === 'admin'
-          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
-          : userForm.role === 'guru'
-          ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'
-          : 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150&auto=format&fit=crop&q=80'
-      ),
+      avatar: editingUser?.avatar || '',
       title: userForm.title,
       phone: userForm.phone,
       teacherId: userForm.teacherId,
@@ -762,6 +813,68 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   onChange={(e) => setFormData({ ...formData, tahfizhCoordinator: e.target.value })}
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* School Logo Upload */}
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-[#D4AF37]" />
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">Logo Resmi Sekolah</h3>
+                  <p className="text-[11px] text-slate-500">Logo ini akan otomatis tampil pada menu login, pojok kiri atas dashboard/navbar, dan lembar raport cetak.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
+              {/* Logo Preview */}
+              <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
+                {formData.customLogoUrl ? (
+                  <img
+                    src={formData.customLogoUrl}
+                    alt="Logo Sekolah"
+                    className="w-full h-full object-contain p-1"
+                  />
+                ) : (
+                  <div className="text-center p-2 text-slate-400">
+                    <ImageIcon className="w-6 h-6 mx-auto mb-1 opacity-50" />
+                    <span className="text-[10px] font-medium block">Belum Ada Logo</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Upload & Action Controls */}
+              <div className="flex-1 space-y-2.5">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1E293B] hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer">
+                    <Upload className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>Upload Logo Sekolah</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      onChange={handleLogoUpload}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {formData.customLogoUrl && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveLogo}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold transition cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Hapus Logo</span>
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-slate-500">
+                  Format yang didukung: <strong>PNG, JPG, SVG, WebP</strong>. Disarankan gambar dengan latar belakang transparan berukuran proporsional (persegi/lingkaran).
+                </p>
               </div>
             </div>
           </div>

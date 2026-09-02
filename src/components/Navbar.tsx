@@ -83,9 +83,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="flex items-center space-x-3 cursor-pointer group" 
             onClick={() => setActiveView && setActiveView(currentUser.role === 'wali' ? 'parent-portal' : 'dashboard')}
           >
-            <div className="p-1 bg-white rounded-full border border-slate-200 shadow-xs group-hover:scale-105 transition flex items-center justify-center">
-              <LogoAlAzhar size={44} />
-            </div>
+            {storageService.getSettings()?.customLogoUrl && (
+              <div className="p-1 bg-white rounded-lg border border-slate-200 shadow-xs group-hover:scale-105 transition flex items-center justify-center shrink-0">
+                <img
+                  src={storageService.getSettings()?.customLogoUrl}
+                  alt="Logo Sekolah"
+                  className="w-9 h-9 sm:w-10 sm:h-10 object-contain rounded-md"
+                />
+              </div>
+            )}
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-extrabold tracking-tight text-base sm:text-lg text-slate-900 font-sans">

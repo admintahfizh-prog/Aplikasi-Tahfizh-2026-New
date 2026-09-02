@@ -49,13 +49,19 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
     <div className="min-h-screen bg-[#F1F5F9] flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden relative z-10 animate-in fade-in zoom-in-95 duration-200">
         
-        {/* Top Header with Al Azhar 21 Emblem */}
+        {/* Top Header with Brand */}
         <div className="bg-[#1E293B] p-6 text-center text-white relative">
-          <div className="flex justify-center mb-3">
-            <div className="p-1.5 bg-white rounded-full shadow-md inline-block">
-              <LogoAlAzhar size={72} />
+          {storageService.getSettings()?.customLogoUrl && (
+            <div className="flex justify-center mb-3">
+              <div className="p-1.5 bg-white rounded-xl shadow-md inline-block">
+                <img
+                  src={storageService.getSettings()?.customLogoUrl}
+                  alt="Logo Sekolah"
+                  className="w-16 h-16 object-contain rounded-lg"
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <h1 className="text-lg sm:text-xl font-extrabold tracking-tight">
             TAHFIZH SMPIA 21
@@ -64,7 +70,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
             Sistem Monitoring Tahfizh Al-Qur'an & Metode Ummi
           </p>
           <p className="text-[11px] text-[#D4AF37] font-semibold mt-0.5">
-            SMP Islam Al Azhar 21
+            {storageService.getSettings()?.schoolName || 'SMP Islam Al Azhar 21'}
           </p>
         </div>
 
