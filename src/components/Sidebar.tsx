@@ -79,7 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       {/* Desktop / Tablet Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 bg-[#1E293B] text-white shrink-0 min-h-[calc(100vh-4rem)] border-r border-slate-700/80">
+      <aside className="no-print hidden md:flex flex-col w-64 bg-[#1E293B] text-white shrink-0 min-h-[calc(100vh-4rem)] border-r border-slate-700/80">
         
         {/* Brand header */}
         <div className="p-5 flex items-center gap-3 border-b border-slate-700">
@@ -148,7 +148,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </aside>
 
       {/* Mobile Bottom Navigation Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1E293B] border-t border-slate-700 px-2 py-1 flex items-center justify-around">
+      <nav className="no-print md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1E293B] border-t border-slate-700 px-2 py-1 flex items-center justify-around">
         {navItems.slice(0, 5).map((item) => {
           const Icon = item.icon;
           const isActive = current === item.id || (item.id === 'parent-portal' && current === 'portal-wali');

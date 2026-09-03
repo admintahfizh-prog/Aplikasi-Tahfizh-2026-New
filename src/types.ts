@@ -249,9 +249,17 @@ export interface AppSettings {
   semester: 'Ganjil' | 'Genap';
   activeSemester?: 'Ganjil' | 'Genap';
   headmasterName?: string;
+  headmasterNik?: string;
   principalName?: string;
   tahfizhCoordinator?: string;
+  tahfizhCoordinatorNik?: string;
+  raportDate?: string;
   minScoreKKM?: number;
   defaultTargetJuz?: number;
   customLogoUrl?: string;
+  yayasanLogoUrl?: string;
+  raportFrameUrl?: string;
+  bismillahImgUrl?: string;
+  headmasterSignatureUrl?: string;
+  tahfizhCoordinatorSignatureUrl?: string;
 }

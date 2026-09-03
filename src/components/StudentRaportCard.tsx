@@ -15,12 +15,20 @@ import {
   BookOpen,
   BookMarked,
   Save,
-  RotateCcw
+  RotateCcw,
+  Upload,
+  Image as ImageIcon,
+  Square,
+  X,
+  Trash2,
+  Loader2,
+  AlertCircle,
+  FileText
 } from 'lucide-react';
 import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, AppSettings } from '../types';
 import { storageService } from '../services/storageService';
 import { LogoAlAzhar } from './LogoAlAzhar';
-import { LogoMakarima } from './LogoMakarima';
+import html2pdf from 'html2pdf.js';
 
 interface StudentRaportCardProps {
   student: Student;
@@ -172,26 +180,453 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
     `Alhamdulillah ananda ${student.nickname || student.name.split(' ')[0]} menunjukkan kedisiplinan dan semangat yang sangat baik dalam halaqah tahfizh dan pembiasaan tartil metode Ummi. Pertahankan kelancaran muraja'ah di rumah dan tingkatkan pengulangan ayat baru.`
   );
 
-  // Signatures
-  const [headmasterName, setHeadmasterName] = useState<string>(settings.headmasterName || 'H. M. Ridwan, M.Pd.I');
-  const [headmasterNik, setHeadmasterNik] = useState<string>('01.0125');
-  const [waliKelasName, setWaliKelasName] = useState<string>(
-    teacher?.name || 'Sekar Ningtyas Dewi Pratiwi, S.Pd'
+  // Signatures & Settings (Synced with Admin Settings)
+  const [headmasterName, setHeadmasterName] = useState<string>(
+    settings.headmasterName || settings.principalName || 'H. M. Ridwan, M.Pd.I'
   );
-  const [waliKelasNik, setWaliKelasNik] = useState<string>(
-    teacher?.nip || '02.0367'
+  const [headmasterNik, setHeadmasterNik] = useState<string>(
+    settings.headmasterNik || '01.0125'
+  );
+  const [tahfizhCoordinatorName, setTahfizhCoordinatorName] = useState<string>(
+    settings.tahfizhCoordinator || teacher?.name || 'Sekar Ningtyas Dewi Pratiwi, S.Pd'
+  );
+  const [tahfizhCoordinatorNik, setTahfizhCoordinatorNik] = useState<string>(
+    settings.tahfizhCoordinatorNik || teacher?.nip || '02.0367'
   );
   const [cityDate, setCityDate] = useState<string>(
-    `Sukoharjo, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+    settings.raportDate || `Sukoharjo, 20 Desember 2026`
   );
+  const [yayasanLogoUrl, setYayasanLogoUrl] = useState<string>(
+    settings.yayasanLogoUrl || ''
+  );
+  const [raportFrameUrl, setRaportFrameUrl] = useState<string>(
+    settings.raportFrameUrl || ''
+  );
+  const [bismillahImgUrl, setBismillahImgUrl] = useState<string>(
+    settings.bismillahImgUrl || ''
+  );
+  const [headmasterSignatureUrl, setHeadmasterSignatureUrl] = useState<string>(
+    settings.headmasterSignatureUrl || ''
+  );
+  const [tahfizhCoordinatorSignatureUrl, setTahfizhCoordinatorSignatureUrl] = useState<string>(
+    settings.tahfizhCoordinatorSignatureUrl || ''
+  );
+
+  // Sync when settings change from outside
+  useEffect(() => {
+    if (settings.headmasterName || settings.principalName) {
+      setHeadmasterName(settings.headmasterName || settings.principalName || '');
+    }
+    if (settings.headmasterNik) {
+      setHeadmasterNik(settings.headmasterNik);
+    }
+    if (settings.tahfizhCoordinator) {
+      setTahfizhCoordinatorName(settings.tahfizhCoordinator);
+    }
+    if (settings.tahfizhCoordinatorNik) {
+      setTahfizhCoordinatorNik(settings.tahfizhCoordinatorNik);
+    }
+    if (settings.raportDate) {
+      setCityDate(settings.raportDate);
+    }
+    if (settings.yayasanLogoUrl !== undefined) {
+      setYayasanLogoUrl(settings.yayasanLogoUrl || '');
+    }
+    if (settings.raportFrameUrl !== undefined) {
+      setRaportFrameUrl(settings.raportFrameUrl || '');
+    }
+    if (settings.bismillahImgUrl !== undefined) {
+      setBismillahImgUrl(settings.bismillahImgUrl || '');
+    }
+    if (settings.headmasterSignatureUrl !== undefined) {
+      setHeadmasterSignatureUrl(settings.headmasterSignatureUrl || '');
+    }
+    if (settings.tahfizhCoordinatorSignatureUrl !== undefined) {
+      setTahfizhCoordinatorSignatureUrl(settings.tahfizhCoordinatorSignatureUrl || '');
+    }
+  }, [settings]);
+
+  const handleYayasanLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const rawDataUrl = event.target?.result as string;
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 320;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/png', 0.9);
+          setYayasanLogoUrl(compressed);
+          const current = storageService.getSettings();
+          storageService.saveSettings({ ...current, yayasanLogoUrl: compressed });
+        }
+      };
+      img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveYayasanLogo = () => {
+    setYayasanLogoUrl('');
+    const current = storageService.getSettings();
+    storageService.saveSettings({ ...current, yayasanLogoUrl: '' });
+  };
+
+  const handleRaportFrameUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const rawDataUrl = event.target?.result as string;
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxWidth = 1200;
+        const maxHeight = 1800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/png');
+          setRaportFrameUrl(compressed);
+          const current = storageService.getSettings();
+          storageService.saveSettings({ ...current, raportFrameUrl: compressed });
+        }
+      };
+      img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveRaportFrame = () => {
+    setRaportFrameUrl('');
+    const current = storageService.getSettings();
+    storageService.saveSettings({ ...current, raportFrameUrl: '' });
+  };
+
+  const handleBismillahUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const rawDataUrl = event.target?.result as string;
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxW = 700;
+        const maxH = 250;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxW || height > maxH) {
+          const ratio = Math.min(maxW / width, maxH / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/png', 0.95);
+          setBismillahImgUrl(compressed);
+          const current = storageService.getSettings();
+          storageService.saveSettings({ ...current, bismillahImgUrl: compressed });
+        }
+      };
+      img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveBismillah = () => {
+    setBismillahImgUrl('');
+    const current = storageService.getSettings();
+    storageService.saveSettings({ ...current, bismillahImgUrl: '' });
+  };
+
+  const handleHeadmasterSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const rawDataUrl = event.target?.result as string;
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxW = 500;
+        const maxH = 250;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxW || height > maxH) {
+          const ratio = Math.min(maxW / width, maxH / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/png', 0.95);
+          setHeadmasterSignatureUrl(compressed);
+          const current = storageService.getSettings();
+          storageService.saveSettings({ ...current, headmasterSignatureUrl: compressed });
+        }
+      };
+      img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveHeadmasterSignature = () => {
+    setHeadmasterSignatureUrl('');
+    const current = storageService.getSettings();
+    storageService.saveSettings({ ...current, headmasterSignatureUrl: '' });
+  };
+
+  const handleTahfizhCoordinatorSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const rawDataUrl = event.target?.result as string;
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxW = 500;
+        const maxH = 250;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxW || height > maxH) {
+          const ratio = Math.min(maxW / width, maxH / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/png', 0.95);
+          setTahfizhCoordinatorSignatureUrl(compressed);
+          const current = storageService.getSettings();
+          storageService.saveSettings({ ...current, tahfizhCoordinatorSignatureUrl: compressed });
+        }
+      };
+      img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveTahfizhCoordinatorSignature = () => {
+    setTahfizhCoordinatorSignatureUrl('');
+    const current = storageService.getSettings();
+    storageService.saveSettings({ ...current, tahfizhCoordinatorSignatureUrl: '' });
+  };
+
+  const handleSaveRaportConfig = () => {
+    const current = storageService.getSettings();
+    storageService.saveSettings({
+      ...current,
+      headmasterName,
+      principalName: headmasterName,
+      headmasterNik,
+      tahfizhCoordinator: tahfizhCoordinatorName,
+      tahfizhCoordinatorNik,
+      raportDate: cityDate,
+      yayasanLogoUrl,
+      raportFrameUrl,
+      bismillahImgUrl,
+      headmasterSignatureUrl,
+      tahfizhCoordinatorSignatureUrl
+    });
+  };
 
   // Edit Mode toggle in UI
   const [isCustomizing, setIsCustomizing] = useState<boolean>(false);
 
+  // PDF & Print States
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
+  const [pdfSuccessMessage, setPdfSuccessMessage] = useState<string>('');
+  const [printStatusMessage, setPrintStatusMessage] = useState<string>('');
+
   const printAreaRef = useRef<HTMLDivElement>(null);
 
+  const handleDownloadPdf = async () => {
+    if (!printAreaRef.current) return;
+    setIsGeneratingPdf(true);
+    setPdfSuccessMessage('');
+    setPrintStatusMessage('');
+
+    try {
+      const element = printAreaRef.current;
+      const cleanStudentName = (student.name || 'Siswa')
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .substring(0, 40);
+      const cleanNis = (student.nis || 'NIS').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const filename = `Raport_Tahfizh_${cleanStudentName}_${cleanNis}.pdf`;
+
+      const opt = {
+        margin: 0,
+        filename: filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          scrollX: 0,
+          scrollY: 0,
+          onclone: (clonedDoc: Document) => {
+            const noPrintEls = clonedDoc.querySelectorAll('.no-print');
+            noPrintEls.forEach((el) => {
+              (el as HTMLElement).style.display = 'none';
+            });
+          }
+        },
+        jsPDF: {
+          unit: 'mm',
+          format: [215, 330] as [number, number],
+          orientation: 'portrait' as const
+        }
+      };
+
+      // @ts-ignore
+      await html2pdf().set(opt).from(element).save();
+
+      setPdfSuccessMessage(`Alhamdulillah! Berkas PDF ${filename} berhasil diunduh.`);
+      setTimeout(() => setPdfSuccessMessage(''), 6000);
+    } catch (err) {
+      console.error('Failed to generate PDF:', err);
+      setPrintStatusMessage('Gagal membuat PDF otomatis. Mengalihkan ke jendela cetak browser...');
+      setTimeout(() => setPrintStatusMessage(''), 6000);
+      handlePrint();
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  const openPrintWindow = () => {
+    if (!printAreaRef.current) {
+      window.print();
+      return;
+    }
+
+    const content = printAreaRef.current.outerHTML;
+    const printWin = window.open('', '_blank', 'width=950,height=900');
+
+    if (!printWin) {
+      // Browser popup blocked! Fallback to direct PDF download
+      setPrintStatusMessage('Pop-up cetak diblokir browser. Mengalihkan ke unduhan file PDF langsung...');
+      setTimeout(() => setPrintStatusMessage(''), 6000);
+      handleDownloadPdf();
+      return;
+    }
+
+    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map(el => el.outerHTML)
+      .join('\n');
+
+    printWin.document.open();
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html lang="id">
+        <head>
+          <meta charset="utf-8" />
+          <title>Raport Tahfizh - ${student.name}</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          ${styles}
+          <style>
+            @page {
+              size: 215mm 330mm;
+              margin: 4mm 5mm 4mm 5mm;
+            }
+            body {
+              margin: 0;
+              padding: 0;
+              background: #ffffff;
+              font-family: 'Times New Roman', Times, serif;
+            }
+            .raport-sheet {
+              margin: 0 auto !important;
+              box-shadow: none !important;
+            }
+            .no-print {
+              display: none !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div style="display:flex;justify-content:center;padding:0;margin:0;">
+            ${content}
+          </div>
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.focus();
+                window.print();
+              }, 400);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
   const handlePrint = () => {
-    window.print();
+    try {
+      const isInIframe = window.self !== window.top;
+      if (isInIframe) {
+        openPrintWindow();
+      } else {
+        window.print();
+      }
+    } catch (err) {
+      console.warn('Direct print failed, attempting popup window...', err);
+      openPrintWindow();
+    }
   };
 
   const handleShareWhatsApp = () => {
@@ -330,15 +765,82 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             <span className="hidden sm:inline">Kirim ke WA</span>
           </button>
 
-          <button
-            onClick={handlePrint}
-            className="px-4 py-2 rounded-xl bg-[#1E293B] hover:bg-slate-800 text-white text-xs font-bold shadow-sm transition flex items-center gap-2 cursor-pointer"
-          >
-            <Printer className="w-4 h-4 text-[#D4AF37]" />
-            <span>Cetak / Simpan PDF</span>
-          </button>
+          {/* Tombol Cetak & Simpan PDF Terpisah & Handal */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={isGeneratingPdf}
+              onClick={handleDownloadPdf}
+              className="px-4 py-2 rounded-xl bg-[#1E293B] hover:bg-slate-800 disabled:bg-slate-600 text-white text-xs font-bold shadow-sm transition flex items-center gap-2 cursor-pointer disabled:cursor-not-allowed"
+              title="Unduh file raport dalam format PDF Folio/F4 langsung ke perangkat"
+            >
+              {isGeneratingPdf ? (
+                <Loader2 className="w-4 h-4 text-[#D4AF37] animate-spin" />
+              ) : (
+                <Download className="w-4 h-4 text-[#D4AF37]" />
+              )}
+              <span>{isGeneratingPdf ? 'Membuat PDF...' : 'Simpan PDF'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              title="Buka dialog pencetakan printer dokumen raport"
+            >
+              <Printer className="w-4 h-4 text-slate-950" />
+              <span>Cetak Raport</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* NOTIFIKASI STATUS PROSES PDF / CETAK */}
+      {(isGeneratingPdf || pdfSuccessMessage || printStatusMessage) && (
+        <div className="no-print space-y-2 animate-in fade-in transition-all">
+          {isGeneratingPdf && (
+            <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold flex items-center gap-2.5 shadow-xs">
+              <Loader2 className="w-4 h-4 text-blue-600 animate-spin shrink-0" />
+              <div>
+                <p className="font-bold">Sedang Merender Raport ke Dokumen PDF Folio/F4...</p>
+                <p className="text-[11px] text-blue-700">Menyiapkan layout 215 × 330 mm, menyematkan bingkai, dan data santri {student.name}. File akan otomatis terunduh.</p>
+              </div>
+            </div>
+          )}
+
+          {pdfSuccessMessage && (
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center justify-between gap-2 shadow-xs">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{pdfSuccessMessage}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPdfSuccessMessage('')}
+                className="text-emerald-700 hover:text-emerald-950 p-1 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {printStatusMessage && (
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs font-bold flex items-center justify-between gap-2 shadow-xs">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>{printStatusMessage}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPrintStatusMessage('')}
+                className="text-amber-800 hover:text-amber-950 p-1 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* CUSTOMIZATION DRAWER / FORM (If teacher wants to customize values before printing) */}
       {isCustomizing && (
@@ -534,43 +1036,299 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             />
           </div>
 
-          {/* Row 5: Tanda Tangan */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Nama Wali Kelas / Guru Pengampu:</label>
-              <div className="flex gap-2">
+          {/* Row 5: Pengaturan Tanggal & Tanda Tangan */}
+          <div className="border-t border-amber-200/80 pt-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-amber-950 text-xs">Pengaturan Tanda Tangan & Format Raport:</span>
+              <button
+                type="button"
+                onClick={handleSaveRaportConfig}
+                className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition shadow-xs"
+              >
+                <Save className="w-3 h-3" />
+                <span>Simpan ke Pengaturan Admin</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Tanggal Terbit Raport:</label>
                 <input
                   type="text"
-                  value={waliKelasName}
-                  onChange={(e) => setWaliKelasName(e.target.value)}
-                  className="w-2/3 p-2 bg-white border border-slate-300 rounded-lg font-semibold"
+                  value={cityDate}
+                  onChange={(e) => setCityDate(e.target.value)}
+                  placeholder="Sukoharjo, 20 Desember 2026"
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg font-medium text-xs"
                 />
-                <input
-                  type="text"
-                  value={waliKelasNik}
-                  onChange={(e) => setWaliKelasNik(e.target.value)}
-                  placeholder="NIK Guru"
-                  className="w-1/3 p-2 bg-white border border-slate-300 rounded-lg font-mono text-xs"
-                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Kepala Sekolah & NIK:</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={headmasterName}
+                    onChange={(e) => setHeadmasterName(e.target.value)}
+                    placeholder="Nama Kepala Sekolah"
+                    className="w-2/3 p-2 bg-white border border-slate-300 rounded-lg font-semibold text-xs"
+                  />
+                  <input
+                    type="text"
+                    value={headmasterNik}
+                    onChange={(e) => setHeadmasterNik(e.target.value)}
+                    placeholder="NIK"
+                    className="w-1/3 p-2 bg-white border border-slate-300 rounded-lg font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Koordinator Tahfizh & NIK:</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={tahfizhCoordinatorName}
+                    onChange={(e) => setTahfizhCoordinatorName(e.target.value)}
+                    placeholder="Nama Koordinator"
+                    className="w-2/3 p-2 bg-white border border-slate-300 rounded-lg font-semibold text-xs"
+                  />
+                  <input
+                    type="text"
+                    value={tahfizhCoordinatorNik}
+                    onChange={(e) => setTahfizhCoordinatorNik(e.target.value)}
+                    placeholder="NIK"
+                    className="w-1/3 p-2 bg-white border border-slate-300 rounded-lg font-mono text-xs"
+                  />
+                </div>
               </div>
             </div>
 
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Nama Kepala Sekolah & NIK:</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={headmasterName}
-                  onChange={(e) => setHeadmasterName(e.target.value)}
-                  className="w-2/3 p-2 bg-white border border-slate-300 rounded-lg font-semibold"
-                />
-                <input
-                  type="text"
-                  value={headmasterNik}
-                  onChange={(e) => setHeadmasterNik(e.target.value)}
-                  placeholder="NIK Kepala"
-                  className="w-1/3 p-2 bg-white border border-slate-300 rounded-lg font-mono text-xs"
-                />
+            {/* Row 6: Quick Upload Logo Yayasan, Kaligrafi Bismillah, & Bingkai Raport */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-amber-200/60">
+              {/* Logo Yayasan Kanan */}
+              <div className="flex items-center justify-between p-2 bg-white rounded-xl border border-slate-200">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                    {yayasanLogoUrl ? (
+                      <img src={yayasanLogoUrl} alt="Logo Yayasan" className="w-full h-full object-contain p-0.5" />
+                    ) : (
+                      <ImageIcon className="w-4 h-4 text-slate-400 opacity-60" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <span className="font-bold text-slate-800 text-[11px] block truncate">Logo Yayasan</span>
+                    <span className="text-[10px] text-slate-500">
+                      {yayasanLogoUrl ? 'Terpasang' : 'Kosong'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  <label className="px-2 py-1.5 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white text-[10px] font-bold transition cursor-pointer flex items-center gap-1">
+                    <Upload className="w-3 h-3 text-[#D4AF37]" />
+                    <span>{yayasanLogoUrl ? 'Ganti' : 'Upload'}</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={handleYayasanLogoUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  {yayasanLogoUrl && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveYayasanLogo}
+                      className="p-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 transition cursor-pointer"
+                      title="Hapus Logo Yayasan"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Kaligrafi Bismillah PNG */}
+              <div className="flex items-center justify-between p-2 bg-white rounded-xl border border-slate-200">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                    {bismillahImgUrl ? (
+                      <img src={bismillahImgUrl} alt="Bismillah PNG" className="w-full h-full object-contain p-0.5" />
+                    ) : (
+                      <ImageIcon className="w-4 h-4 text-slate-400 opacity-60" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <span className="font-bold text-slate-800 text-[11px] block truncate">Bismillah (PNG)</span>
+                    <span className="text-[10px] text-slate-500">
+                      {bismillahImgUrl ? 'Terpasang' : 'Belum upload'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  <label className="px-2 py-1.5 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white text-[10px] font-bold transition cursor-pointer flex items-center gap-1">
+                    <Upload className="w-3 h-3 text-[#D4AF37]" />
+                    <span>{bismillahImgUrl ? 'Ganti' : 'Upload'}</span>
+                    <input
+                      type="file"
+                      accept="image/png"
+                      onChange={handleBismillahUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  {bismillahImgUrl && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveBismillah}
+                      className="p-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 transition cursor-pointer"
+                      title="Hapus Bismillah PNG"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Bingkai Raport PNG */}
+              <div className="flex items-center justify-between p-2 bg-white rounded-xl border border-slate-200">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                    {raportFrameUrl ? (
+                      <img src={raportFrameUrl} alt="Bingkai Raport PNG" className="w-full h-full object-contain p-0.5" />
+                    ) : (
+                      <Square className="w-4 h-4 text-slate-400 opacity-60" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <span className="font-bold text-slate-800 text-[11px] block truncate">Bingkai (PNG)</span>
+                    <span className="text-[10px] text-slate-500">
+                      {raportFrameUrl ? 'Aktif' : 'Tanpa bingkai'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  <label className="px-2 py-1.5 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white text-[10px] font-bold transition cursor-pointer flex items-center gap-1">
+                    <Upload className="w-3 h-3 text-[#D4AF37]" />
+                    <span>{raportFrameUrl ? 'Ganti' : 'Upload'}</span>
+                    <input
+                      type="file"
+                      accept="image/png"
+                      onChange={handleRaportFrameUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  {raportFrameUrl && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveRaportFrame}
+                      className="p-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 transition cursor-pointer"
+                      title="Hapus Bingkai PNG"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Row 7: Tanda Tangan Online Kepala Sekolah & Koordinator Tahfizh */}
+            <div className="pt-2 border-t border-amber-200/60">
+              <span className="text-[11px] font-bold text-amber-950 block mb-2">
+                Tanda Tangan Online / Digital (Format PNG Disarankan Transparan):
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* TTD Kepala Sekolah */}
+                <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-16 h-10 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                      {headmasterSignatureUrl ? (
+                        <img
+                          src={headmasterSignatureUrl}
+                          alt="TTD Kepsek"
+                          className="w-full h-full object-contain p-0.5"
+                        />
+                      ) : (
+                        <FileText className="w-4 h-4 text-slate-400 opacity-60" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <span className="font-bold text-slate-800 text-[11px] block truncate">TTD Kepala Sekolah</span>
+                      <span className="text-[10px] text-slate-500">
+                        {headmasterSignatureUrl ? 'Sudah Diunggah' : 'Belum Ada TTD'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <label className="px-2.5 py-1.5 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white text-[10px] font-bold transition cursor-pointer flex items-center gap-1 shadow-2xs">
+                      <Upload className="w-3 h-3 text-[#D4AF37]" />
+                      <span>{headmasterSignatureUrl ? 'Ganti' : 'Upload TTD'}</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={handleHeadmasterSignatureUpload}
+                        className="hidden"
+                      />
+                    </label>
+                    {headmasterSignatureUrl && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveHeadmasterSignature}
+                        className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 transition cursor-pointer"
+                        title="Hapus TTD Kepala Sekolah"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* TTD Koordinator Tahfizh */}
+                <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-16 h-10 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                      {tahfizhCoordinatorSignatureUrl ? (
+                        <img
+                          src={tahfizhCoordinatorSignatureUrl}
+                          alt="TTD Koordinator"
+                          className="w-full h-full object-contain p-0.5"
+                        />
+                      ) : (
+                        <FileText className="w-4 h-4 text-slate-400 opacity-60" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <span className="font-bold text-slate-800 text-[11px] block truncate">TTD Koordinator Tahfizh</span>
+                      <span className="text-[10px] text-slate-500">
+                        {tahfizhCoordinatorSignatureUrl ? 'Sudah Diunggah' : 'Belum Ada TTD'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <label className="px-2.5 py-1.5 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white text-[10px] font-bold transition cursor-pointer flex items-center gap-1 shadow-2xs">
+                      <Upload className="w-3 h-3 text-[#D4AF37]" />
+                      <span>{tahfizhCoordinatorSignatureUrl ? 'Ganti' : 'Upload TTD'}</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={handleTahfizhCoordinatorSignatureUpload}
+                        className="hidden"
+                      />
+                    </label>
+                    {tahfizhCoordinatorSignatureUrl && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveTahfizhCoordinatorSignature}
+                        className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 transition cursor-pointer"
+                        title="Hapus TTD Koordinator"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -578,166 +1336,187 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* PRINTABLE OFFICIAL RAPORT CONTAINER (EXACT 1:1 REPLICA OF REQUESTED PDF)  */}
+      {/* PRINTABLE OFFICIAL RAPORT CONTAINER - STRICT FOLIO / F4 (215 x 330 mm)    */}
       {/* ========================================================================= */}
-      <div className="flex justify-center">
+      <div className="flex justify-center overflow-x-auto py-2">
         <div 
           ref={printAreaRef}
-          className="raport-sheet bg-white text-slate-900 w-full max-w-[800px] min-h-[1130px] p-8 sm:p-12 border border-slate-300 shadow-md relative print:shadow-none print:border-none print:p-8 print:m-0 print:w-full print:max-w-none"
-          style={{ fontFamily: "'Times New Roman', Times, serif" }}
+          className="raport-sheet bg-white text-slate-900 relative shadow-xl print:shadow-none print:m-0"
+          style={{ 
+            width: '215mm', 
+            minHeight: '330mm',
+            maxHeight: '330mm',
+            padding: '16mm 18mm 14mm 18mm',
+            fontFamily: "'Times New Roman', Times, serif" 
+          }}
         >
-          {/* ORNATE CERTIFICATE BORDER (Classic Guilloche Decorative Frame) */}
-          <div className="absolute inset-3.5 sm:inset-5 pointer-events-none border-[3px] border-slate-800 rounded-xs">
-            {/* Inner Thin Border */}
-            <div className="absolute inset-1.5 border border-slate-700"></div>
-            
-            {/* Corner Arabesque Embellishments (Top-Left) */}
-            <svg className="absolute -top-1 -left-1 w-8 h-8 text-slate-800" viewBox="0 0 100 100" fill="currentColor">
-              <path d="M0,0 L40,0 C30,10 20,20 15,35 C10,20 0,10 0,0 Z M0,0 L0,40 C10,30 20,20 35,15 C20,10 10,0 0,0 Z" />
-              <circle cx="12" cy="12" r="4" />
-            </svg>
-            {/* Top-Right */}
-            <svg className="absolute -top-1 -right-1 w-8 h-8 text-slate-800 rotate-90" viewBox="0 0 100 100" fill="currentColor">
-              <path d="M0,0 L40,0 C30,10 20,20 15,35 C10,20 0,10 0,0 Z M0,0 L0,40 C10,30 20,20 35,15 C20,10 10,0 0,0 Z" />
-              <circle cx="12" cy="12" r="4" />
-            </svg>
-            {/* Bottom-Left */}
-            <svg className="absolute -bottom-1 -left-1 w-8 h-8 text-slate-800 -rotate-90" viewBox="0 0 100 100" fill="currentColor">
-              <path d="M0,0 L40,0 C30,10 20,20 15,35 C10,20 0,10 0,0 Z M0,0 L0,40 C10,30 20,20 35,15 C20,10 10,0 0,0 Z" />
-              <circle cx="12" cy="12" r="4" />
-            </svg>
-            {/* Bottom-Right */}
-            <svg className="absolute -bottom-1 -right-1 w-8 h-8 text-slate-800 rotate-180" viewBox="0 0 100 100" fill="currentColor">
-              <path d="M0,0 L40,0 C30,10 20,20 15,35 C10,20 0,10 0,0 Z M0,0 L0,40 C10,30 20,20 35,15 C20,10 10,0 0,0 Z" />
-              <circle cx="12" cy="12" r="4" />
-            </svg>
-          </div>
+          {/* BINGKAI RAPORT (UPLOAD MANUAL FORMAT PNG, MENGGANTIKAN LINE BINGKAI LAMA) */}
+          {raportFrameUrl && (
+            <img
+              src={raportFrameUrl}
+              alt="Bingkai Raport PNG"
+              className="absolute inset-0 w-full h-full object-fill pointer-events-none z-0 select-none"
+            />
+          )}
 
-          {/* INNER REPORT CONTENT */}
-          <div className="relative z-10 px-4 sm:px-6 py-2 space-y-4 text-[13px] leading-relaxed">
+          {/* INNER REPORT CONTENT - SAFELY BUFFERED FROM BINGKAI */}
+          <div className="relative z-10 space-y-3.5 text-[12.5px] leading-snug">
             
-            {/* HEADER: LOGO AL AZHAR (LEFT) - BISMILLAH (CENTER) - LOGO MAKARIMA (RIGHT) */}
-            <div className="flex items-center justify-between gap-2 border-b border-transparent pb-1">
-              {/* Left Logo: SMPI Al Azhar 21 */}
-              <div className="w-18 flex justify-start">
-                <LogoAlAzhar size={68} className="w-16 h-16" />
+            {/* HEADER: LOGO SEKOLAH (KIRI BESAR) - BISMILLAH PNG (TENGAH) - LOGO YAYASAN (KANAN BESAR) */}
+            <div className="flex items-center justify-between gap-3 border-b border-transparent pb-1">
+              {/* Left Logo: Sekolah (Al Azhar 21) */}
+              <div className="w-24 sm:w-28 flex justify-start items-center shrink-0">
+                <LogoAlAzhar size={88} customLogoUrl={settings.customLogoUrl} className="w-22 h-22 object-contain" />
               </div>
 
-              {/* Center Arabic Calligraphy: Bismillah */}
-              <div className="text-center flex-1 px-2">
-                <div 
-                  className="text-2xl sm:text-3xl text-slate-900 font-serif leading-none tracking-wide select-none"
-                  style={{ fontFamily: "'Traditional Arabic', 'Amiri', 'Scheherazade New', serif" }}
-                >
-                  بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
-                </div>
+              {/* Center Bismillah PNG (Ganti Tulisan Arab) */}
+              <div className="flex-1 px-2 flex flex-col items-center justify-center min-h-[72px]">
+                {bismillahImgUrl ? (
+                  <img
+                    src={bismillahImgUrl}
+                    alt="Kaligrafi Bismillah"
+                    className="h-14 sm:h-16 max-w-[290px] object-contain mx-auto select-none"
+                  />
+                ) : (
+                  <div className="no-print flex flex-col items-center justify-center p-2 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 text-slate-400 text-center w-full max-w-[240px]">
+                    <span className="text-[10px] font-bold text-slate-600">Kaligrafi Bismillah (PNG)</span>
+                    <label className="text-[9px] text-[#D4AF37] font-bold underline cursor-pointer mt-0.5">
+                      + Upload Bismillah PNG
+                      <input
+                        type="file"
+                        accept="image/png"
+                        onChange={handleBismillahUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
 
-              {/* Right Logo: Makarima */}
-              <div className="w-18 flex justify-end">
-                <LogoMakarima size={68} className="w-16 h-16" />
+              {/* Right Logo: Yayasan (Upload Manual Besar Proporsional) */}
+              <div className="w-24 sm:w-28 flex justify-end items-center shrink-0">
+                {yayasanLogoUrl ? (
+                  <img 
+                    src={yayasanLogoUrl} 
+                    alt="Logo Yayasan" 
+                    className="w-22 h-22 object-contain" 
+                  />
+                ) : (
+                  <div className="no-print w-22 h-22 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-[9px] text-slate-400 text-center p-1 bg-slate-50/70">
+                    <span className="font-semibold text-slate-500">Logo Yayasan</span>
+                    <label className="text-[#D4AF37] font-bold underline cursor-pointer text-[8px] mt-0.5">
+                      + Upload
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={handleYayasanLogoUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* DOCUMENT TITLE */}
-            <div className="text-center space-y-0.5 pt-1">
-              <h1 className="text-[14px] sm:text-[15px] font-black uppercase tracking-tight text-slate-950">
-                LAPORAN PROGRAM TAHFIZHUL QUR'AN DAN PERKEMBANGAN METODE UMMI
+            {/* DOCUMENT TITLE (PERBAIKAN FORMAT SESUAI PERMINTAAN) */}
+            <div className="text-center space-y-0.5 pt-0.5">
+              <h1 className="text-[15px] sm:text-[16px] font-black uppercase tracking-tight text-slate-950">
+                LAPORAN PROGRAM TAHFIZHUL QUR'AN
               </h1>
-              <h2 className="text-[13px] sm:text-[14px] font-bold uppercase text-slate-900">
+              <h2 className="text-[13.5px] sm:text-[14.5px] font-bold uppercase tracking-tight text-slate-900">
                 SMP ISLAM AL AZHAR 21 SUKOHARJO
               </h2>
-              <div className="inline-block border-b-2 border-slate-900 pb-0.5">
-                <p className="text-[12px] sm:text-[13px] font-extrabold uppercase text-slate-900">
+              <div className="inline-block border-b-2 border-slate-900 pb-0.5 mt-0.5">
+                <p className="text-[12px] sm:text-[12.5px] font-extrabold uppercase text-slate-900">
                   {periodTitle}
                 </p>
               </div>
-              <p className="text-[12px] font-bold text-slate-800">
+              <p className="text-[11.5px] font-bold text-slate-800">
                 Tahun Ajaran {academicYear}
               </p>
             </div>
 
-            {/* IDENTITAS SANTRI (Aligned key-value format) */}
-            <div className="pt-2 text-[12.5px]">
+            {/* IDENTITAS SANTRI */}
+            <div className="pt-1 text-[12.5px]">
               <table className="w-full border-none">
                 <tbody>
                   <tr>
-                    <td className="w-36 py-0.5 font-bold text-slate-900">Nama</td>
+                    <td className="w-36 py-1 font-bold text-slate-900">Nama</td>
                     <td className="w-4 text-center font-bold">:</td>
-                    <td className="py-0.5 font-bold text-slate-900 uppercase">{student.name}</td>
+                    <td className="py-1 font-bold text-slate-900 uppercase">{student.name}</td>
                   </tr>
                   <tr>
-                    <td className="py-0.5 font-bold text-slate-900">No. Induk / NISN</td>
+                    <td className="py-1 font-bold text-slate-900">No. Induk / NISN</td>
                     <td className="text-center font-bold">:</td>
-                    <td className="py-0.5 font-bold text-slate-800 font-mono text-[12px]">
+                    <td className="py-1 font-bold text-slate-800 font-mono text-[12px]">
                       {student.nis} / {student.nisn || '0128437712'}
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-0.5 font-bold text-slate-900">Kelas</td>
+                    <td className="py-1 font-bold text-slate-900">Kelas</td>
                     <td className="text-center font-bold">:</td>
-                    <td className="py-0.5 font-bold text-slate-900">{studentClass?.name || '8 E'}</td>
+                    <td className="py-1 font-bold text-slate-900">{studentClass?.name || '8 E'}</td>
                   </tr>
                   <tr>
-                    <td className="py-0.5 font-bold text-slate-900">Halaqah Tahfizh</td>
+                    <td className="py-1 font-bold text-slate-900">Halaqah Tahfizh</td>
                     <td className="text-center font-bold">:</td>
-                    <td className="py-0.5 font-bold text-slate-900">{halaqahType}</td>
+                    <td className="py-1 font-bold text-slate-900">{halaqahType}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
             {/* ========================================================================= */}
-            {/* I. KETERCAPAIAN TAHFIZH                                                    */}
+            {/* I. KETERCAPAIAN TAHFIZH (PROPORSI PENUH & RAPI)                            */}
             {/* ========================================================================= */}
-            <div className="space-y-1 pt-1">
+            <div className="space-y-1 pt-0.5">
               <h3 className="font-bold text-[13px] text-slate-950">
                 I. &nbsp; Ketercapaian Tahfizh
               </h3>
 
-              <table className="w-full text-center text-[12px] border border-slate-900 border-collapse">
+              <table className="w-full text-center text-[12.5px] border border-slate-900 border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-900">
-                    <th colSpan={3} className="py-1 px-2 font-bold text-slate-900">
+                    <th colSpan={3} className="py-2 px-3 font-bold text-slate-900">
                       Capaian Tahfizhul Qur'an
                     </th>
                   </tr>
                   <tr className="bg-white border-b border-slate-900 text-slate-900 font-bold">
-                    <th className="py-1 px-2 border-r border-slate-900 w-1/3">Surat / Ayat</th>
-                    <th className="py-1 px-2 border-r border-slate-900 w-1/3">Target</th>
-                    <th className="py-1 px-2 w-1/3">Keterangan</th>
+                    <th className="py-2 px-3 border-r border-slate-900 w-1/3">Surat / Ayat</th>
+                    <th className="py-2 px-3 border-r border-slate-900 w-1/3">Target</th>
+                    <th className="py-2 px-3 w-1/3">Keterangan</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr className="border-b border-slate-900">
-                    <td className="py-1.5 px-2 border-r border-slate-900 font-semibold">{suratAyatCapaian}</td>
-                    <td className="py-1.5 px-2 border-r border-slate-900 font-semibold">{targetSuratAyat}</td>
-                    <td className="py-1.5 px-2 font-semibold text-slate-800">{keteranganTahfizh}</td>
+                    <td className="py-2.5 px-3 border-r border-slate-900 font-semibold">{suratAyatCapaian}</td>
+                    <td className="py-2.5 px-3 border-r border-slate-900 font-semibold">{targetSuratAyat}</td>
+                    <td className="py-2.5 px-3 font-semibold text-slate-800">{keteranganTahfizh}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
             {/* ========================================================================= */}
-            {/* II. KEDISIPLINAN                                                          */}
+            {/* II. KEDISIPLINAN (PROPORSI PENUH & RAPI)                                   */}
             {/* ========================================================================= */}
-            <div className="space-y-1 pt-1">
+            <div className="space-y-1 pt-0.5">
               <h3 className="font-bold text-[13px] text-slate-950">
                 II. &nbsp; Kedisiplinan
               </h3>
 
-              <table className="w-full text-[12px] border border-slate-900 border-collapse">
+              <table className="w-full text-[12.5px] border border-slate-900 border-collapse">
                 <thead>
                   <tr className="bg-white border-b border-slate-900 text-slate-900 font-bold">
-                    <th className="py-1 px-3 border-r border-slate-900 w-1/2 text-center">Ketidakhadiran</th>
-                    <th className="py-1 px-3 w-1/2 text-center">Pelanggaran</th>
+                    <th className="py-2 px-3 border-r border-slate-900 w-1/2 text-center">Ketidakhadiran</th>
+                    <th className="py-2 px-3 w-1/2 text-center">Pelanggaran</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
                     {/* Left: Ketidakhadiran list */}
-                    <td className="p-2 border-r border-slate-900 align-top">
-                      <div className="space-y-0.5 px-4 font-mono text-[12px]">
+                    <td className="p-3 border-r border-slate-900 align-top">
+                      <div className="space-y-1 px-4 font-mono text-[12.5px]">
                         <div className="flex">
                           <span className="w-8 font-bold font-sans">A</span>
                           <span className="w-4 text-center">:</span>
@@ -760,7 +1539,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                     </td>
 
                     {/* Right: Pelanggaran */}
-                    <td className="p-2 text-center align-middle font-medium text-slate-800">
+                    <td className="p-3 text-center align-middle font-medium text-slate-800">
                       {pelanggaranNotes}
                     </td>
                   </tr>
@@ -769,35 +1548,35 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             </div>
 
             {/* ========================================================================= */}
-            {/* III. PERKEMBANGAN INDIVIDU METODE UMMI (SESUAI FORMAT GAMBAR)             */}
+            {/* III. PERKEMBANGAN INDIVIDU METODE UMMI (PROPORSI PENUH & RAPI)            */}
             {/* ========================================================================= */}
-            <div className="space-y-1 pt-1">
+            <div className="space-y-1 pt-0.5">
               <h3 className="font-bold text-[13px] text-slate-950">
                 III. &nbsp; Perkembangan Individu Metode Ummi
               </h3>
 
-              <table className="w-full text-[12px] border border-slate-900 border-collapse">
+              <table className="w-full text-[12.5px] border border-slate-900 border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-900 text-slate-900">
-                    <th colSpan={2} className="py-1.5 px-3 text-center font-bold text-[12px]">
+                    <th colSpan={2} className="py-2 px-3 text-center font-bold text-[12.5px]">
                       Capaian UMMI
                     </th>
                   </tr>
                   <tr className="bg-white border-b border-slate-900 text-slate-900 font-bold">
-                    <th className="py-1 px-3 border-r border-slate-900 text-left w-8/12 font-bold">
+                    <th className="py-2 px-3 border-r border-slate-900 text-left w-8/12 font-bold">
                       Jilid/Tilawah/Gharib/Tajwid
                     </th>
-                    <th className="py-1 px-3 text-center w-4/12 font-bold">
+                    <th className="py-2 px-3 text-center w-4/12 font-bold">
                       Nilai
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td className="py-2 px-3 border-r border-slate-900 font-normal text-slate-900">
+                    <td className="py-2.5 px-3 border-r border-slate-900 font-normal text-slate-900">
                       {ummiCapaianDescription}
                     </td>
-                    <td className="py-2 px-3 text-center font-bold font-mono text-slate-900">
+                    <td className="py-2.5 px-3 text-center font-bold font-mono text-slate-900 text-[13px]">
                       {ummiNilaiScore}
                     </td>
                   </tr>
@@ -808,56 +1587,122 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             {/* ========================================================================= */}
             {/* IV. CATATAN                                                               */}
             {/* ========================================================================= */}
-            <div className="space-y-1 pt-1">
+            <div className="space-y-1 pt-0.5">
               <h3 className="font-bold text-[13px] text-slate-950">
                 IV. &nbsp; Catatan
               </h3>
 
-              <div className="border border-slate-900 p-2.5 min-h-[56px] text-[12px] text-slate-900 leading-normal">
+              <div className="border border-slate-900 p-3 min-h-[72px] sm:min-h-[78px] text-[12px] text-slate-900 leading-relaxed">
                 {teacherNotes || '-'}
               </div>
             </div>
 
             {/* ========================================================================= */}
-            {/* TANDA TANGAN (SIGNATURES)                                                 */}
+            {/* TANDA TANGAN (SIGNATURES) - SAMPAI SEBELUM BINGKAI BAWAH                   */}
             {/* ========================================================================= */}
-            <div className="pt-6 grid grid-cols-2 text-center text-[12px]">
-              {/* Left Signature: Kepala Sekolah */}
-              <div className="flex flex-col items-center justify-between min-h-[100px]">
+            <div className="pt-5 grid grid-cols-2 text-center text-[12.5px]">
+              {/* Left Signature: Kepala Sekolah (Sinkron Admin) */}
+              <div className="flex flex-col items-center justify-between min-h-[112px]">
                 <div>
                   <p className="text-slate-800">Mengetahui,</p>
                   <p className="font-bold text-slate-950 uppercase">
-                    Kepala SMP ISLAM AL AZHAR 21 SUKOHARJO
+                    Kepala {settings.schoolName || 'SMP ISLAM AL AZHAR 21 SUKOHARJO'}
                   </p>
                 </div>
                 
-                {/* Signature space / line */}
-                <div className="pt-14">
+                {/* Online Digital Signature Kepala Sekolah */}
+                <div className="relative w-full flex flex-col items-center justify-center my-0.5">
+                  {headmasterSignatureUrl ? (
+                    <div className="relative group flex items-center justify-center">
+                      <img
+                        src={headmasterSignatureUrl}
+                        alt="Tanda Tangan Kepala Sekolah"
+                        className="h-14 sm:h-16 max-w-[140px] object-contain select-none -mb-3 relative z-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRemoveHeadmasterSignature}
+                        title="Hapus Tanda Tangan"
+                        className="no-print absolute -top-1 -right-5 p-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-full opacity-0 group-hover:opacity-100 transition shadow-xs cursor-pointer z-20"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="h-14 flex items-center justify-center">
+                      <label className="no-print text-[10.5px] text-[#D4AF37] hover:text-amber-700 font-bold cursor-pointer border border-dashed border-amber-300 hover:border-amber-500 rounded-lg px-2.5 py-1 bg-amber-50/60 transition flex items-center gap-1">
+                        <Upload className="w-3 h-3" />
+                        <span>+ Upload TTD Kepsek</span>
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          onChange={handleHeadmasterSignatureUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+
+                <div>
                   <p className="font-bold text-slate-950 underline underline-offset-2">
                     {headmasterName}
                   </p>
-                  <p className="text-[11px] font-mono text-slate-800 mt-0.5">
+                  <p className="text-[11.5px] font-mono text-slate-800 mt-0.5">
                     NIK. {headmasterNik}
                   </p>
                 </div>
               </div>
 
-              {/* Right Signature: Wali Kelas / Guru Pengampu */}
-              <div className="flex flex-col items-center justify-between min-h-[100px]">
+              {/* Right Signature: Koordinator Tahfizh (Sinkron Admin) */}
+              <div className="flex flex-col items-center justify-between min-h-[112px]">
                 <div>
                   <p className="text-slate-800">{cityDate}</p>
                   <p className="font-bold text-slate-950">
-                    Wali Kelas / Guru Pengampu
+                    Koordinator Tahfizh
                   </p>
                 </div>
                 
-                {/* Signature space / line */}
-                <div className="pt-14">
+                {/* Online Digital Signature Koordinator Tahfizh */}
+                <div className="relative w-full flex flex-col items-center justify-center my-0.5">
+                  {tahfizhCoordinatorSignatureUrl ? (
+                    <div className="relative group flex items-center justify-center">
+                      <img
+                        src={tahfizhCoordinatorSignatureUrl}
+                        alt="Tanda Tangan Koordinator Tahfizh"
+                        className="h-14 sm:h-16 max-w-[140px] object-contain select-none -mb-3 relative z-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRemoveTahfizhCoordinatorSignature}
+                        title="Hapus Tanda Tangan"
+                        className="no-print absolute -top-1 -right-5 p-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-full opacity-0 group-hover:opacity-100 transition shadow-xs cursor-pointer z-20"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="h-14 flex items-center justify-center">
+                      <label className="no-print text-[10.5px] text-[#D4AF37] hover:text-amber-700 font-bold cursor-pointer border border-dashed border-amber-300 hover:border-amber-500 rounded-lg px-2.5 py-1 bg-amber-50/60 transition flex items-center gap-1">
+                        <Upload className="w-3 h-3" />
+                        <span>+ Upload TTD Koordinator</span>
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          onChange={handleTahfizhCoordinatorSignatureUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+
+                <div>
                   <p className="font-bold text-slate-950 underline underline-offset-2">
-                    {waliKelasName}
+                    {tahfizhCoordinatorName}
                   </p>
-                  <p className="text-[11px] font-mono text-slate-800 mt-0.5">
-                    NIK. {waliKelasNik}
+                  <p className="text-[11.5px] font-mono text-slate-800 mt-0.5">
+                    NIK. {tahfizhCoordinatorNik}
                   </p>
                 </div>
               </div>

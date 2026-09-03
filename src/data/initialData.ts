@@ -12,13 +12,21 @@ import {
 } from '../types';
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  schoolName: 'SMP Islam Al Azhar 21',
+  schoolName: 'SMP Islam Al Azhar 21 Solo Baru',
   schoolSubtitle: 'Sistem Pencatatan & Monitoring Tahfizh Al-Qur\'an (TAHFIZH SMPIA21)',
-  schoolAddress: 'Jl. Al-Azhar No. 21, Kompleks Pendidikan Islam, Jakarta',
+  schoolAddress: 'Jl. Al-Azhar No. 21, Solo Baru, Sukoharjo, Jawa Tengah',
   academicYear: '2026/2027',
   semester: 'Ganjil',
-  headmasterName: 'Drs. H. Sulaiman Affandi, M.Pd.',
-  tahfizhCoordinator: 'Ustadz Ahmad Fauzan, Lc., M.Ag.'
+  activeSemester: 'Ganjil',
+  headmasterName: 'H. M. Ridwan, M.Pd.I',
+  headmasterNik: '01.0125',
+  tahfizhCoordinator: 'Sekar Ningtyas Dewi Pratiwi, S.Pd',
+  tahfizhCoordinatorNik: '02.0367',
+  raportDate: 'Sukoharjo, 20 Desember 2026',
+  minScoreKKM: 75,
+  defaultTargetJuz: 4,
+  headmasterSignatureUrl: '',
+  tahfizhCoordinatorSignatureUrl: ''
 };
 
 export const INITIAL_USERS: User[] = [

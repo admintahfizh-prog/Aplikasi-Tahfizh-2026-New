@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Settings, 
   School, 
@@ -32,7 +32,9 @@ import {
   CheckCircle,
   Upload,
   Image as ImageIcon,
-  X
+  X,
+  FileText,
+  Square
 } from 'lucide-react';
 import { AppSettings, Role, User, Student, Teacher } from '../types';
 import { storageService } from '../services/storageService';
@@ -102,6 +104,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     onRefreshData();
   };
 
+  useEffect(() => {
+    setFormData({ ...settings });
+  }, [settings]);
+
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -149,6 +155,256 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const handleRemoveLogo = () => {
     const updated = { ...formData, customLogoUrl: '' };
+    setFormData(updated);
+    storageService.saveSettings(updated);
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
+    onRefreshData();
+  };
+
+  const handleYayasanLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const rawDataUrl = event.target?.result as string;
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 320;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/png', 0.9);
+          const updated = { ...formData, yayasanLogoUrl: compressed };
+          setFormData(updated);
+          storageService.saveSettings(updated);
+          setSavedSuccess(true);
+          setTimeout(() => setSavedSuccess(false), 3000);
+          onRefreshData();
+        }
+      };
+      img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveYayasanLogo = () => {
+    const updated = { ...formData, yayasanLogoUrl: '' };
+    setFormData(updated);
+    storageService.saveSettings(updated);
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
+    onRefreshData();
+  };
+
+  const handleRaportFrameUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const rawDataUrl = event.target?.result as string;
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxWidth = 1200;
+        const maxHeight = 1800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/png');
+          const updated = { ...formData, raportFrameUrl: compressed };
+          setFormData(updated);
+          storageService.saveSettings(updated);
+          setSavedSuccess(true);
+          setTimeout(() => setSavedSuccess(false), 3000);
+          onRefreshData();
+        }
+      };
+      img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveRaportFrame = () => {
+    const updated = { ...formData, raportFrameUrl: '' };
+    setFormData(updated);
+    storageService.saveSettings(updated);
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
+    onRefreshData();
+  };
+
+  const handleBismillahUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const rawDataUrl = event.target?.result as string;
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxWidth = 800;
+        const maxHeight = 300;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/png');
+          const updated = { ...formData, bismillahImgUrl: compressed };
+          setFormData(updated);
+          storageService.saveSettings(updated);
+          setSavedSuccess(true);
+          setTimeout(() => setSavedSuccess(false), 3000);
+          onRefreshData();
+        }
+      };
+      img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveBismillah = () => {
+    const updated = { ...formData, bismillahImgUrl: '' };
+    setFormData(updated);
+    storageService.saveSettings(updated);
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
+    onRefreshData();
+  };
+
+  const handleHeadmasterSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const rawDataUrl = event.target?.result as string;
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxWidth = 500;
+        const maxHeight = 250;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/png', 0.95);
+          const updated = { ...formData, headmasterSignatureUrl: compressed };
+          setFormData(updated);
+          storageService.saveSettings(updated);
+          setSavedSuccess(true);
+          setTimeout(() => setSavedSuccess(false), 3000);
+          onRefreshData();
+        }
+      };
+      img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveHeadmasterSignature = () => {
+    const updated = { ...formData, headmasterSignatureUrl: '' };
+    setFormData(updated);
+    storageService.saveSettings(updated);
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
+    onRefreshData();
+  };
+
+  const handleTahfizhCoordinatorSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const rawDataUrl = event.target?.result as string;
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxWidth = 500;
+        const maxHeight = 250;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/png', 0.95);
+          const updated = { ...formData, tahfizhCoordinatorSignatureUrl: compressed };
+          setFormData(updated);
+          storageService.saveSettings(updated);
+          setSavedSuccess(true);
+          setTimeout(() => setSavedSuccess(false), 3000);
+          onRefreshData();
+        }
+      };
+      img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveTahfizhCoordinatorSignature = () => {
+    const updated = { ...formData, tahfizhCoordinatorSignatureUrl: '' };
     setFormData(updated);
     storageService.saveSettings(updated);
     setSavedSuccess(true);
@@ -796,35 +1052,226 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Kepala Sekolah</label>
+                <label className="block font-semibold text-slate-700 mb-1">Subjudul / Tagline Sistem</label>
                 <input
                   type="text"
-                  value={formData.principalName}
-                  onChange={(e) => setFormData({ ...formData, principalName: e.target.value })}
+                  value={formData.schoolSubtitle || ''}
+                  onChange={(e) => setFormData({ ...formData, schoolSubtitle: e.target.value })}
+                  placeholder="Sistem Pencatatan & Monitoring Tahfizh Al-Qur'an"
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
                 />
               </div>
 
               <div className="sm:col-span-2">
-                <label className="block font-semibold text-slate-700 mb-1">Koordinator Program Tahfizh</label>
+                <label className="block font-semibold text-slate-700 mb-1">Alamat Lengkap Sekolah</label>
                 <input
                   type="text"
-                  value={formData.tahfizhCoordinator}
-                  onChange={(e) => setFormData({ ...formData, tahfizhCoordinator: e.target.value })}
+                  value={formData.schoolAddress || ''}
+                  onChange={(e) => setFormData({ ...formData, schoolAddress: e.target.value })}
+                  placeholder="Jl. Al-Azhar No. 21, Solo Baru, Sukoharjo"
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
                 />
               </div>
             </div>
           </div>
 
-          {/* School Logo Upload */}
+          {/* Raport & Official Signatures Settings */}
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+              <FileText className="w-4 h-4 text-[#D4AF37]" />
+              <div>
+                <h3 className="font-bold text-slate-800 text-sm">Pengaturan Format & Tanda Tangan Raport</h3>
+                <p className="text-[11px] text-slate-500">Data ini akan otomatis disinkronkan ke area tanda tangan dan tanggal terbit lembar raport santri.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div className="sm:col-span-2">
+                <label className="block font-semibold text-slate-700 mb-1">Tanggal Raport (Tempat & Tanggal)</label>
+                <input
+                  type="text"
+                  value={formData.raportDate || ''}
+                  onChange={(e) => setFormData({ ...formData, raportDate: e.target.value })}
+                  placeholder="Sukoharjo, 20 Desember 2026"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">Format: Nama Kota, Tanggal Bulan Tahun (contoh: Sukoharjo, 20 Desember 2026). Dicetak di atas tanda tangan Koordinator Tahfizh.</p>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Nama Kepala Sekolah</label>
+                <input
+                  type="text"
+                  value={formData.headmasterName || formData.principalName || ''}
+                  onChange={(e) => setFormData({ ...formData, headmasterName: e.target.value, principalName: e.target.value })}
+                  placeholder="H. M. Ridwan, M.Pd.I"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">NIK / NIP Kepala Sekolah</label>
+                <input
+                  type="text"
+                  value={formData.headmasterNik || ''}
+                  onChange={(e) => setFormData({ ...formData, headmasterNik: e.target.value })}
+                  placeholder="01.0125"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Nama Koordinator Tahfizh</label>
+                <input
+                  type="text"
+                  value={formData.tahfizhCoordinator || ''}
+                  onChange={(e) => setFormData({ ...formData, tahfizhCoordinator: e.target.value })}
+                  placeholder="Sekar Ningtyas Dewi Pratiwi, S.Pd"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">NIK / NIP Koordinator Tahfizh</label>
+                <input
+                  type="text"
+                  value={formData.tahfizhCoordinatorNik || ''}
+                  onChange={(e) => setFormData({ ...formData, tahfizhCoordinatorNik: e.target.value })}
+                  placeholder="02.0367"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Tanda Tangan Digital Online Kepala Sekolah */}
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-[#D4AF37]" />
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">Tanda Tangan Digital Kepala Sekolah (Online Signature)</h3>
+                  <p className="text-[11px] text-slate-500">Disematkan otomatis di atas nama & NIK Kepala Sekolah pada lembar cetak raport & unduh PDF.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
+              <div className="w-40 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
+                {formData.headmasterSignatureUrl ? (
+                  <img
+                    src={formData.headmasterSignatureUrl}
+                    alt="TTD Kepala Sekolah"
+                    className="w-full h-full object-contain p-2"
+                  />
+                ) : (
+                  <div className="text-center p-2 text-slate-400">
+                    <FileText className="w-6 h-6 mx-auto mb-1 opacity-50" />
+                    <span className="text-[10px] font-medium block">Belum Ada TTD</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 space-y-2.5">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1E293B] hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer">
+                    <Upload className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>Upload TTD Kepsek (PNG)</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={handleHeadmasterSignatureUpload}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {formData.headmasterSignatureUrl && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveHeadmasterSignature}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold transition cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Hapus TTD</span>
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-slate-500">
+                  Format yang didukung: <strong>PNG, JPG, WebP</strong>. Disarankan gambar dengan latar transparan (PNG transparan) agar rapi di atas garis nama.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Tanda Tangan Digital Online Koordinator Tahfizh */}
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-[#D4AF37]" />
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">Tanda Tangan Digital Koordinator Tahfizh (Online Signature)</h3>
+                  <p className="text-[11px] text-slate-500">Disematkan otomatis di atas nama & NIK Koordinator Tahfizh pada lembar cetak raport & unduh PDF.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
+              <div className="w-40 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
+                {formData.tahfizhCoordinatorSignatureUrl ? (
+                  <img
+                    src={formData.tahfizhCoordinatorSignatureUrl}
+                    alt="TTD Koordinator Tahfizh"
+                    className="w-full h-full object-contain p-2"
+                  />
+                ) : (
+                  <div className="text-center p-2 text-slate-400">
+                    <FileText className="w-6 h-6 mx-auto mb-1 opacity-50" />
+                    <span className="text-[10px] font-medium block">Belum Ada TTD</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 space-y-2.5">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1E293B] hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer">
+                    <Upload className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>Upload TTD Koordinator (PNG)</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={handleTahfizhCoordinatorSignatureUpload}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {formData.tahfizhCoordinatorSignatureUrl && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveTahfizhCoordinatorSignature}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold transition cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Hapus TTD</span>
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-slate-500">
+                  Format yang didukung: <strong>PNG, JPG, WebP</strong>. Disarankan gambar dengan latar transparan (PNG transparan) agar rapi di atas garis nama.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* School Logo Upload (Kiri Kop) */}
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <ImageIcon className="w-4 h-4 text-[#D4AF37]" />
                 <div>
-                  <h3 className="font-bold text-slate-800 text-sm">Logo Resmi Sekolah</h3>
-                  <p className="text-[11px] text-slate-500">Logo ini akan otomatis tampil pada menu login, pojok kiri atas dashboard/navbar, dan lembar raport cetak.</p>
+                  <h3 className="font-bold text-slate-800 text-sm">Logo Resmi Sekolah (Kiri Kop Raport & Navbar)</h3>
+                  <p className="text-[11px] text-slate-500">Logo ini otomatis tampil pada menu login, pojok kiri atas dashboard/navbar, dan posisi kiri kop raport cetak.</p>
                 </div>
               </div>
             </div>
@@ -873,7 +1320,193 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
 
                 <p className="text-[11px] text-slate-500">
-                  Format yang didukung: <strong>PNG, JPG, SVG, WebP</strong>. Disarankan gambar dengan latar belakang transparan berukuran proporsional (persegi/lingkaran).
+                  Format yang didukung: <strong>PNG, JPG, SVG, WebP</strong>. Disarankan gambar dengan latar belakang transparan.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Yayasan Logo Upload (Kanan Kop Raport) */}
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-[#D4AF37]" />
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">Logo Yayasan (Sebelah Kanan Kop Raport)</h3>
+                  <p className="text-[11px] text-slate-500">Logo yayasan/lembaga penaung yang tampil di sisi kanan atas kop raport santri. Diupload manual oleh admin.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
+              {/* Logo Preview */}
+              <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
+                {formData.yayasanLogoUrl ? (
+                  <img
+                    src={formData.yayasanLogoUrl}
+                    alt="Logo Yayasan"
+                    className="w-full h-full object-contain p-1"
+                  />
+                ) : (
+                  <div className="text-center p-2 text-slate-400">
+                    <ImageIcon className="w-6 h-6 mx-auto mb-1 opacity-50" />
+                    <span className="text-[10px] font-medium block">Belum Ada Logo Yayasan</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Upload & Action Controls */}
+              <div className="flex-1 space-y-2.5">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1E293B] hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer">
+                    <Upload className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>Upload Logo Yayasan</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      onChange={handleYayasanLogoUpload}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {formData.yayasanLogoUrl && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveYayasanLogo}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold transition cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Hapus Logo Yayasan</span>
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-slate-500">
+                  Format yang didukung: <strong>PNG, JPG, SVG, WebP</strong>. Otomatis tampil di sebelah kanan kop raport cetak.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Kaligrafi Bismillah PNG Upload (Tengah Kop Raport) */}
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-[#D4AF37]" />
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">Kaligrafi Bismillah Raport (Format PNG)</h3>
+                  <p className="text-[11px] text-slate-500">Ganti teks kaligrafi Bismillah bawaan di tengah kop raport cetak dengan file gambar kaligrafi berformat PNG transparan.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
+              {/* Bismillah Preview */}
+              <div className="w-48 h-20 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
+                {formData.bismillahImgUrl ? (
+                  <img
+                    src={formData.bismillahImgUrl}
+                    alt="Kaligrafi Bismillah PNG"
+                    className="w-full h-full object-contain p-2"
+                  />
+                ) : (
+                  <div className="text-center p-2 text-slate-400">
+                    <ImageIcon className="w-5 h-5 mx-auto mb-1 opacity-50" />
+                    <span className="text-[10px] font-medium block">Belum Ada Gambar Bismillah</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Upload & Action Controls */}
+              <div className="flex-1 space-y-2.5">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1E293B] hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer">
+                    <Upload className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>Upload Kaligrafi Bismillah (PNG)</span>
+                    <input
+                      type="file"
+                      accept="image/png"
+                      onChange={handleBismillahUpload}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {formData.bismillahImgUrl && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveBismillah}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold transition cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Hapus Kaligrafi Bismillah</span>
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-slate-500">
+                  Format yang didukung: <strong>PNG</strong> transparan. Tampil di tengah kop antara logo sekolah dan logo yayasan.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Raport Frame Upload (Bingkai Format PNG) */}
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Square className="w-4 h-4 text-[#D4AF37]" />
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">Bingkai Raport (Format PNG)</h3>
+                  <p className="text-[11px] text-slate-500">Ganti bingkai garis bawaan dengan mengupload file bingkai/ornamen resmi sekolah berformat PNG transparan.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
+              {/* Frame Preview */}
+              <div className="w-24 h-32 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs relative">
+                {formData.raportFrameUrl ? (
+                  <img
+                    src={formData.raportFrameUrl}
+                    alt="Bingkai Raport PNG"
+                    className="w-full h-full object-contain p-1"
+                  />
+                ) : (
+                  <div className="text-center p-2 text-slate-400">
+                    <Square className="w-6 h-6 mx-auto mb-1 opacity-50" />
+                    <span className="text-[10px] font-medium block">Tanpa Bingkai PNG</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Upload & Action Controls */}
+              <div className="flex-1 space-y-2.5">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1E293B] hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer">
+                    <Upload className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>Upload Bingkai Raport (PNG)</span>
+                    <input
+                      type="file"
+                      accept="image/png"
+                      onChange={handleRaportFrameUpload}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {formData.raportFrameUrl && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveRaportFrame}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold transition cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Hapus Bingkai</span>
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-slate-500">
+                  Wajib format: <strong>PNG</strong> (bagian tengah transparan agar teks raport tetap terbaca). Bingkai akan otomatis membingkai lembar raport berukuran Folio / F4.
                 </p>
               </div>
             </div>

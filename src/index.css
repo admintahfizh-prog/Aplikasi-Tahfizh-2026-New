@@ -23,18 +23,71 @@
   background: #94a3b8;
 }
 
-/* Print stylesheet for printable Tahfizh Report Card & Certificate */
+/* Print stylesheet for printable Tahfizh Report Card & Certificate - Strict F4 / Folio (215 x 330 mm) */
+@page {
+  size: 215mm 330mm;
+  margin: 5mm 6mm;
+}
+
 @media print {
-  body {
-    background: white !important;
-    color: black !important;
+  html, body {
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-  .no-print {
+
+  /* Completely hide any menu, navbar, sidebar, header, button, modal */
+  .no-print,
+  nav,
+  header,
+  aside,
+  footer,
+  button,
+  input,
+  select,
+  .print\:hidden {
     display: none !important;
   }
-  .print-only {
+
+  /* Reset wrappers and scroll containers */
+  #root,
+  main,
+  .flex-1 {
     display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
   }
+
+  /* Raport Sheet strictly matches Folio / F4 (215mm x 330mm) with narrow margin compliance */
+  .raport-sheet {
+    box-sizing: border-box !important;
+    position: relative !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: calc(330mm - 12mm) !important;
+    min-height: calc(330mm - 12mm) !important;
+    max-height: calc(330mm - 12mm) !important;
+    margin: 0 auto !important;
+    padding: 16mm 18mm 14mm 18mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    page-break-inside: avoid !important;
+    page-break-after: avoid !important;
+    page-break-before: avoid !important;
+    background-color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   .page-break {
     page-break-after: always;
   }

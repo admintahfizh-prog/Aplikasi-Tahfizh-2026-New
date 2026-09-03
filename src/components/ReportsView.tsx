@@ -84,7 +84,50 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   const currentStudentClass = classes.find(c => c.id === currentIndividualStudent?.classId);
 
   const handlePrint = () => {
-    window.print();
+    try {
+      const isInIframe = window.self !== window.top;
+      if (isInIframe) {
+        const printableArea = document.querySelector('.raport-sheet') || document.querySelector('.printable-report-area');
+        if (printableArea) {
+          const content = printableArea.outerHTML;
+          const printWin = window.open('', '_blank', 'width=950,height=900');
+          if (printWin) {
+            const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+              .map(el => el.outerHTML)
+              .join('\n');
+            printWin.document.open();
+            printWin.document.write(`
+              <!DOCTYPE html>
+              <html>
+                <head>
+                  <meta charset="utf-8" />
+                  <title>Laporan Tahfizh SMPI Al Azhar 21</title>
+                  ${styles}
+                  <style>
+                    @page { size: auto; margin: 6mm; }
+                    body { margin: 0; padding: 10px; background: #fff; font-family: sans-serif; }
+                    .no-print { display: none !important; }
+                  </style>
+                </head>
+                <body>
+                  ${content}
+                  <script>
+                    window.onload = function() {
+                      setTimeout(function() { window.focus(); window.print(); }, 400);
+                    };
+                  </script>
+                </body>
+              </html>
+            `);
+            printWin.document.close();
+            return;
+          }
+        }
+      }
+      window.print();
+    } catch (e) {
+      window.print();
+    }
   };
 
   const handleExportHafalanCSV = () => {
