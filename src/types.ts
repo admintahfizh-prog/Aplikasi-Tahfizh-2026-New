@@ -40,6 +40,19 @@ export interface ClassItem {
   studentCount?: number;
 }
 
+export interface HalaqahGroup {
+  id: string;
+  name: string; // e.g. "Halaqah 1 (Umar bin Khattab)", "Halaqah 2 (Abu Bakar)", etc.
+  teacherId: string;
+  teacherName?: string;
+  description?: string;
+  schedule?: string;
+  room?: string;
+  studentIds?: string[];
+  maxCapacity?: number;
+  createdAt?: string;
+}
+
 export type HalaqahType = 'Akselerasi' | 'Reguler' | 'Khusus';
 
 export interface Student {
@@ -51,6 +64,8 @@ export interface Student {
   gender: 'L' | 'P';
   classId: string;
   teacherId: string;
+  halaqahGroupId?: string;
+  halaqahGroupName?: string;
   parentName: string;
   parentPhone: string;
   parentEmail?: string;

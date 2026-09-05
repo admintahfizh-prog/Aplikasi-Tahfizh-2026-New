@@ -2,6 +2,7 @@ import {
   Student, 
   Teacher, 
   ClassItem, 
+  HalaqahGroup,
   MemorizationRecord, 
   UmmiRecord, 
   LearningMaterial, 
@@ -16,6 +17,7 @@ import {
 import { 
   DEFAULT_SETTINGS, 
   INITIAL_CLASSES, 
+  INITIAL_HALAQAH_GROUPS,
   INITIAL_MEMORIZATION_RECORDS, 
   INITIAL_NOTIFICATIONS, 
   INITIAL_STUDENTS, 
@@ -45,6 +47,7 @@ const STORAGE_KEYS = {
   SETTINGS: 'tahfizh_smpia21_settings',
   USERS: 'tahfizh_smpia21_users',
   CLASSES: 'tahfizh_smpia21_classes',
+  HALAQAH_GROUPS: 'tahfizh_smpia21_halaqah_groups',
   TEACHERS: 'tahfizh_smpia21_teachers',
   STUDENTS: 'tahfizh_smpia21_students',
   MEMORIZATION: 'tahfizh_smpia21_memorization',
@@ -327,6 +330,17 @@ export const storageService = {
         await syncCollectionToCloud('classes', localClasses);
       }
 
+      // 3b. Fetch Halaqah Groups
+      const hlqSnap = await getDocs(collection(db, 'halaqah_groups'));
+      if (!hlqSnap.empty) {
+        const cloudHalaqah: HalaqahGroup[] = [];
+        hlqSnap.forEach(d => cloudHalaqah.push(d.data() as HalaqahGroup));
+        setItem(STORAGE_KEYS.HALAQAH_GROUPS, cloudHalaqah);
+      } else {
+        const localHalaqah = this.getHalaqahGroups();
+        await syncCollectionToCloud('halaqah_groups', localHalaqah);
+      }
+
       // 4. Fetch Memorization Records
       const memSnap = await getDocs(collection(db, 'memorization_records'));
       if (!memSnap.empty) {
@@ -443,6 +457,7 @@ export const storageService = {
       await syncCollectionToCloud('students', this.getStudents());
       await syncCollectionToCloud('teachers', this.getTeachers());
       await syncCollectionToCloud('classes', this.getClasses());
+      await syncCollectionToCloud('halaqah_groups', this.getHalaqahGroups());
       await syncCollectionToCloud('memorization_records', this.getMemorizationRecords());
       await syncCollectionToCloud('ummi_records', this.getUmmiRecords());
       await syncCollectionToCloud('violations', this.getViolations());
@@ -465,6 +480,7 @@ export const storageService = {
     setItem(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
     setItem(STORAGE_KEYS.USERS, INITIAL_USERS);
     setItem(STORAGE_KEYS.CLASSES, INITIAL_CLASSES);
+    setItem(STORAGE_KEYS.HALAQAH_GROUPS, INITIAL_HALAQAH_GROUPS);
     setItem(STORAGE_KEYS.TEACHERS, INITIAL_TEACHERS);
     setItem(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
     setItem(STORAGE_KEYS.MEMORIZATION, INITIAL_MEMORIZATION_RECORDS);
@@ -697,7 +713,11 @@ export const storageService = {
 
   // Classes
   getClasses(): ClassItem[] {
-    return getItem(STORAGE_KEYS.CLASSES, INITIAL_CLASSES);
+    const list = getItem(STORAGE_KEYS.CLASSES, INITIAL_CLASSES);
+    // Sort classes naturally/alphabetically: 7A, 7B, 7C, 8A, 8B, 8C, 9A, 9B, etc.
+    return [...list].sort((a, b) => 
+      a.name.localeCompare(b.name, 'id', { numeric: true, sensitivity: 'base' })
+    );
   },
   saveClass(cls: ClassItem): void {
     const list = this.getClasses();
@@ -714,6 +734,91 @@ export const storageService = {
     const list = this.getClasses().filter(c => c.id !== id);
     setItem(STORAGE_KEYS.CLASSES, list);
     deleteDocFromCloud('classes', id);
+  },
+
+  // Halaqah Groups (1 guru bisa 2 sampai 5 kelompok halaqah, input manual)
+  getHalaqahGroups(): HalaqahGroup[] {
+    const list = getItem(STORAGE_KEYS.HALAQAH_GROUPS, INITIAL_HALAQAH_GROUPS);
+    return [...list].sort((a, b) =>
+      a.name.localeCompare(b.name, 'id', { numeric: true, sensitivity: 'base' })
+    );
+  },
+  getHalaqahGroupsByTeacher(teacherId: string): HalaqahGroup[] {
+    return this.getHalaqahGroups().filter(g => g.teacherId === teacherId);
+  },
+  saveHalaqahGroup(group: HalaqahGroup): HalaqahGroup {
+    const list = this.getHalaqahGroups();
+    const idx = list.findIndex(g => g.id === group.id);
+    if (idx >= 0) {
+      list[idx] = group;
+    } else {
+      list.push(group);
+    }
+    setItem(STORAGE_KEYS.HALAQAH_GROUPS, list);
+    syncDocToCloud('halaqah_groups', group.id, group);
+    return group;
+  },
+  deleteHalaqahGroup(id: string): void {
+    const list = this.getHalaqahGroups().filter(g => g.id !== id);
+    setItem(STORAGE_KEYS.HALAQAH_GROUPS, list);
+    deleteDocFromCloud('halaqah_groups', id);
+
+    // Unassign halaqah group reference from students
+    const students = this.getStudents();
+    let hasChanged = false;
+    const updatedStudents = students.map(s => {
+      if (s.halaqahGroupId === id) {
+        hasChanged = true;
+        return {
+          ...s,
+          halaqahGroupId: undefined,
+          halaqahGroupName: undefined
+        };
+      }
+      return s;
+    });
+    if (hasChanged) {
+      setItem(STORAGE_KEYS.STUDENTS, updatedStudents);
+      syncCollectionToCloud('students', updatedStudents);
+    }
+  },
+  assignStudentsToHalaqahGroup(studentIds: string[], halaqahGroupId: string, teacherId?: string): void {
+    const halaqah = this.getHalaqahGroups().find(h => h.id === halaqahGroupId);
+    const resolvedTeacherId = teacherId || halaqah?.teacherId || '';
+    const teacher = this.getTeachers().find(t => t.id === resolvedTeacherId);
+    const students = this.getStudents();
+
+    const updated = students.map(s => {
+      if (studentIds.includes(s.id)) {
+        return {
+          ...s,
+          teacherId: resolvedTeacherId || s.teacherId,
+          halaqahGroupId,
+          halaqahGroupName: halaqah?.name || s.halaqahGroupName
+        };
+      } else if (s.halaqahGroupId === halaqahGroupId) {
+        // Was previously in this halaqah group and is now deselected
+        return {
+          ...s,
+          halaqahGroupId: undefined,
+          halaqahGroupName: undefined
+        };
+      }
+      return s;
+    });
+    setItem(STORAGE_KEYS.STUDENTS, updated);
+    syncCollectionToCloud('students', updated);
+
+    // Also update halaqah group model studentIds list
+    if (halaqah) {
+      const updatedGroup: HalaqahGroup = {
+        ...halaqah,
+        teacherId: resolvedTeacherId || halaqah.teacherId,
+        teacherName: teacher?.name || halaqah.teacherName,
+        studentIds
+      };
+      this.saveHalaqahGroup(updatedGroup);
+    }
   },
 
   // Auto-distribute students into halaqah groups (1 guru 1-12 anak)
@@ -800,16 +905,26 @@ export const storageService = {
       if (s.currentUmmiJilid === 'Jilid 4') updatedJilid = 'Jilid 2';
       else if (s.currentUmmiJilid === 'Jilid 5') updatedJilid = 'Jilid 2';
       else if (s.currentUmmiJilid === 'Jilid 6') updatedJilid = 'Jilid 3';
-      if (updatedJilid !== s.currentUmmiJilid) {
+
+      let updatedPhoto = s.photo;
+      if (updatedPhoto && updatedPhoto.includes('unsplash')) {
+        updatedPhoto = '';
         modified = true;
-        return { ...s, currentUmmiJilid: updatedJilid };
+      }
+
+      if (updatedJilid !== s.currentUmmiJilid || updatedPhoto !== s.photo) {
+        modified = true;
+        return { ...s, currentUmmiJilid: updatedJilid, photo: updatedPhoto || '' };
       }
       return s;
     });
     if (modified) {
       setItem(STORAGE_KEYS.STUDENTS, sanitized);
     }
-    return sanitized;
+    // Urutkan seluruh santri berdasarkan abjad nama A-Z
+    return [...sanitized].sort((a, b) =>
+      a.name.localeCompare(b.name, 'id', { sensitivity: 'base' })
+    );
   },
   getStudentById(id: string): Student | undefined {
     return this.getStudents().find(s => s.id === id);
@@ -919,9 +1034,7 @@ export const storageService = {
         parentPhone: cols[parentPhoneIdx] || '0812' + Math.floor(10000000 + Math.random() * 90000000),
         program: programVal.includes('Reguler') ? 'Reguler Tahfizh' : programVal.includes('Takhassus') ? 'Takhassus 30 Juz' : 'Tahfizh Unggulan',
         targetJuz: targetVal,
-        photo: gender === 'L'
-          ? 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80'
-          : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+        photo: '',
         entryYear: '2026',
         currentUmmiJilid: cols[ummiJilidIdx] || 'Jilid 1',
         currentUmmiPage: 1,

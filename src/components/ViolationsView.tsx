@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { Student, Teacher, ClassItem, TahfizhViolation, ViolationType, Role } from '../types';
 import { storageService } from '../services/storageService';
+import { AvatarBadge } from './AvatarBadge';
 
 interface ViolationsViewProps {
   students: Student[];
@@ -542,10 +543,13 @@ export const ViolationsView: React.FC<ViolationsViewProps> = ({
                       {/* Santri */}
                       <td className="py-3 px-4 align-top">
                         <div className="flex items-center gap-2.5">
-                          <img
-                            src={student?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
-                            alt={student?.name}
-                            className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
+                          <AvatarBadge
+                            name={student?.name || 'Santri'}
+                            photoUrl={student?.photo}
+                            gender={student?.gender}
+                            role="santri"
+                            size="sm"
+                            className="shrink-0"
                           />
                           <div>
                             <button

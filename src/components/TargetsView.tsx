@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { TargetProgress, Student, ClassItem, Role } from '../types';
 import { storageService } from '../services/storageService';
+import { AvatarBadge } from './AvatarBadge';
 
 interface TargetsViewProps {
   targets: TargetProgress[];
@@ -203,10 +204,13 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
               <div>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-3">
-                    <img
-                      src={std?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
-                      alt=""
-                      className="w-10 h-10 rounded-lg object-cover border"
+                    <AvatarBadge
+                      name={std?.name || 'Santri'}
+                      photoUrl={std?.photo}
+                      gender={std?.gender}
+                      role="santri"
+                      size="md"
+                      className="shrink-0"
                     />
                     <div>
                       <h4 

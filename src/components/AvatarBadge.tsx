@@ -1,10 +1,11 @@
 import React, { useRef, useState } from 'react';
 import { Camera, User as UserIcon, Loader2, Trash2 } from 'lucide-react';
-import { fileToCompressedBase64, getInitials } from '../utils/imageUtils';
+import { fileToCompressedBase64, getInitials, getStudentAvatar } from '../utils/imageUtils';
 
 interface AvatarBadgeProps {
   name: string;
   photoUrl?: string;
+  gender?: 'L' | 'P' | 'Laki-laki' | 'Perempuan' | string;
   role?: 'admin' | 'guru' | 'wali' | 'santri' | string;
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
   className?: string;
@@ -17,6 +18,7 @@ interface AvatarBadgeProps {
 export const AvatarBadge: React.FC<AvatarBadgeProps> = ({
   name,
   photoUrl,
+  gender,
   role = 'santri',
   size = 'md',
   className = '',
@@ -28,6 +30,17 @@ export const AvatarBadge: React.FC<AvatarBadgeProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [imageError, setImageError] = useState(false);
+
+  // Determine effective display image
+  const effectivePhotoUrl = React.useMemo(() => {
+    if (photoUrl && photoUrl.trim() !== '' && !photoUrl.includes('unsplash') && !imageError) {
+      return photoUrl;
+    }
+    if (role === 'santri' || gender) {
+      return getStudentAvatar({ gender, photo: photoUrl });
+    }
+    return '';
+  }, [photoUrl, role, gender, imageError]);
 
   // Size mappings
   const sizeClasses = {
@@ -53,7 +66,7 @@ export const AvatarBadge: React.FC<AvatarBadgeProps> = ({
     }
   };
 
-  const hasPhoto = Boolean(photoUrl && photoUrl.trim() !== '' && !imageError);
+  const hasPhoto = Boolean(effectivePhotoUrl && !imageError);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -97,7 +110,7 @@ export const AvatarBadge: React.FC<AvatarBadgeProps> = ({
       >
         {hasPhoto ? (
           <img
-            src={photoUrl}
+            src={effectivePhotoUrl}
             alt={name}
             className="w-full h-full object-cover"
             onError={() => setImageError(true)}

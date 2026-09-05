@@ -199,6 +199,8 @@ export default function App() {
               records={records}
               ummiRecords={ummiRecords}
               settings={settings}
+              userRole={currentUser.role}
+              onRefreshData={loadAllData}
               onBack={() => {
                 setSelectedStudentId(null);
                 setCurrentView(currentUser.role === 'wali' ? 'parent-portal' : 'students');

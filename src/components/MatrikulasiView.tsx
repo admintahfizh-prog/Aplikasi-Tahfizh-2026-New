@@ -43,6 +43,7 @@ import {
 import { IQRO_JILIDS, MATRIKULASI_DAYS, IQRO_SYLLABUS } from '../data/iqroData';
 import { storageService } from '../services/storageService';
 import { LogoAlAzhar } from './LogoAlAzhar';
+import { AvatarBadge } from './AvatarBadge';
 
 interface MatrikulasiViewProps {
   students: Student[];
@@ -648,7 +649,14 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
                 {enrichedMatrikulasiStudents.filter(s => s.status === 'Aktif').slice(0, 4).map(item => (
                   <div key={item.id} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/70 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <img src={item.student?.photo} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+                      <AvatarBadge
+                        name={item.student?.name || 'Santri'}
+                        photoUrl={item.student?.photo}
+                        gender={item.student?.gender}
+                        role="santri"
+                        size="sm"
+                        className="shrink-0"
+                      />
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-800 truncate">{item.student?.name}</p>
                         <p className="text-[10px] text-slate-500 truncate">{item.className} • {item.currentIqroJilid} Hal. {item.currentIqroPage}</p>
@@ -688,7 +696,14 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
                 {enrichedMatrikulasiStudents.filter(s => s.status === 'Aktif').slice(0, 4).map(item => (
                   <div key={item.id} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/70 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <img src={item.student?.photo} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+                      <AvatarBadge
+                        name={item.student?.name || 'Santri'}
+                        photoUrl={item.student?.photo}
+                        gender={item.student?.gender}
+                        role="santri"
+                        size="sm"
+                        className="shrink-0"
+                      />
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-800 truncate">{item.student?.name}</p>
                         <p className="text-[10px] text-slate-500 truncate">{item.className} • {item.currentIqroJilid} Hal. {item.currentIqroPage}</p>
@@ -728,7 +743,14 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
                 {enrichedMatrikulasiStudents.filter(s => s.status === 'Aktif').slice(0, 4).map(item => (
                   <div key={item.id} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/70 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <img src={item.student?.photo} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+                      <AvatarBadge
+                        name={item.student?.name || 'Santri'}
+                        photoUrl={item.student?.photo}
+                        gender={item.student?.gender}
+                        role="santri"
+                        size="sm"
+                        className="shrink-0"
+                      />
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-800 truncate">{item.student?.name}</p>
                         <p className="text-[10px] text-slate-500 truncate">{item.className} • {item.currentIqroJilid} Hal. {item.currentIqroPage}</p>
@@ -802,7 +824,14 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
                           </td>
                           <td className="p-3">
                             <div className="flex items-center gap-2">
-                              <img src={std?.photo} alt="" className="w-6 h-6 rounded-full object-cover" />
+                              <AvatarBadge
+                                name={std?.name || 'Santri'}
+                                photoUrl={std?.photo}
+                                gender={std?.gender}
+                                role="santri"
+                                size="sm"
+                                className="shrink-0"
+                              />
                               <span className="font-bold text-slate-800">{std?.name}</span>
                             </div>
                           </td>
@@ -963,7 +992,14 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
                         
                         <td className="p-3.5">
                           <div className="flex items-center gap-3">
-                            <img src={item.student?.photo} alt="" className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0" />
+                            <AvatarBadge
+                              name={item.student?.name || 'Santri'}
+                              photoUrl={item.student?.photo}
+                              gender={item.student?.gender}
+                              role="santri"
+                              size="sm"
+                              className="shrink-0"
+                            />
                             <div>
                               <p className="font-bold text-slate-900">{item.student?.name}</p>
                               <p className="text-[11px] text-slate-500 font-mono">NIS: {item.student?.nis}</p>
@@ -1151,7 +1187,14 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
                           </td>
                           <td className="p-3.5">
                             <div className="flex items-center gap-2">
-                              <img src={std?.photo} alt="" className="w-6 h-6 rounded-full object-cover" />
+                              <AvatarBadge
+                                name={std?.name || 'Santri'}
+                                photoUrl={std?.photo}
+                                gender={std?.gender}
+                                role="santri"
+                                size="sm"
+                                className="shrink-0"
+                              />
                               <div>
                                 <p className="font-bold text-slate-800">{std?.name}</p>
                                 <p className="text-[10px] text-slate-500">{cls?.name}</p>

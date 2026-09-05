@@ -18,6 +18,7 @@ import {
 import { MemorizationRecord, Student, Teacher, ClassItem, SetoranType, Role } from '../types';
 import { storageService } from '../services/storageService';
 import { SURAH_LIST } from '../data/quranData';
+import { AvatarBadge } from './AvatarBadge';
 
 interface HafalanViewProps {
   records: MemorizationRecord[];
@@ -404,10 +405,13 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
                         onClick={() => std && onOpenStudentDetail(std.id)}
                         className="flex items-center gap-2 cursor-pointer hover:text-[#D4AF37] transition"
                       >
-                        <img 
-                          src={std?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'} 
-                          alt="" 
-                          className="w-6 h-6 rounded-full object-cover border" 
+                        <AvatarBadge
+                          name={std?.name || 'Siswa'}
+                          photoUrl={std?.photo}
+                          gender={std?.gender}
+                          role="santri"
+                          size="sm"
+                          className="shrink-0"
                         />
                         <div>
                           <span className="font-bold text-slate-800 block">{std?.name || 'Siswa'}</span>

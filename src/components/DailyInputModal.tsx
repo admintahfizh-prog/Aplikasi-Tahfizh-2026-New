@@ -36,6 +36,7 @@ import {
   calculateCategory 
 } from '../data/quranData';
 import { UMMI_JILIDS, UMMI_SYLLABUS } from '../data/ummiData';
+import { AvatarBadge } from './AvatarBadge';
 
 interface DailyInputModalProps {
   isOpen: boolean;
@@ -508,7 +509,14 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
             {selectedStudent && (
               <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200 text-xs">
                 <div className="flex items-center gap-2">
-                  <img src={selectedStudent.photo} alt={selectedStudent.name} className="w-7 h-7 rounded-full object-cover border border-slate-200" />
+                  <AvatarBadge
+                    name={selectedStudent.name}
+                    photoUrl={selectedStudent.photo}
+                    gender={selectedStudent.gender}
+                    role="santri"
+                    size="sm"
+                    className="shrink-0"
+                  />
                   <span className="font-bold text-slate-900">{selectedStudent.name}</span>
                   <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-semibold">
                     {selectedStudent.program}

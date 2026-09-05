@@ -27,6 +27,7 @@ import {
 import { Student, Teacher, ClassItem, Role, User } from '../types';
 import { storageService } from '../services/storageService';
 import { UMMI_JILIDS } from '../data/ummiData';
+import { AvatarBadge } from './AvatarBadge';
 
 interface StudentsViewProps {
   students: Student[];
@@ -127,7 +128,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
     targetJuz: 4.0,
     currentUmmiJilid: 'Jilid 1',
     currentUmmiPage: 1,
-    photo: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
+    photo: '',
     entryYear: '2026',
     totalJuzHafal: 0,
     totalSurahHafal: 0,
@@ -173,7 +174,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
       targetJuz: 4.0,
       currentUmmiJilid: 'Jilid 1',
       currentUmmiPage: 1,
-      photo: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
+      photo: '',
       entryYear: '2026',
       totalJuzHafal: 0,
       totalSurahHafal: 0,
@@ -418,10 +419,13 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
             >
               {/* Top Row: Avatar & Basic Info */}
               <div className="flex items-start gap-3">
-                <img
-                  src={std.photo}
-                  alt={std.name}
-                  className="w-11 h-11 rounded-lg object-cover border border-slate-200 shrink-0"
+                <AvatarBadge
+                  name={std.name}
+                  photoUrl={std.photo}
+                  gender={std.gender}
+                  role="santri"
+                  size="md"
+                  className="shrink-0"
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-1">
@@ -575,6 +579,26 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
             </div>
 
             <form onSubmit={handleSaveStudent} className="p-6 overflow-y-auto space-y-4 flex-1 text-xs">
+              {/* Photo & Avatar Section */}
+              <div className="flex items-center gap-4 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                <AvatarBadge
+                  name={formData.name || 'Santri'}
+                  photoUrl={formData.photo}
+                  gender={formData.gender}
+                  role="santri"
+                  size="xl"
+                  editable={true}
+                  onPhotoChange={(base64) => setFormData({ ...formData, photo: base64 })}
+                  onPhotoRemove={() => setFormData({ ...formData, photo: '' })}
+                />
+                <div className="flex-1">
+                  <p className="font-bold text-slate-800 text-xs">Foto / Avatar Profil Santri</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Otomatis menggunakan avatar islami ({formData.gender === 'P' ? '🧕 Santriwati / Jilbab' : '👳 Santriwan / Peci'}). Klik tombol kamera untuk mengunggah foto custom.
+                  </p>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">NIS (Nomor Induk Siswa) *</label>
@@ -861,10 +885,13 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
 
             <form onSubmit={handleSaveStudentPassword} className="p-5 space-y-4 text-xs">
               <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <img
-                  src={passwordModalStudent.photo}
-                  alt={passwordModalStudent.name}
-                  className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                <AvatarBadge
+                  name={passwordModalStudent.name}
+                  photoUrl={passwordModalStudent.photo}
+                  gender={passwordModalStudent.gender}
+                  role="santri"
+                  size="md"
+                  className="shrink-0"
                 />
                 <div>
                   <p className="font-bold text-slate-900">{passwordModalStudent.name}</p>

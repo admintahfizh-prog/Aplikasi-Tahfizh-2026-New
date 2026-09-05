@@ -77,3 +77,25 @@ export function getInitials(name?: string, fallback = 'U'): string {
   }
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
+
+export const DEFAULT_MALE_STUDENT_AVATAR = '/avatars/male_student.jpg';
+export const DEFAULT_FEMALE_STUDENT_AVATAR = '/avatars/female_student.jpg';
+
+/**
+ * Returns the student avatar image URL based on gender (L / P) or their uploaded photo.
+ */
+export function getStudentAvatar(student?: { gender?: string; photo?: string } | null): string {
+  if (student?.photo && student.photo.trim() !== '' && !student.photo.includes('unsplash')) {
+    return student.photo;
+  }
+  const rawGender = student?.gender ? String(student.gender).trim().toUpperCase() : '';
+  const isFemale =
+    rawGender === 'P' ||
+    rawGender === 'PEREMPUAN' ||
+    rawGender.startsWith('P') ||
+    rawGender.includes('PUTRI') ||
+    rawGender.includes('PEREMPUAN');
+
+  return isFemale ? DEFAULT_FEMALE_STUDENT_AVATAR : DEFAULT_MALE_STUDENT_AVATAR;
+}
+

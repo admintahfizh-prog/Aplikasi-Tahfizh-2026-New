@@ -234,6 +234,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 <AvatarBadge
                   name={linkedStudent.name}
                   photoUrl={studentPhoto || avatar}
+                  gender={linkedStudent.gender}
                   role="santri"
                   size="lg"
                   editable={false}

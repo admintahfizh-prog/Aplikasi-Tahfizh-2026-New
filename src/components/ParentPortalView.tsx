@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, AppSettings } from '../types';
 import { StudentRaportCard } from './StudentRaportCard';
+import { AvatarBadge } from './AvatarBadge';
 
 interface ParentPortalViewProps {
   students: Student[];
@@ -163,10 +164,13 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
           <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-slate-50/70 border-b border-slate-200">
               <div className="flex items-center gap-4">
-                <img
-                  src={student.photo}
-                  alt={student.name}
-                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover ring-2 ring-[#D4AF37] shadow-xs"
+                <AvatarBadge
+                  name={student.name}
+                  photoUrl={student.photo}
+                  gender={student.gender}
+                  role="santri"
+                  size="xl"
+                  className="shrink-0"
                 />
                 <div>
                   <div className="flex items-center gap-2">

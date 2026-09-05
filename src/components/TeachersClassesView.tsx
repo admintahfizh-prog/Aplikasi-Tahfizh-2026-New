@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   GraduationCap, 
@@ -22,11 +22,16 @@ import {
   UserCheck,
   Shuffle,
   ChevronRight,
+  ChevronDown,
   ShieldCheck,
-  UserPlus
+  UserPlus,
+  Clock,
+  MapPin,
+  FileText
 } from 'lucide-react';
-import { Teacher, ClassItem, Student, Role, User } from '../types';
+import { Teacher, ClassItem, Student, Role, User, HalaqahGroup } from '../types';
 import { storageService } from '../services/storageService';
+import { AvatarBadge } from './AvatarBadge';
 
 interface TeachersClassesViewProps {
   teachers: Teacher[];
@@ -45,7 +50,39 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'teachers' | 'classes' | 'halaqah'>('teachers');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedHalaqahTeacherId, setSelectedHalaqahTeacherId] = useState<string>(teachers[0]?.id || '');
+  const [selectedHalaqahTeacherId, setSelectedHalaqahTeacherId] = useState<string>('all');
+  const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
+
+  // Halaqah Groups State
+  const [halaqahGroups, setHalaqahGroups] = useState<HalaqahGroup[]>(() => storageService.getHalaqahGroups());
+
+  useEffect(() => {
+    setHalaqahGroups(storageService.getHalaqahGroups());
+  }, [teachers, students]);
+
+  // Halaqah Manual Input Modal State
+  const [showHalaqahModal, setShowHalaqahModal] = useState(false);
+  const [editingHalaqah, setEditingHalaqah] = useState<HalaqahGroup | null>(null);
+  const [halaqahFormData, setHalaqahFormData] = useState<{
+    id?: string;
+    name: string;
+    teacherId: string;
+    description: string;
+    schedule: string;
+    room: string;
+    maxCapacity: number;
+    studentIds: string[];
+  }>({
+    name: '',
+    teacherId: teachers[0]?.id || '',
+    description: 'Tahsin Ummi & Tahfizh Juz 30',
+    schedule: 'Senin - Kamis, 07.00 - 08.15',
+    room: 'Masjid Utama Al Azhar',
+    maxCapacity: 12,
+    studentIds: []
+  });
+  const [halaqahStudentSearch, setHalaqahStudentSearch] = useState('');
+  const [halaqahClassFilter, setHalaqahClassFilter] = useState('');
 
   // Modals
   const [showTeacherModal, setShowTeacherModal] = useState(false);
@@ -72,6 +109,7 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
   // Assign Student Modal State
   const [showAssignStudentModal, setShowAssignStudentModal] = useState(false);
   const [assignTargetTeacherId, setAssignTargetTeacherId] = useState<string>(teachers[0]?.id || '');
+  const [assignTargetHalaqahId, setAssignTargetHalaqahId] = useState<string>('');
   const [selectedStudentIdsToAssign, setSelectedStudentIdsToAssign] = useState<string[]>([]);
   const [assignClassFilter, setAssignClassFilter] = useState<string>('');
 
@@ -210,14 +248,100 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
     }
   };
 
+  // Halaqah Handlers
+  const handleOpenAddHalaqah = (teacherId?: string) => {
+    const defaultTid = teacherId || (teachers[0]?.id || '');
+    const teacherExistingGroups = halaqahGroups.filter(g => g.teacherId === defaultTid);
+    if (teacherExistingGroups.length >= 5) {
+      alert('Guru ini sudah memiliki 5 kelompok halaqah (batas maksimal 2–5 kelompok). Silakan edit kelompok yang ada atau pilih guru lain.');
+      return;
+    }
+    const nextGroupNum = teacherExistingGroups.length + 1;
+    setEditingHalaqah(null);
+    setHalaqahFormData({
+      name: `Halaqah ${nextGroupNum}`,
+      teacherId: defaultTid,
+      description: 'Tahsin Ummi & Tahfizh Al-Qur\'an',
+      schedule: 'Senin - Kamis, 07.00 - 08.15',
+      room: 'Masjid Utama Lt. 1',
+      maxCapacity: 12,
+      studentIds: []
+    });
+    setHalaqahStudentSearch('');
+    setHalaqahClassFilter('');
+    setShowHalaqahModal(true);
+  };
+
+  const handleOpenEditHalaqah = (group: HalaqahGroup) => {
+    setEditingHalaqah(group);
+    setHalaqahFormData({
+      id: group.id,
+      name: group.name,
+      teacherId: group.teacherId,
+      description: group.description || '',
+      schedule: group.schedule || 'Senin - Kamis, 07.00 - 08.15',
+      room: group.room || 'Masjid Utama Lt. 1',
+      maxCapacity: group.maxCapacity || 12,
+      studentIds: [...(group.studentIds || [])]
+    });
+    setHalaqahStudentSearch('');
+    setHalaqahClassFilter('');
+    setShowHalaqahModal(true);
+  };
+
+  const handleSaveHalaqah = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!halaqahFormData.name.trim() || !halaqahFormData.teacherId) {
+      alert('Nama kelompok dan Guru pengampu wajib diisi.');
+      return;
+    }
+
+    // If new, check max 5 groups per teacher
+    if (!editingHalaqah) {
+      const existing = halaqahGroups.filter(g => g.teacherId === halaqahFormData.teacherId);
+      if (existing.length >= 5) {
+        alert('Guru ini sudah memiliki 5 kelompok halaqah. Maksimal per guru adalah 5 kelompok.');
+        return;
+      }
+    }
+
+    const saved = storageService.saveHalaqahGroup({
+      id: halaqahFormData.id,
+      name: halaqahFormData.name.trim(),
+      teacherId: halaqahFormData.teacherId,
+      description: halaqahFormData.description.trim(),
+      schedule: halaqahFormData.schedule.trim(),
+      room: halaqahFormData.room.trim(),
+      maxCapacity: Number(halaqahFormData.maxCapacity) || 12,
+      studentIds: halaqahFormData.studentIds
+    });
+
+    // Also sync the students' halaqahGroupId & halaqahGroupName
+    storageService.assignStudentsToHalaqahGroup(halaqahFormData.studentIds, saved.id);
+
+    setShowHalaqahModal(false);
+    setHalaqahGroups(storageService.getHalaqahGroups());
+    onRefreshData();
+    alert(`Kelompok ${saved.name} berhasil disimpan dengan ${halaqahFormData.studentIds.length} santri.`);
+  };
+
+  const handleDeleteHalaqah = (group: HalaqahGroup) => {
+    if (window.confirm(`Hapus kelompok "${group.name}"? Santri di kelompok ini akan dilepas status halaqahnya.`)) {
+      storageService.deleteHalaqahGroup(group.id);
+      setHalaqahGroups(storageService.getHalaqahGroups());
+      onRefreshData();
+    }
+  };
+
   const filteredTeachers = teachers.filter(t => 
     t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     t.nip.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const filteredClasses = classes.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Sort classes naturally: 7A, 7B, 7C, 8A, 8B, 8C, etc.
+  const filteredClasses = [...classes]
+    .filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    .sort((a, b) => a.name.localeCompare(b.name, 'id', { numeric: true, sensitivity: 'base' }));
 
   return (
     <div className="space-y-6 animate-in fade-in">
@@ -244,13 +368,21 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
                 <Plus className="w-4 h-4 text-[#D4AF37]" />
                 <span>+ Tambah Guru Tahfizh</span>
               </button>
-            ) : (
+            ) : activeTab === 'classes' ? (
               <button
                 onClick={handleOpenAddClass}
                 className="px-4 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
               >
                 <Plus className="w-4 h-4 text-[#D4AF37]" />
                 <span>+ Tambah Kelas Baru</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => handleOpenAddHalaqah()}
+                className="px-4 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4 text-[#D4AF37]" />
+                <span>+ Tambah Halaqah Manual</span>
               </button>
             )}
           </div>
@@ -293,7 +425,7 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
             }`}
           >
             <UserCheck className="w-4 h-4 text-[#D4AF37]" />
-            <span>Kelompok Halaqah (1-12 Anak)</span>
+            <span>Kelompok Halaqah (2-5 per Guru)</span>
           </button>
         </div>
 
@@ -336,10 +468,12 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
                   className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs hover:border-slate-300 transition space-y-4"
                 >
                   <div className="flex items-start gap-3.5">
-                    <img
-                      src={t.photo}
-                      alt={t.name}
-                      className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0"
+                    <AvatarBadge
+                      name={t.name}
+                      photoUrl={t.photo}
+                      role="guru"
+                      size="lg"
+                      className="shrink-0"
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
@@ -419,39 +553,108 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredClasses.map((c) => {
               const homeroom = teachers.find(t => t.id === c.homeroomTeacherId);
-              const countInClass = students.filter(s => s.classId === c.id).length;
+              const classStudents = students
+                .filter(s => s.classId === c.id)
+                .sort((a, b) => a.name.localeCompare(b.name, 'id', { sensitivity: 'base' }));
+              const isExpanded = expandedClassId === c.id;
 
               return (
                 <div
                   key={c.id}
-                  className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3 hover:border-slate-300 transition"
+                  className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3 hover:border-slate-300 transition flex flex-col justify-between"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-900 font-bold text-sm">
-                      {c.name}
-                    </span>
-                    <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200/60">
-                      Tingkat {c.level || 7} SMP
-                    </span>
-                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="px-3 py-1 rounded-full bg-slate-900 text-[#D4AF37] font-bold text-sm">
+                        Kelas {c.name}
+                      </span>
+                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200/60">
+                        Tingkat {c.level || 7} SMP
+                      </span>
+                    </div>
 
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 space-y-1.5 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Wali Kelas:</span>
-                      <span className="font-semibold text-slate-800">{homeroom?.name || 'Belum Ditentukan'}</span>
+                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 space-y-1.5 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Wali Kelas:</span>
+                        <span className="font-semibold text-slate-800">{homeroom?.name || 'Belum Ditentukan'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Tahun Ajaran:</span>
+                        <span className="font-semibold text-slate-700">{c.academicYear}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500">Total Santri:</span>
+                        <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          {classStudents.length} Siswa Terdaftar
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Tahun Ajaran:</span>
-                      <span className="font-semibold text-slate-700">{c.academicYear}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Total Santri:</span>
-                      <span className="font-bold text-emerald-700">{countInClass} Siswa</span>
+
+                    {/* Toggle Show Students Alphabetically A-Z */}
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedClassId(isExpanded ? null : c.id)}
+                        className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center justify-between transition cursor-pointer"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Daftar Santri Kelas ({classStudents.length} Siswa A-Z)</span>
+                        </span>
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {isExpanded && (
+                        <div className="mt-2 pt-2 border-t border-slate-100 space-y-1.5 max-h-60 overflow-y-auto pr-1 animate-in fade-in">
+                          {classStudents.length > 0 ? (
+                            classStudents.map((std, idx) => {
+                              const tch = teachers.find(t => t.id === std.teacherId);
+                              const halaqah = halaqahGroups.find(g => g.id === std.halaqahGroupId);
+                              return (
+                                <div
+                                  key={std.id}
+                                  className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100 hover:bg-white text-xs transition"
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                      {idx + 1}
+                                    </span>
+                                    <AvatarBadge
+                                      name={std.name}
+                                      photoUrl={std.photo}
+                                      gender={std.gender}
+                                      role="santri"
+                                      size="xs"
+                                      className="shrink-0"
+                                    />
+                                    <div className="min-w-0">
+                                      <p className="font-semibold text-slate-800 truncate">{std.name}</p>
+                                      <p className="text-[10px] text-slate-400">
+                                        NIS: {std.nis} • {std.gender === 'P' ? 'Perempuan' : 'Laki-laki'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800">
+                                      {std.totalJuzHafal || 0} Juz
+                                    </span>
+                                    <p className="text-[9px] text-slate-400 mt-0.5 truncate max-w-[110px]">
+                                      {halaqah?.name || (tch ? `Binaan ${tch.name}` : '-')}
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <p className="text-center py-4 text-[11px] text-slate-400">Belum ada santri di kelas ini.</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   {userRole === 'admin' && (
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-1">
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-1 mt-2">
                       <button
                         onClick={() => handleOpenEditClass(c)}
                         className="px-2.5 py-1.5 text-slate-600 hover:text-[#1E293B] rounded-lg hover:bg-slate-100 text-xs font-semibold flex items-center gap-1 cursor-pointer transition"
@@ -489,157 +692,316 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
         </div>
       )}
 
-      {/* TAB 3: HALAQAH & KELOMPOK GURU (1 GURU 1-12 ANAK / LINTAS KELAS) */}
+      {/* TAB 3: HALAQAH & KELOMPOK GURU (1 GURU 2-5 KELOMPOK HALAQAH DENGAN INPUT MANUAL) */}
       {activeTab === 'halaqah' && (
-        <div className="space-y-5 animate-in fade-in">
+        <div className="space-y-6 animate-in fade-in">
           
           {/* Banner Info & Action */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs">
-                  Sistem Halaqah Fleksibel
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Sistem Halaqah Multi-Kelompok
                 </span>
-                <span className="text-xs text-slate-500">Kapasitas Ideal: 1 Guru membina 1–12 Santri</span>
+                <span className="text-xs text-slate-500 font-medium">
+                  Rekomendasi: <strong>1 Guru mengampu 2 sampai 5 Kelompok Halaqah</strong>
+                </span>
               </div>
-              <h3 className="font-bold text-slate-900 text-base">
-                Distribusi Kelompok Halaqah & Guru Pengampu
+              <h3 className="font-extrabold text-slate-900 text-base sm:text-lg">
+                Distribusi & Manajemen Kelompok Halaqah Guru Tahfizh
               </h3>
-              <p className="text-xs text-slate-500 max-w-2xl">
-                Semua guru dapat menguji seluruh kelas, atau difokuskan membina kelompok halaqah tetap (1 Guru memegang 1–12 anak lintas kelas maupun per kelas).
+              <p className="text-xs text-slate-500 max-w-3xl leading-relaxed">
+                Setiap Ustadz/Ustadzah dapat mengelola 2 hingga 5 kelompok halaqah mandiri secara terstruktur. Anda dapat menginput nama kelompok halaqah secara manual, menentukan jadwal, ruangan, serta memilih santri binaan berurutan abjad A-Z lengkap dengan foto profil gender santri.
               </p>
             </div>
 
-            {userRole === 'admin' && (
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {userRole === 'admin' && (
                 <button
-                  onClick={() => {
-                    if (window.confirm('Bagi rata seluruh santri ke seluruh guru yang ada (1 guru rata-rata memegang 8-12 anak)?')) {
-                      const result = storageService.autoDistributeStudentsToTeachers(12);
-                      onRefreshData();
-                      alert(`Berhasil membagi ${result.totalDistributed} santri secara seimbang ke ${result.groups.length} guru pengampu.`);
-                    }
-                  }}
-                  className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer transition"
-                  title="Otomatis bagi rata santri 1 guru 1-12 anak"
+                  onClick={() => handleOpenAddHalaqah()}
+                  className="px-4 py-2.5 bg-[#1E293B] hover:bg-slate-800 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-xs cursor-pointer transition"
                 >
-                  <Shuffle className="w-3.5 h-3.5" />
-                  <span>Bagi Rata Otomatis (1-12 Anak)</span>
+                  <Plus className="w-4 h-4 text-[#D4AF37]" />
+                  <span>+ Tambah Kelompok Halaqah Manual</span>
                 </button>
-
-                <button
-                  onClick={() => {
-                    setAssignTargetTeacherId(teachers[0]?.id || '');
-                    setSelectedStudentIdsToAssign([]);
-                    setShowAssignStudentModal(true);
-                  }}
-                  className="px-3.5 py-2 bg-[#1E293B] hover:bg-slate-800 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer transition"
-                >
-                  <UserPlus className="w-3.5 h-3.5 text-[#D4AF37]" />
-                  <span>Atur Anggota Halaqah</span>
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
-          {/* Teacher Halaqah Group Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {teachers.map((teacher) => {
-              const teacherStudents = students.filter(s => s.teacherId === teacher.id);
-              const count = teacherStudents.length;
-              const isOverLimit = count > 12;
-              const isIdeal = count >= 1 && count <= 12;
+          {/* Filter Guru Halaqah */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-700">Filter Guru Pengampu:</span>
+              <select
+                value={selectedHalaqahTeacherId}
+                onChange={(e) => setSelectedHalaqahTeacherId(e.target.value)}
+                className="p-1.5 bg-slate-50 border border-slate-200 rounded-lg font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#D4AF37]"
+              >
+                <option value="all">Semua Guru Tahfizh ({teachers.length} Guru)</option>
+                {teachers.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
 
-              return (
-                <div
-                  key={teacher.id}
-                  className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden flex flex-col hover:border-slate-300 transition"
-                >
-                  {/* Card Header */}
-                  <div className="p-4 bg-slate-50/80 border-b border-slate-200 flex items-start gap-3">
-                    <img
-                      src={teacher.photo}
-                      alt={teacher.name}
-                      className="w-11 h-11 rounded-xl object-cover border border-slate-200 shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-1">
-                        <h4 className="font-bold text-slate-900 text-sm truncate">{teacher.name}</h4>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
-                          count === 0 
-                            ? 'bg-slate-100 text-slate-600'
-                            : isOverLimit
-                            ? 'bg-red-100 text-red-700 border border-red-200'
-                            : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                        }`}>
-                          {count} / 12 Santri
-                        </span>
+            <div className="text-slate-500 font-medium">
+              Total Kelompok Terdaftar: <strong className="text-slate-900">{halaqahGroups.length} Halaqah</strong>
+            </div>
+          </div>
+
+          {/* Teacher Groups Container */}
+          <div className="space-y-6">
+            {teachers
+              .filter(t => selectedHalaqahTeacherId === 'all' || t.id === selectedHalaqahTeacherId)
+              .filter(t => 
+                t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                t.nip.includes(searchTerm)
+              )
+              .map((teacher) => {
+                const teacherHalaqahs = halaqahGroups.filter(g => g.teacherId === teacher.id);
+                const teacherGroupCount = teacherHalaqahs.length;
+                const isIdealGroupCount = teacherGroupCount >= 2 && teacherGroupCount <= 5;
+                const isBelowMin = teacherGroupCount < 2;
+                const isAtMax = teacherGroupCount >= 5;
+
+                // Total students across all halaqahs of this teacher
+                const allTeacherStudentIds = new Set(teacherHalaqahs.flatMap(g => g.studentIds || []));
+                // Also add legacy assigned students if any
+                students.filter(s => s.teacherId === teacher.id).forEach(s => allTeacherStudentIds.add(s.id));
+                const totalStudentsForTeacher = allTeacherStudentIds.size;
+
+                return (
+                  <div
+                    key={teacher.id}
+                    className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden"
+                  >
+                    {/* Teacher Header Bar */}
+                    <div className="p-4 sm:p-5 bg-slate-50/90 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <AvatarBadge
+                          name={teacher.name}
+                          photoUrl={teacher.photo}
+                          role="guru"
+                          size="md"
+                          className="shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-extrabold text-slate-900 text-sm sm:text-base truncate">
+                              {teacher.name}
+                            </h4>
+                            {teacher.ummiCertified && (
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0">
+                                Ummi Certified
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500 font-medium truncate mt-0.5">
+                            {teacher.specialization || 'Guru Tahfizh'} • NIP: {teacher.nip || '-'} • WA: {teacher.phone}
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-[11px] text-slate-500 truncate mt-0.5 font-medium">
-                        {teacher.specialization || 'Guru Tahfizh'}
-                      </p>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Status Badge 2-5 Kelompok */}
+                        <div className="text-right">
+                          <div className="flex items-center gap-1.5 justify-end">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-extrabold border ${
+                              isIdealGroupCount
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                : isBelowMin
+                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                : 'bg-blue-50 text-blue-800 border-blue-200'
+                            }`}>
+                              {teacherGroupCount} / 5 Kelompok Halaqah
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 block mt-0.5">
+                            {isIdealGroupCount 
+                              ? '✓ Sesuai target (2–5 kelompok)' 
+                              : isBelowMin 
+                              ? '⚠️ Disarankan tambah hingga 2–5 kelompok' 
+                              : 'Batas maksimal 5 kelompok'}
+                          </span>
+                        </div>
+
+                        {userRole === 'admin' && !isAtMax && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAddHalaqah(teacher.id)}
+                            className="px-3 py-1.5 bg-[#1E293B] hover:bg-slate-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition shadow-xs"
+                            title="Tambah kelompok halaqah untuk guru ini"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-[#D4AF37]" />
+                            <span>+ Kelompok</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Halaqah Groups Grid for this Teacher */}
+                    <div className="p-4 sm:p-5">
+                      {teacherHalaqahs.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {teacherHalaqahs.map((group, gIdx) => {
+                            const groupStudents = students
+                              .filter(s => (group.studentIds || []).includes(s.id))
+                              .sort((a, b) => a.name.localeCompare(b.name, 'id', { sensitivity: 'base' }));
+
+                            return (
+                              <div
+                                key={group.id}
+                                className="bg-slate-50/60 rounded-xl border border-slate-200 hover:border-slate-300 transition p-4 flex flex-col justify-between space-y-3"
+                              >
+                                <div className="space-y-2.5">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-700">
+                                        Kelompok {gIdx + 1}
+                                      </span>
+                                      <h5 className="font-extrabold text-slate-900 text-sm mt-1 truncate">
+                                        {group.name}
+                                      </h5>
+                                    </div>
+                                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold shrink-0 ${
+                                      groupStudents.length > (group.maxCapacity || 12)
+                                        ? 'bg-red-100 text-red-700'
+                                        : 'bg-emerald-100 text-emerald-800'
+                                    }`}>
+                                      {groupStudents.length} Santri
+                                    </span>
+                                  </div>
+
+                                  {/* Details */}
+                                  <div className="text-[11px] text-slate-600 space-y-1 bg-white p-2.5 rounded-lg border border-slate-100">
+                                    {group.description && (
+                                      <p className="flex items-center gap-1.5 text-slate-700 font-semibold truncate">
+                                        <FileText className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
+                                        <span className="truncate">{group.description}</span>
+                                      </p>
+                                    )}
+                                    {group.schedule && (
+                                      <p className="flex items-center gap-1.5 text-slate-500 truncate">
+                                        <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                        <span className="truncate">{group.schedule}</span>
+                                      </p>
+                                    )}
+                                    {group.room && (
+                                      <p className="flex items-center gap-1.5 text-slate-500 truncate">
+                                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                        <span className="truncate">{group.room}</span>
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {/* Student List in Group (Sorted A-Z) */}
+                                  <div className="space-y-1">
+                                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 px-1">
+                                      <span>Santri Anggota (A-Z)</span>
+                                      <span className="text-[10px] text-slate-400">{groupStudents.length} Santri</span>
+                                    </div>
+
+                                    {groupStudents.length > 0 ? (
+                                      <div className="space-y-1 max-h-44 overflow-y-auto pr-1">
+                                        {groupStudents.map((std, sIdx) => {
+                                          const cls = classes.find(c => c.id === std.classId);
+                                          return (
+                                            <div
+                                              key={std.id}
+                                              className="flex items-center justify-between p-1.5 rounded-lg bg-white border border-slate-100 text-xs hover:border-slate-300 transition"
+                                            >
+                                              <div className="flex items-center gap-2 min-w-0">
+                                                <span className="w-4 h-4 rounded-full bg-slate-100 text-slate-600 text-[9px] font-bold flex items-center justify-center shrink-0">
+                                                  {sIdx + 1}
+                                                </span>
+                                                <AvatarBadge
+                                                  name={std.name}
+                                                  photoUrl={std.photo}
+                                                  gender={std.gender}
+                                                  role="santri"
+                                                  size="xs"
+                                                  className="shrink-0"
+                                                />
+                                                <div className="min-w-0 truncate">
+                                                  <p className="font-semibold text-slate-800 text-[11px] truncate">{std.name}</p>
+                                                  <p className="text-[9px] text-slate-400 truncate">
+                                                    NIS: {std.nis} • {cls?.name || 'Rombel'}
+                                                  </p>
+                                                </div>
+                                              </div>
+                                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 shrink-0 ml-1">
+                                                {std.totalJuzHafal || 0} Juz
+                                              </span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : (
+                                      <div className="py-4 text-center bg-white rounded-lg border border-dashed border-slate-200 text-slate-400 text-[11px]">
+                                        <p>Belum ada santri di kelompok ini</p>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenEditHalaqah(group)}
+                                          className="text-blue-600 font-bold hover:underline mt-1 block mx-auto text-[10px] cursor-pointer"
+                                        >
+                                          + Pilih Santri Sekarang
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Card Actions */}
+                                {userRole === 'admin' && (
+                                  <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between text-xs">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditHalaqah(group)}
+                                      className="text-[11px] font-bold text-[#1E293B] hover:text-[#D4AF37] flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Edit className="w-3 h-3" />
+                                      <span>Edit / Atur Santri</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteHalaqah(group)}
+                                      className="text-[11px] text-red-500 hover:text-red-700 flex items-center gap-1 cursor-pointer"
+                                      title="Hapus kelompok halaqah ini"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                      <span>Hapus</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="py-8 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 text-slate-500">
+                          <p className="text-xs font-semibold">
+                            Ustadz/Ustadzah {teacher.name} belum memiliki kelompok halaqah.
+                          </p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Setiap guru dianjurkan memiliki 2 hingga 5 kelompok halaqah santri.
+                          </p>
+                          {userRole === 'admin' && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAddHalaqah(teacher.id)}
+                              className="mt-3 px-4 py-2 bg-[#1E293B] text-white rounded-lg text-xs font-bold cursor-pointer hover:bg-slate-800 transition"
+                            >
+                              + Buat Kelompok Halaqah 1
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
-
-                  {/* Student List in Group */}
-                  <div className="p-3 flex-1 flex flex-col justify-between space-y-2">
-                    {teacherStudents.length > 0 ? (
-                      <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
-                        {teacherStudents.map((std, idx) => {
-                          const cls = classes.find(c => c.id === std.classId);
-                          return (
-                            <div
-                              key={std.id}
-                              className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100 hover:bg-slate-100 text-xs transition"
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold flex items-center justify-center shrink-0">
-                                  {idx + 1}
-                                </span>
-                                <div className="truncate">
-                                  <p className="font-semibold text-slate-800 truncate">{std.name}</p>
-                                  <p className="text-[10px] text-slate-400">
-                                    {cls?.name || 'Rombel'} • {std.currentUmmiJilid || 'Jilid 1'}
-                                  </p>
-                                </div>
-                              </div>
-                              <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded shrink-0">
-                                {std.totalJuzHafal || 0} Juz
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="py-8 text-center text-slate-400 text-xs">
-                        <p className="font-medium">Belum ada santri di halaqah ini</p>
-                        <p className="text-[10px]">Klik "Atur Anggota" untuk memasukkan santri</p>
-                      </div>
-                    )}
-
-                    {/* Quick Move Action */}
-                    {userRole === 'admin' && (
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                        <span className="text-[10px] text-slate-400">
-                          {isOverLimit ? '⚠️ Melebihi rasio 12 anak' : '✓ Rasio pembinaan ideal'}
-                        </span>
-                        <button
-                          onClick={() => {
-                            setAssignTargetTeacherId(teacher.id);
-                            setSelectedStudentIdsToAssign(teacherStudents.map(s => s.id));
-                            setShowAssignStudentModal(true);
-                          }}
-                          className="text-[11px] font-bold text-[#1E293B] hover:text-[#D4AF37] flex items-center gap-1 cursor-pointer"
-                        >
-                          <span>Kelola Santri</span>
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
 
         </div>
@@ -841,10 +1203,12 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
 
             <form onSubmit={handleSaveTeacherPassword} className="p-5 space-y-4 text-xs">
               <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <img
-                  src={passwordModalTeacher.photo}
-                  alt={passwordModalTeacher.name}
-                  className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                <AvatarBadge
+                  name={passwordModalTeacher.name}
+                  photoUrl={passwordModalTeacher.photo}
+                  role="guru"
+                  size="md"
+                  className="shrink-0"
                 />
                 <div>
                   <p className="font-bold text-slate-900">{passwordModalTeacher.name}</p>
@@ -1112,6 +1476,306 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
                 <span>Simpan Anggota Halaqah</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: INPUT & EDIT HALAQAH MANUAL (1 GURU 2-5 KELOMPOK) */}
+      {showHalaqahModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+            {/* Modal Header */}
+            <div className="bg-[#1E293B] p-4 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-slate-800 text-[#D4AF37]">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base">
+                    {editingHalaqah ? 'Edit Kelompok Halaqah' : 'Input Kelompok Halaqah Manual'}
+                  </h3>
+                  <p className="text-[11px] text-slate-300">
+                    Konfigurasi nama kelompok, jadwal, ruangan, dan santri binaan (1 Guru bisa 2–5 kelompok)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowHalaqahModal(false)}
+                className="text-slate-400 hover:text-white cursor-pointer p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body / Form */}
+            <form onSubmit={handleSaveHalaqah} className="flex flex-col flex-1 overflow-hidden">
+              <div className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
+                
+                {/* Guru Pembina */}
+                <div className="space-y-1">
+                  <label className="block font-bold text-slate-800">
+                    Guru / Ustadz Pembina Halaqah *
+                  </label>
+                  <select
+                    required
+                    value={halaqahFormData.teacherId}
+                    onChange={(e) => setHalaqahFormData({ ...halaqahFormData, teacherId: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                  >
+                    {teachers.map(t => {
+                      const tGroups = halaqahGroups.filter(g => g.teacherId === t.id && g.id !== editingHalaqah?.id);
+                      return (
+                        <option key={t.id} value={t.id}>
+                          {t.name} (Saat ini: {tGroups.length} kelompok terdaftar)
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <p className="text-[10px] text-slate-400">
+                    Setiap guru pengampu dapat mengelola 2 hingga 5 kelompok halaqah.
+                  </p>
+                </div>
+
+                {/* Nama Kelompok & Kapasitas */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2 space-y-1">
+                    <label className="block font-bold text-slate-800">
+                      Nama Kelompok Halaqah *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={halaqahFormData.name}
+                      onChange={(e) => setHalaqahFormData({ ...halaqahFormData, name: e.target.value })}
+                      placeholder="Contoh: Halaqah 1 (Abu Bakar Ash-Shiddiq)"
+                      className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block font-bold text-slate-800">
+                      Kapasitas Maksimal
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={30}
+                      value={halaqahFormData.maxCapacity}
+                      onChange={(e) => setHalaqahFormData({ ...halaqahFormData, maxCapacity: Number(e.target.value) || 12 })}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Fokus Program & Jadwal & Ruang */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <label className="block font-bold text-slate-800">
+                      Fokus / Program Materi
+                    </label>
+                    <input
+                      type="text"
+                      value={halaqahFormData.description}
+                      onChange={(e) => setHalaqahFormData({ ...halaqahFormData, description: e.target.value })}
+                      placeholder="Contoh: Tahsin Ummi & Juz 30"
+                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:bg-white focus:ring-1 focus:ring-[#D4AF37]"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block font-bold text-slate-800">
+                      Jadwal Rutin
+                    </label>
+                    <input
+                      type="text"
+                      value={halaqahFormData.schedule}
+                      onChange={(e) => setHalaqahFormData({ ...halaqahFormData, schedule: e.target.value })}
+                      placeholder="Senin - Kamis, 07.00 - 08.15"
+                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:bg-white focus:ring-1 focus:ring-[#D4AF37]"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block font-bold text-slate-800">
+                      Ruang / Tempat
+                    </label>
+                    <input
+                      type="text"
+                      value={halaqahFormData.room}
+                      onChange={(e) => setHalaqahFormData({ ...halaqahFormData, room: e.target.value })}
+                      placeholder="Masjid Utama Lt. 1"
+                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:bg-white focus:ring-1 focus:ring-[#D4AF37]"
+                    />
+                  </div>
+                </div>
+
+                {/* Section Pemilihan Santri Manual */}
+                <div className="pt-2 border-t border-slate-200 space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-xs">
+                        Pilih Santri Anggota Kelompok (Urut Abjad A-Z)
+                      </h4>
+                      <p className="text-[10px] text-slate-400">
+                        Santri ditampilkan dengan foto profil sesuai gender dan informasi kelas
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-extrabold ${
+                        halaqahFormData.studentIds.length > halaqahFormData.maxCapacity
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-emerald-100 text-emerald-800'
+                      }`}>
+                        {halaqahFormData.studentIds.length} Santri Terpilih
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Filter Search & Rombel Kelas */}
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="relative flex-1">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={halaqahStudentSearch}
+                        onChange={(e) => setHalaqahStudentSearch(e.target.value)}
+                        placeholder="Cari nama santri atau NIS..."
+                        className="w-full pl-8 pr-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#D4AF37]"
+                      />
+                    </div>
+
+                    <select
+                      value={halaqahClassFilter}
+                      onChange={(e) => setHalaqahClassFilter(e.target.value)}
+                      className="p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 font-medium"
+                    >
+                      <option value="">Semua Rombel Kelas</option>
+                      {filteredClasses.map(c => (
+                        <option key={c.id} value={c.id}>Kelas {c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Checklist Table */}
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <div className="bg-slate-100 px-3 py-2 text-slate-700 font-bold flex items-center justify-between text-[11px] border-b border-slate-200">
+                      <span>Daftar Santri Tersedia (A-Z)</span>
+                      <div className="flex items-center gap-2 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const matchingIds = students
+                              .filter(s => !halaqahClassFilter || s.classId === halaqahClassFilter)
+                              .filter(s => !halaqahStudentSearch || s.name.toLowerCase().includes(halaqahStudentSearch.toLowerCase()) || s.nis.includes(halaqahStudentSearch))
+                              .map(s => s.id);
+                            setHalaqahFormData(prev => ({
+                              ...prev,
+                              studentIds: Array.from(new Set([...prev.studentIds, ...matchingIds]))
+                            }));
+                          }}
+                          className="text-blue-600 font-bold hover:underline cursor-pointer"
+                        >
+                          Pilih Sesuai Filter
+                        </button>
+                        <span>•</span>
+                        <button
+                          type="button"
+                          onClick={() => setHalaqahFormData(prev => ({ ...prev, studentIds: [] }))}
+                          className="text-slate-500 font-bold hover:underline cursor-pointer"
+                        >
+                          Kosongkan Pilihan
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 p-1">
+                      {students
+                        .filter(s => !halaqahClassFilter || s.classId === halaqahClassFilter)
+                        .filter(s => 
+                          !halaqahStudentSearch || 
+                          s.name.toLowerCase().includes(halaqahStudentSearch.toLowerCase()) || 
+                          s.nis.includes(halaqahStudentSearch)
+                        )
+                        .sort((a, b) => a.name.localeCompare(b.name, 'id', { sensitivity: 'base' }))
+                        .map((s, idx) => {
+                          const isChecked = halaqahFormData.studentIds.includes(s.id);
+                          const cls = classes.find(c => c.id === s.classId);
+                          const currentHalaqah = halaqahGroups.find(g => g.id === s.halaqahGroupId && g.id !== editingHalaqah?.id);
+
+                          return (
+                            <label
+                              key={s.id}
+                              className={`flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 cursor-pointer transition ${
+                                isChecked ? 'bg-amber-50/70 font-semibold' : ''
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setHalaqahFormData(prev => ({
+                                        ...prev,
+                                        studentIds: [...prev.studentIds, s.id]
+                                      }));
+                                    } else {
+                                      setHalaqahFormData(prev => ({
+                                        ...prev,
+                                        studentIds: prev.studentIds.filter(id => id !== s.id)
+                                      }));
+                                    }
+                                  }}
+                                  className="w-4 h-4 rounded text-[#D4AF37] focus:ring-[#D4AF37]"
+                                />
+                                <AvatarBadge
+                                  name={s.name}
+                                  photoUrl={s.photo}
+                                  gender={s.gender}
+                                  role="santri"
+                                  size="xs"
+                                  className="shrink-0"
+                                />
+                                <div className="min-w-0">
+                                  <p className="text-slate-900 truncate text-[11px]">{s.name}</p>
+                                  <p className="text-[9px] text-slate-400 font-normal">
+                                    NIS: {s.nis} • {cls?.name ? `Kelas ${cls.name}` : 'Rombel'} • {s.gender === 'P' ? 'Perempuan' : 'Laki-laki'}
+                                    {currentHalaqah ? ` • (Halaqah lain: ${currentHalaqah.name})` : ''}
+                                  </p>
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded shrink-0">
+                                {s.totalJuzHafal || 0} Juz
+                              </span>
+                            </label>
+                          );
+                        })}
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setShowHalaqahModal(false)}
+                  className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-100 cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#1E293B] hover:bg-slate-800 text-white rounded-xl font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <Save className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  <span>Simpan Kelompok Halaqah</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

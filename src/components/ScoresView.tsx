@@ -12,6 +12,7 @@ import {
   BookOpen
 } from 'lucide-react';
 import { Student, MemorizationRecord, Teacher } from '../types';
+import { AvatarBadge } from './AvatarBadge';
 
 interface ScoresViewProps {
   students: Student[];
@@ -165,10 +166,13 @@ export const ScoresView: React.FC<ScoresViewProps> = ({
                     {rankNumber}
                   </div>
 
-                  <img
-                    src={std.photo}
-                    alt={std.name}
-                    className="w-10 h-10 rounded-lg object-cover border shrink-0"
+                  <AvatarBadge
+                    name={std.name}
+                    photoUrl={std.photo}
+                    gender={std.gender}
+                    role="santri"
+                    size="sm"
+                    className="shrink-0"
                   />
 
                   <div>

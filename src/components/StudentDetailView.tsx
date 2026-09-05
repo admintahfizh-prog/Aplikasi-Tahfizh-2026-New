@@ -35,6 +35,7 @@ import { StudentRaportCard } from './StudentRaportCard';
 import { JUZ_MAPPINGS } from '../data/quranData';
 import { storageService } from '../services/storageService';
 import { VIOLATION_PRESETS } from './ViolationsView';
+import { AvatarBadge } from './AvatarBadge';
 
 interface StudentDetailViewProps {
   studentId: string;
@@ -46,6 +47,8 @@ interface StudentDetailViewProps {
   settings: AppSettings;
   onBack: () => void;
   onOpenDailyInput: (studentId: string) => void;
+  userRole?: string;
+  onRefreshData?: () => void;
 }
 
 export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
@@ -57,7 +60,9 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
   ummiRecords,
   settings,
   onBack,
-  onOpenDailyInput
+  onOpenDailyInput,
+  userRole,
+  onRefreshData
 }) => {
   const [activeTab, setActiveTab] = useState<'hafalan' | 'ummi' | 'kedisiplinan' | 'grafik' | 'raport'>('hafalan');
 
@@ -162,13 +167,34 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
         {/* Header Ribbon */}
         <div className="bg-[#1E293B] p-6 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-800">
           <div className="flex items-center gap-4">
-            <img
-              src={student.photo}
-              alt={student.name}
-              className="w-20 h-20 sm:w-22 sm:h-22 rounded-xl object-cover ring-2 ring-[#D4AF37] shadow-sm"
-            />
+            <div className="relative shrink-0">
+              <AvatarBadge
+                name={student.name}
+                photoUrl={student.photo}
+                gender={student.gender}
+                role="santri"
+                size="2xl"
+                editable={userRole === 'admin' || userRole === 'guru' || userRole === 'wali'}
+                onPhotoChange={async (base64) => {
+                  const updatedStudent: Student = {
+                    ...student,
+                    photo: base64
+                  };
+                  storageService.saveStudent(updatedStudent);
+                  if (onRefreshData) onRefreshData();
+                }}
+                onPhotoRemove={async () => {
+                  const updatedStudent: Student = {
+                    ...student,
+                    photo: ''
+                  };
+                  storageService.saveStudent(updatedStudent);
+                  if (onRefreshData) onRefreshData();
+                }}
+              />
+            </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className={`text-xs font-bold px-2.5 py-0.5 rounded shadow-xs ${
                   halaqahName === 'Akselerasi'
                     ? 'bg-[#D4AF37] text-slate-950'
@@ -179,6 +205,13 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                   Halaqah {halaqahName}
                 </span>
                 <span className="text-xs text-slate-300 font-mono">NIS: {student.nis}</span>
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                  student.gender === 'P' || student.gender === 'Perempuan'
+                    ? 'bg-rose-900/60 text-rose-200 border border-rose-700/50'
+                    : 'bg-emerald-900/60 text-emerald-200 border border-emerald-700/50'
+                }`}>
+                  {student.gender === 'P' || student.gender === 'Perempuan' ? '🧕 Santri Akhawat' : '👳 Santri Ikhwan'}
+                </span>
               </div>
               <h1 className="text-xl sm:text-2xl font-bold mt-1 text-white">
                 {student.name} ({student.nickname})

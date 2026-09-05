@@ -32,6 +32,7 @@ import {
   Cell 
 } from 'recharts';
 import { Student, Teacher, MemorizationRecord, UmmiRecord, TargetProgress } from '../types';
+import { AvatarBadge } from './AvatarBadge';
 
 interface DashboardViewProps {
   students: Student[];
@@ -487,10 +488,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     className="py-3 flex items-center justify-between gap-3 hover:bg-slate-50 rounded-lg px-2 transition cursor-pointer"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <img
-                        src={std?.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
-                        alt={std?.name}
-                        className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0"
+                      <AvatarBadge
+                        name={std?.name || 'Santri'}
+                        photoUrl={std?.photo}
+                        gender={std?.gender}
+                        role="santri"
+                        size="sm"
+                        className="shrink-0"
                       />
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-800 truncate">{std?.name}</p>
