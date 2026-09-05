@@ -16,6 +16,7 @@ import { ViolationsView } from './components/ViolationsView';
 import { MatrikulasiView } from './components/MatrikulasiView';
 import { SettingsView } from './components/SettingsView';
 import { DailyInputModal } from './components/DailyInputModal';
+import { UserProfileModal } from './components/UserProfileModal';
 import { LoginView } from './components/LoginView';
 
 import { storageService } from './services/storageService';
@@ -47,6 +48,7 @@ export default function App() {
 
   // Modal State
   const [isDailyInputOpen, setIsDailyInputOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [prefilledStudentId, setPrefilledStudentId] = useState<string | undefined>(undefined);
 
   // Data Store States
@@ -128,6 +130,13 @@ export default function App() {
     return <LoginView onLogin={handleLogin} />;
   }
 
+  const currentTeacher = teachers.find(t => 
+    (currentUser.teacherId && t.id === currentUser.teacherId) ||
+    t.id === currentUser.id ||
+    (currentUser.email && t.email && t.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+    (currentUser.name && t.name && (t.name.toLowerCase().includes(currentUser.name.toLowerCase()) || currentUser.name.toLowerCase().includes(t.name.toLowerCase())))
+  );
+
   return (
     <div className="min-h-screen bg-[#F1F5F9] flex flex-col antialiased text-slate-900 font-sans selection:bg-[#D4AF37] selection:text-slate-950">
       
@@ -137,6 +146,7 @@ export default function App() {
         onOpenDailyInput={() => handleOpenDailyInput()}
         onLogout={handleLogout}
         onOpenSettings={() => setCurrentView('settings')}
+        onOpenProfile={() => setIsProfileModalOpen(true)}
         schoolName={settings.schoolName}
         activeView={currentView}
         setActiveView={(v) => setCurrentView(v)}
@@ -157,6 +167,9 @@ export default function App() {
             }
           }}
           userRole={currentUser.role}
+          currentUser={currentUser}
+          currentTeacher={currentTeacher}
+          onOpenProfile={() => setIsProfileModalOpen(true)}
         />
 
         {/* Content Area */}

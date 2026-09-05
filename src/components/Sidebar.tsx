@@ -14,9 +14,11 @@ import {
   School,
   HeartHandshake,
   ShieldAlert,
-  Sparkles
+  Sparkles,
+  UserCheck
 } from 'lucide-react';
-import { Role } from '../types';
+import { Role, User, Teacher } from '../types';
+import { AvatarBadge } from './AvatarBadge';
 
 interface SidebarProps {
   activeView?: string;
@@ -24,7 +26,10 @@ interface SidebarProps {
   currentView?: string;
   onViewChange?: (view: string) => void;
   userRole?: Role;
+  currentUser?: User;
+  currentTeacher?: Teacher;
   onOpenDailyInput?: () => void;
+  onOpenProfile?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -33,7 +38,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentView,
   onViewChange,
   userRole = 'admin',
-  onOpenDailyInput
+  currentUser,
+  currentTeacher,
+  onOpenDailyInput,
+  onOpenProfile
 }) => {
   const current = activeView || currentView || 'dashboard';
   const handleSelectView = (view: string) => {
@@ -129,20 +137,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
           })}
         </nav>
 
-        {/* User Card at bottom of sidebar */}
-        <div className="p-4 border-t border-slate-700 bg-slate-900/50">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-slate-700 border-2 border-[#D4AF37] flex items-center justify-center text-xs font-bold text-white shrink-0">
-              {userRole === 'admin' ? 'AF' : userRole === 'guru' ? 'SM' : 'IZ'}
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-xs font-semibold text-white truncate">
-                {userRole === 'admin' ? 'Ust. Ahmad Fauzan' : userRole === 'guru' ? 'Usth. Siti Maryam' : 'Bpk. Iskandar'}
-              </span>
-              <span className="text-[10px] text-slate-400 capitalize truncate">
-                {userRole === 'admin' ? 'Koordinator Tahfizh' : userRole === 'guru' ? 'Guru Halaqah' : 'Wali Santri'}
-              </span>
-            </div>
+        {/* Dynamic User Card at bottom of sidebar */}
+        <div className="p-3 border-t border-slate-700/80 bg-slate-900/70">
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={onOpenProfile}
+              className="flex items-center gap-2.5 min-w-0 text-left hover:opacity-90 transition cursor-pointer flex-1 group"
+              title="Klik untuk membuka Pengaturan Profil, Ganti Kata Sandi & Upload Foto"
+            >
+              <div className="relative shrink-0">
+                <AvatarBadge
+                  name={currentUser?.name || (userRole === 'admin' ? 'Administrator' : currentTeacher?.name || 'Pengguna')}
+                  photoUrl={currentUser?.avatar || currentTeacher?.photo}
+                  role={currentUser?.role || userRole}
+                  gender={currentUser?.role === 'guru' ? (currentTeacher?.gender || 'L') : undefined}
+                  size="sm"
+                  className="ring-2 ring-[#D4AF37]/60 group-hover:ring-[#D4AF37] transition"
+                />
+                <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#1E293B]" title="Status Online"></span>
+              </div>
+              <div className="flex flex-col min-w-0 flex-1">
+                <span className="text-xs font-bold text-white truncate group-hover:text-[#D4AF37] transition">
+                  {currentUser?.name || (userRole === 'admin' ? 'Administrator Tahfizh' : currentTeacher?.name || 'Guru Tahfizh')}
+                </span>
+                <span className="text-[10px] text-slate-400 capitalize truncate">
+                  {currentUser?.title || (
+                    userRole === 'admin' 
+                      ? 'Koordinator Tahfizh' 
+                      : userRole === 'guru' 
+                      ? (currentTeacher?.specialization || 'Guru Halaqah')
+                      : 'Wali Santri'
+                  )}
+                </span>
+              </div>
+            </button>
+
+            {onOpenProfile && (
+              <button
+                type="button"
+                onClick={onOpenProfile}
+                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-[#D4AF37] border border-slate-700 transition cursor-pointer shrink-0"
+                title="Pengaturan Akun (Ganti Password & Foto)"
+              >
+                <Settings className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
       </aside>

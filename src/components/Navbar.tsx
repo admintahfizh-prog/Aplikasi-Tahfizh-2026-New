@@ -9,11 +9,13 @@ import {
   Users, 
   CheckCheck,
   Cloud,
-  RefreshCw
+  RefreshCw,
+  KeyRound
 } from 'lucide-react';
 import { User, NotificationItem } from '../types';
 import { LogoAlAzhar } from './LogoAlAzhar';
 import { storageService } from '../services/storageService';
+import { AvatarBadge } from './AvatarBadge';
 
 interface NavbarProps {
   currentUser: User;
@@ -25,6 +27,7 @@ interface NavbarProps {
   onMarkNotificationsRead?: () => void;
   onLogout: () => void;
   onOpenSettings?: () => void;
+  onOpenProfile?: () => void;
   schoolName?: string;
   activeView?: string;
   setActiveView?: (view: string) => void;
@@ -37,6 +40,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onMarkNotificationsRead,
   onLogout,
   onOpenSettings,
+  onOpenProfile,
   schoolName = 'SMP Islam Al Azhar 21',
   setActiveView
 }) => {
@@ -215,10 +219,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <p className="text-xs font-bold text-slate-800 truncate max-w-[120px]">{currentUser.name}</p>
                   <p className="text-[10px] text-[#8C7015] font-semibold uppercase">{currentUser.role}</p>
                 </div>
-                <img
-                  src={currentUser.avatar}
-                  alt={currentUser.name}
-                  className="w-7 h-7 rounded-full object-cover border-2 border-[#D4AF37]"
+                <AvatarBadge
+                  name={currentUser.name}
+                  photoUrl={currentUser.avatar}
+                  role={currentUser.role}
+                  size="xs"
+                  className="ring-2 ring-[#D4AF37]"
                 />
               </button>
 
@@ -229,6 +235,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <p className="text-[11px] text-slate-500 truncate">{currentUser.email}</p>
                     <div className="mt-1">{getRoleBadge(currentUser.role)}</div>
                   </div>
+
+                  {onOpenProfile && (
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        onOpenProfile();
+                      }}
+                      className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 font-medium cursor-pointer"
+                    >
+                      <KeyRound className="w-3.5 h-3.5 text-[#D4AF37]" />
+                      Pengaturan Profil & Sandi
+                    </button>
+                  )}
 
                   {currentUser.role === 'admin' && onOpenSettings && (
                     <button
