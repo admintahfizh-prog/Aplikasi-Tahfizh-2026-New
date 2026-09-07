@@ -215,6 +215,16 @@ export const storageService = {
         }
       }, (err) => console.warn('[Cloud Sync] Classes listener warning:', err));
 
+      // 5b. Halaqah Groups
+      onSnapshot(collection(db, 'halaqah_groups'), (snap) => {
+        const list: HalaqahGroup[] = [];
+        snap.forEach(d => list.push(d.data() as HalaqahGroup));
+        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.HALAQAH_GROUPS)) {
+          setItem(STORAGE_KEYS.HALAQAH_GROUPS, list);
+          this.notifyListeners();
+        }
+      }, (err) => console.warn('[Cloud Sync] Halaqah Groups listener warning:', err));
+
       // 6. Targets
       onSnapshot(collection(db, 'targets'), (snap) => {
         const list: TargetProgress[] = [];
@@ -297,131 +307,110 @@ export const storageService = {
       // Start Real-time snapshot listeners immediately
       this.startRealtimeSync();
 
-      // 1. Fetch Students from Firestore
+      // Helper for intelligent 2-way sync: merge cloud items + local un-synced items
+      const mergeTwoWay = async <T extends { id: string }>(col: string, local: T[], cloud: T[]): Promise<T[]> => {
+        if (cloud.length === 0) {
+          if (local.length > 0) {
+            await syncCollectionToCloud(col, local);
+          }
+          return local;
+        }
+        const map = new Map<string, T>();
+        cloud.forEach(c => map.set(c.id, c));
+        const missingInCloud: T[] = [];
+        local.forEach(l => {
+          if (!map.has(l.id)) {
+            map.set(l.id, l);
+            missingInCloud.push(l);
+          }
+        });
+        if (missingInCloud.length > 0) {
+          await syncCollectionToCloud(col, missingInCloud);
+        }
+        return Array.from(map.values());
+      };
+
+      // 1. Fetch & Merge Students
       const stdSnap = await getDocs(collection(db, 'students'));
-      if (!stdSnap.empty) {
-        const cloudStudents: Student[] = [];
-        stdSnap.forEach(d => cloudStudents.push(d.data() as Student));
-        setItem(STORAGE_KEYS.STUDENTS, cloudStudents);
-      } else {
-        const localStudents = this.getStudents();
-        await syncCollectionToCloud('students', localStudents);
-      }
+      const cloudStudents: Student[] = [];
+      stdSnap.forEach(d => cloudStudents.push(d.data() as Student));
+      const mergedStudents = await mergeTwoWay('students', this.getStudents(), cloudStudents);
+      setItem(STORAGE_KEYS.STUDENTS, mergedStudents);
 
-      // 2. Fetch Teachers
+      // 2. Fetch & Merge Teachers
       const tchSnap = await getDocs(collection(db, 'teachers'));
-      if (!tchSnap.empty) {
-        const cloudTeachers: Teacher[] = [];
-        tchSnap.forEach(d => cloudTeachers.push(d.data() as Teacher));
-        setItem(STORAGE_KEYS.TEACHERS, cloudTeachers);
-      } else {
-        const localTeachers = this.getTeachers();
-        await syncCollectionToCloud('teachers', localTeachers);
-      }
+      const cloudTeachers: Teacher[] = [];
+      tchSnap.forEach(d => cloudTeachers.push(d.data() as Teacher));
+      const mergedTeachers = await mergeTwoWay('teachers', this.getTeachers(), cloudTeachers);
+      setItem(STORAGE_KEYS.TEACHERS, mergedTeachers);
 
-      // 3. Fetch Classes
+      // 3. Fetch & Merge Classes
       const clsSnap = await getDocs(collection(db, 'classes'));
-      if (!clsSnap.empty) {
-        const cloudClasses: ClassItem[] = [];
-        clsSnap.forEach(d => cloudClasses.push(d.data() as ClassItem));
-        setItem(STORAGE_KEYS.CLASSES, cloudClasses);
-      } else {
-        const localClasses = this.getClasses();
-        await syncCollectionToCloud('classes', localClasses);
-      }
+      const cloudClasses: ClassItem[] = [];
+      clsSnap.forEach(d => cloudClasses.push(d.data() as ClassItem));
+      const mergedClasses = await mergeTwoWay('classes', this.getClasses(), cloudClasses);
+      setItem(STORAGE_KEYS.CLASSES, mergedClasses);
 
-      // 3b. Fetch Halaqah Groups
+      // 3b. Fetch & Merge Halaqah Groups
       const hlqSnap = await getDocs(collection(db, 'halaqah_groups'));
-      if (!hlqSnap.empty) {
-        const cloudHalaqah: HalaqahGroup[] = [];
-        hlqSnap.forEach(d => cloudHalaqah.push(d.data() as HalaqahGroup));
-        setItem(STORAGE_KEYS.HALAQAH_GROUPS, cloudHalaqah);
-      } else {
-        const localHalaqah = this.getHalaqahGroups();
-        await syncCollectionToCloud('halaqah_groups', localHalaqah);
-      }
+      const cloudHalaqah: HalaqahGroup[] = [];
+      hlqSnap.forEach(d => cloudHalaqah.push(d.data() as HalaqahGroup));
+      const mergedHalaqah = await mergeTwoWay('halaqah_groups', this.getHalaqahGroups(), cloudHalaqah);
+      setItem(STORAGE_KEYS.HALAQAH_GROUPS, mergedHalaqah);
 
-      // 4. Fetch Memorization Records
+      // 4. Fetch & Merge Memorization Records
       const memSnap = await getDocs(collection(db, 'memorization_records'));
-      if (!memSnap.empty) {
-        const cloudMem: MemorizationRecord[] = [];
-        memSnap.forEach(d => cloudMem.push(d.data() as MemorizationRecord));
-        cloudMem.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setItem(STORAGE_KEYS.MEMORIZATION, cloudMem);
-      } else {
-        const localMem = this.getMemorizationRecords();
-        await syncCollectionToCloud('memorization_records', localMem);
-      }
+      const cloudMem: MemorizationRecord[] = [];
+      memSnap.forEach(d => cloudMem.push(d.data() as MemorizationRecord));
+      const mergedMem = await mergeTwoWay('memorization_records', this.getMemorizationRecords(), cloudMem);
+      mergedMem.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setItem(STORAGE_KEYS.MEMORIZATION, mergedMem);
 
-      // 5. Fetch Ummi Records
+      // 5. Fetch & Merge Ummi Records
       const ummiSnap = await getDocs(collection(db, 'ummi_records'));
-      if (!ummiSnap.empty) {
-        const cloudUmmi: UmmiRecord[] = [];
-        ummiSnap.forEach(d => cloudUmmi.push(d.data() as UmmiRecord));
-        cloudUmmi.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setItem(STORAGE_KEYS.UMMI, cloudUmmi);
-      } else {
-        const localUmmi = this.getUmmiRecords();
-        await syncCollectionToCloud('ummi_records', localUmmi);
-      }
+      const cloudUmmi: UmmiRecord[] = [];
+      ummiSnap.forEach(d => cloudUmmi.push(d.data() as UmmiRecord));
+      const mergedUmmi = await mergeTwoWay('ummi_records', this.getUmmiRecords(), cloudUmmi);
+      mergedUmmi.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setItem(STORAGE_KEYS.UMMI, mergedUmmi);
 
-      // 6. Fetch Targets
+      // 6. Fetch & Merge Targets
       const tgtSnap = await getDocs(collection(db, 'targets'));
-      if (!tgtSnap.empty) {
-        const cloudTargets: TargetProgress[] = [];
-        tgtSnap.forEach(d => cloudTargets.push(d.data() as TargetProgress));
-        setItem(STORAGE_KEYS.TARGETS, cloudTargets);
-      } else {
-        const localTargets = this.getTargets();
-        await syncCollectionToCloud('targets', localTargets);
-      }
+      const cloudTargets: TargetProgress[] = [];
+      tgtSnap.forEach(d => cloudTargets.push(d.data() as TargetProgress));
+      const mergedTargets = await mergeTwoWay('targets', this.getTargets(), cloudTargets);
+      setItem(STORAGE_KEYS.TARGETS, mergedTargets);
 
-      // 7. Fetch Materials
+      // 7. Fetch & Merge Materials
       const matSnap = await getDocs(collection(db, 'materials'));
-      if (!matSnap.empty) {
-        const cloudMat: LearningMaterial[] = [];
-        matSnap.forEach(d => cloudMat.push(d.data() as LearningMaterial));
-        setItem(STORAGE_KEYS.MATERIALS, cloudMat);
-      } else {
-        const localMat = this.getMaterials();
-        await syncCollectionToCloud('materials', localMat);
-      }
+      const cloudMat: LearningMaterial[] = [];
+      matSnap.forEach(d => cloudMat.push(d.data() as LearningMaterial));
+      const mergedMat = await mergeTwoWay('materials', this.getMaterials(), cloudMat);
+      setItem(STORAGE_KEYS.MATERIALS, mergedMat);
 
-      // 8. Fetch Violations
+      // 8. Fetch & Merge Violations
       const vioSnap = await getDocs(collection(db, 'violations'));
-      if (!vioSnap.empty) {
-        const cloudVio: TahfizhViolation[] = [];
-        vioSnap.forEach(d => cloudVio.push(d.data() as TahfizhViolation));
-        cloudVio.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setItem(STORAGE_KEYS.VIOLATIONS, cloudVio);
-      } else {
-        const localVio = this.getViolations();
-        await syncCollectionToCloud('violations', localVio);
-      }
+      const cloudVio: TahfizhViolation[] = [];
+      vioSnap.forEach(d => cloudVio.push(d.data() as TahfizhViolation));
+      const mergedVio = await mergeTwoWay('violations', this.getViolations(), cloudVio);
+      mergedVio.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setItem(STORAGE_KEYS.VIOLATIONS, mergedVio);
 
-      // 9. Fetch Matrikulasi
+      // 9. Fetch & Merge Matrikulasi
       const matStdSnap = await getDocs(collection(db, 'matrikulasi_students'));
-      if (!matStdSnap.empty) {
-        const cloudMatStd: MatrikulasiStudent[] = [];
-        matStdSnap.forEach(d => cloudMatStd.push(d.data() as MatrikulasiStudent));
-        setItem(STORAGE_KEYS.MATRIKULASI_STUDENTS, cloudMatStd);
-      } else {
-        const localMatStd = this.getMatrikulasiStudents();
-        await syncCollectionToCloud('matrikulasi_students', localMatStd);
-      }
+      const cloudMatStd: MatrikulasiStudent[] = [];
+      matStdSnap.forEach(d => cloudMatStd.push(d.data() as MatrikulasiStudent));
+      const mergedMatStd = await mergeTwoWay('matrikulasi_students', this.getMatrikulasiStudents(), cloudMatStd);
+      setItem(STORAGE_KEYS.MATRIKULASI_STUDENTS, mergedMatStd);
 
       const matRecSnap = await getDocs(collection(db, 'matrikulasi_records'));
-      if (!matRecSnap.empty) {
-        const cloudMatRec: MatrikulasiRecord[] = [];
-        matRecSnap.forEach(d => cloudMatRec.push(d.data() as MatrikulasiRecord));
-        cloudMatRec.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setItem(STORAGE_KEYS.MATRIKULASI_RECORDS, cloudMatRec);
-      } else {
-        const localMatRec = this.getMatrikulasiRecords();
-        await syncCollectionToCloud('matrikulasi_records', localMatRec);
-      }
+      const cloudMatRec: MatrikulasiRecord[] = [];
+      matRecSnap.forEach(d => cloudMatRec.push(d.data() as MatrikulasiRecord));
+      const mergedMatRec = await mergeTwoWay('matrikulasi_records', this.getMatrikulasiRecords(), cloudMatRec);
+      mergedMatRec.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setItem(STORAGE_KEYS.MATRIKULASI_RECORDS, mergedMatRec);
 
-      // 10. Fetch Settings
+      // 10. Fetch & Merge Settings
       const setDocSnap = await getDoc(doc(db, 'app_settings', 'config'));
       if (setDocSnap.exists()) {
         setItem(STORAGE_KEYS.SETTINGS, setDocSnap.data() as AppSettings);
@@ -430,16 +419,12 @@ export const storageService = {
         await syncDocToCloud('app_settings', 'config', localSet);
       }
 
-      // 11. Fetch Users
+      // 11. Fetch & Merge Users
       const usrSnap = await getDocs(collection(db, 'users'));
-      if (!usrSnap.empty) {
-        const cloudUsers: User[] = [];
-        usrSnap.forEach(d => cloudUsers.push(d.data() as User));
-        setItem(STORAGE_KEYS.USERS, cloudUsers);
-      } else {
-        const localUsers = this.getUsers();
-        await syncCollectionToCloud('users', localUsers);
-      }
+      const cloudUsers: User[] = [];
+      usrSnap.forEach(d => cloudUsers.push(d.data() as User));
+      const mergedUsers = await mergeTwoWay('users', this.getUsers(), cloudUsers);
+      setItem(STORAGE_KEYS.USERS, mergedUsers);
 
       localStorage.setItem(STORAGE_KEYS.CLOUD_SYNCED, 'true');
       this.notifyListeners();

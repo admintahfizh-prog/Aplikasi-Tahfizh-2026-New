@@ -94,6 +94,83 @@
       },
       "required": ["id", "username", "role"]
     },
+    "HalaqahGroup": {
+      "title": "HalaqahGroup",
+      "description": "Tahfizh halaqah study group",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "teacherName": { "type": "string" },
+        "studentIds": { "type": "array" }
+      },
+      "required": ["id", "name", "teacherId"]
+    },
+    "TargetProgress": {
+      "title": "TargetProgress",
+      "description": "Student memorization target and achievement tracking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "targetJuz": { "type": "number" },
+        "achievedJuz": { "type": "number" },
+        "percentage": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "studentId", "targetJuz"]
+    },
+    "LearningMaterial": {
+      "title": "LearningMaterial",
+      "description": "Quran & Ummi learning guides and tajweed syllabus",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" }
+      },
+      "required": ["id", "title"]
+    },
+    "TahfizhViolation": {
+      "title": "TahfizhViolation",
+      "description": "Discipline and violation records in tahfizh activities",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "date": { "type": "string" },
+        "violationType": { "type": "string" },
+        "points": { "type": "number" }
+      },
+      "required": ["id", "studentId", "date"]
+    },
+    "MatrikulasiStudent": {
+      "title": "MatrikulasiStudent",
+      "description": "Students enrolled in basic Quranic matriculation (Iqro)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "currentIqroJilid": { "type": "string" },
+        "currentIqroPage": { "type": "number" }
+      },
+      "required": ["id", "studentId"]
+    },
+    "MatrikulasiRecord": {
+      "title": "MatrikulasiRecord",
+      "description": "Daily reading and examination records for Iqro matriculation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "date": { "type": "string" },
+        "jilid": { "type": "string" },
+        "page": { "type": "number" }
+      },
+      "required": ["id", "studentId", "date", "jilid"]
+    },
     "AppSettings": {
       "title": "AppSettings",
       "description": "Application settings and school identity",
@@ -130,6 +207,30 @@
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/User" },
       "description": "Collection of system users"
+    },
+    "/halaqah_groups/{groupId}": {
+      "schema": { "$ref": "#/entities/HalaqahGroup" },
+      "description": "Collection of tahfizh halaqah groups"
+    },
+    "/targets/{targetId}": {
+      "schema": { "$ref": "#/entities/TargetProgress" },
+      "description": "Collection of target progress"
+    },
+    "/materials/{materialId}": {
+      "schema": { "$ref": "#/entities/LearningMaterial" },
+      "description": "Collection of learning materials"
+    },
+    "/violations/{violationId}": {
+      "schema": { "$ref": "#/entities/TahfizhViolation" },
+      "description": "Collection of violations"
+    },
+    "/matrikulasi_students/{studentId}": {
+      "schema": { "$ref": "#/entities/MatrikulasiStudent" },
+      "description": "Collection of matriculation students"
+    },
+    "/matrikulasi_records/{recordId}": {
+      "schema": { "$ref": "#/entities/MatrikulasiRecord" },
+      "description": "Collection of matriculation records"
     },
     "/app_settings/{settingId}": {
       "schema": { "$ref": "#/entities/AppSettings" },
