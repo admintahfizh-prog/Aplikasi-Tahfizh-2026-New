@@ -335,6 +335,8 @@ export default function App() {
               classes={classes}
               students={students}
               userRole={currentUser.role}
+              currentUser={currentUser}
+              onOpenProfile={() => setIsProfileModalOpen(true)}
               onRefreshData={loadAllData}
             />
           )}
@@ -370,7 +372,13 @@ export default function App() {
         students={students}
         classes={classes}
         allTeachers={teachers}
-        currentTeacher={teachers.find(t => t.id === currentUser?.id) || teachers[0]}
+        currentTeacher={
+          teachers.find(t => 
+            (currentUser?.teacherId && t.id === currentUser.teacherId) || 
+            t.id === currentUser?.id ||
+            (currentUser?.email && t.email && t.email.toLowerCase() === currentUser.email.toLowerCase())
+          ) || teachers[0]
+        }
         onSaveMemorization={(record) => {
           storageService.addMemorizationRecord(record);
           loadAllData();
@@ -382,6 +390,17 @@ export default function App() {
         preSelectedStudentId={prefilledStudentId}
         initialStudentId={prefilledStudentId}
         onSaveSuccess={() => {
+          loadAllData();
+        }}
+      />
+
+      {/* USER PROFILE & PASSWORD MODAL */}
+      <UserProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        currentUser={currentUser}
+        onUpdateUser={(updatedUser) => {
+          setCurrentUser(updatedUser);
           loadAllData();
         }}
       />

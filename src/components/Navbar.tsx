@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Bell, 
   Plus, 
@@ -46,6 +46,22 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [showNotifMenu, setShowNotifMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const notifMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close menus when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
+      }
+      if (notifMenuRef.current && !notifMenuRef.current.contains(e.target as Node)) {
+        setShowNotifMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -206,7 +222,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
 
             {/* Current User Avatar & Profile */}
-            <div className="relative">
+            <div className="relative" ref={userMenuRef}>
               <button
                 id="btn-user-profile"
                 onClick={() => {
@@ -214,6 +230,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   setShowNotifMenu(false);
                 }}
                 className="flex items-center gap-2 p-1 pl-2 pr-1 rounded-lg hover:bg-slate-100 transition cursor-pointer border border-slate-200"
+                title="Pengaturan Akun & Profil"
               >
                 <div className="text-right hidden md:block">
                   <p className="text-xs font-bold text-slate-800 truncate max-w-[120px]">{currentUser.name}</p>
@@ -238,19 +255,22 @@ export const Navbar: React.FC<NavbarProps> = ({
 
                   {onOpenProfile && (
                     <button
+                      id="btn-pengaturan-profil-modal"
+                      type="button"
                       onClick={() => {
                         setShowUserMenu(false);
                         onOpenProfile();
                       }}
-                      className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 font-medium cursor-pointer"
+                      className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 font-semibold cursor-pointer"
                     >
                       <KeyRound className="w-3.5 h-3.5 text-[#D4AF37]" />
-                      Pengaturan Profil & Sandi
+                      Pengaturan Akun & Profil
                     </button>
                   )}
 
                   {currentUser.role === 'admin' && onOpenSettings && (
                     <button
+                      type="button"
                       onClick={() => {
                         setShowUserMenu(false);
                         onOpenSettings();

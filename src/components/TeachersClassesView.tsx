@@ -69,10 +69,10 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
 
   // When myTeacher resolves on load, sync selectedHalaqahTeacherId for guru
   useEffect(() => {
-    if (userRole === 'guru' && myTeacher && selectedHalaqahTeacherId === 'all') {
+    if (userRole === 'guru' && myTeacher) {
       setSelectedHalaqahTeacherId(myTeacher.id);
     }
-  }, [userRole, myTeacher]);
+  }, [userRole, myTeacher?.id]);
 
   const canManageTeacherHalaqah = (teacherId: string) => {
     if (userRole === 'admin') return true;
@@ -841,8 +841,34 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
 
           {/* Filter Guru Halaqah */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-slate-700">Filter Guru Pengampu:</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-slate-700">Filter Guru:</span>
+              <div className="flex items-center gap-1.5">
+                {userRole === 'guru' && myTeacher && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedHalaqahTeacherId(myTeacher.id)}
+                    className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer text-xs ${
+                      selectedHalaqahTeacherId === myTeacher.id
+                        ? 'bg-[#1E293B] text-[#D4AF37] shadow-xs'
+                        : 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
+                    }`}
+                  >
+                    ⭐ Halaqah Saya ({myTeacher.name})
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedHalaqahTeacherId('all')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer text-xs ${
+                    selectedHalaqahTeacherId === 'all'
+                      ? 'bg-[#1E293B] text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  Semua Guru
+                </button>
+              </div>
               <select
                 value={selectedHalaqahTeacherId}
                 onChange={(e) => setSelectedHalaqahTeacherId(e.target.value)}
@@ -850,7 +876,9 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
               >
                 <option value="all">Semua Guru Tahfizh ({teachers.length} Guru)</option>
                 {teachers.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
+                  <option key={t.id} value={t.id}>
+                    {t.name} {userRole === 'guru' && myTeacher?.id === t.id ? ' (Akun Anda)' : ''}
+                  </option>
                 ))}
               </select>
             </div>

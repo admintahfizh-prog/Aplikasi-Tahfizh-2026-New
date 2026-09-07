@@ -68,14 +68,14 @@ export const INITIAL_USERS: User[] = [
   },
   {
     id: 'usr-guru-3',
-    name: 'Ustadz M. Zulkifli, S.Pd.I',
-    username: 'zulkifli',
-    password: 'zulkifli21',
-    email: 'zulkifli@smpialazhar21.sch.id',
+    name: 'Ustadz M. Ridwan, M.Ag.',
+    username: 'ridwan',
+    password: 'ridwan21',
+    email: 'm.ridwan@smpialazhar21.sch.id',
     role: 'guru',
     avatar: '',
     title: 'Pengampu Halaqah Takhassus & Kelas 8A',
-    phone: '081377889900',
+    phone: '081577889900',
     teacherId: 't-3'
   },
   {

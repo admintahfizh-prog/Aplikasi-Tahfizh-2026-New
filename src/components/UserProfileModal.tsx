@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   User as UserIcon, 
   X, 
@@ -67,6 +67,24 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Sync state whenever modal opens or currentUser changes
+  useEffect(() => {
+    if (isOpen) {
+      setName(currentUser.name || '');
+      setEmail(currentUser.email || '');
+      setPhone(currentUser.phone || '');
+      setTitle(currentUser.title || '');
+      setAvatar(currentUser.avatar || linkedTeacher?.photo || '');
+      setPassword(currentUser.password || '');
+      setConfirmPassword(currentUser.password || '');
+      setValidationError(null);
+      setSaveSuccess(false);
+      if (linkedStudent) {
+        setStudentPhoto(linkedStudent.photo || '');
+      }
+    }
+  }, [isOpen, currentUser, linkedTeacher, linkedStudent]);
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 'user' | 'student') => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -125,7 +143,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       storageService.setCurrentUser(updatedUser);
 
       // 2. If user is linked to teacher, also update teacher photo & details
-      if (resolvedTeacherId || linkedTeacher) {
+      if (resolvedTeacherId || linkedTeacher || currentUser.role === 'guru') {
         const targetTeacherId = resolvedTeacherId || linkedTeacher?.id;
         const targetTeacher = linkedTeacher || (targetTeacherId ? storageService.getTeachers().find(t => t.id === targetTeacherId) : undefined);
         if (targetTeacher) {
@@ -134,7 +152,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             name: name.trim(),
             phone: phone.trim() || targetTeacher.phone,
             email: email.trim() || targetTeacher.email,
-            photo: avatar,
+            photo: avatar || targetTeacher.photo,
             specialization: title.trim() || targetTeacher.specialization
           };
           storageService.saveTeacher(updatedTeacher);

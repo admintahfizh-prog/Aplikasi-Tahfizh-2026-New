@@ -510,7 +510,31 @@ export const storageService = {
 
   // Current User / Auth
   getCurrentUser(): User | null {
-    return getItem<User | null>(STORAGE_KEYS.CURRENT_USER, null);
+    const user = getItem<User | null>(STORAGE_KEYS.CURRENT_USER, null);
+    if (!user) return null;
+
+    // Sync current user with latest teacher data if guru
+    if (user.role === 'guru') {
+      const teachers = this.getTeachers();
+      const teacher = teachers.find(t => 
+        (user.teacherId && t.id === user.teacherId) ||
+        (user.email && t.email && t.email.toLowerCase() === user.email.toLowerCase()) ||
+        (user.id === `usr-t-${t.id}`)
+      );
+      if (teacher && (user.name !== teacher.name || user.teacherId !== teacher.id || (teacher.photo && user.avatar !== teacher.photo))) {
+        const synced: User = {
+          ...user,
+          name: teacher.name,
+          teacherId: teacher.id,
+          avatar: user.avatar || teacher.photo || '',
+          email: user.email || teacher.email,
+          phone: user.phone || teacher.phone
+        };
+        setItem(STORAGE_KEYS.CURRENT_USER, synced);
+        return synced;
+      }
+    }
+    return user;
   },
   setCurrentUser(user: User | null): void {
     if (user === null) {
@@ -529,6 +553,46 @@ export const storageService = {
       users = [...INITIAL_USERS];
       setItem(STORAGE_KEYS.USERS, users);
     }
+
+    // Self-healing synchronization with teachers to prevent name discrepancies with halaqah
+    const teachers = getItem<Teacher[]>(STORAGE_KEYS.TEACHERS, INITIAL_TEACHERS);
+    let changed = false;
+    users = users.map(u => {
+      // Fix old mismatched user usr-guru-3 if still named Zulkifli
+      if (u.id === 'usr-guru-3' && (u.name.includes('Zulkifli') || u.username === 'zulkifli')) {
+        const t3 = teachers.find(t => t.id === 't-3');
+        if (t3) {
+          changed = true;
+          return {
+            ...u,
+            name: t3.name,
+            email: t3.email,
+            phone: t3.phone,
+            teacherId: 't-3',
+            title: `Pengampu Halaqah (${t3.specialization})`
+          };
+        }
+      }
+
+      if (u.role === 'guru' && u.teacherId) {
+        const tch = teachers.find(t => t.id === u.teacherId);
+        if (tch && tch.name !== u.name) {
+          changed = true;
+          return {
+            ...u,
+            name: tch.name,
+            email: tch.email || u.email,
+            phone: tch.phone || u.phone,
+            avatar: tch.photo || u.avatar
+          };
+        }
+      }
+      return u;
+    });
+
+    if (changed) {
+      setItem(STORAGE_KEYS.USERS, users);
+    }
     return users;
   },
   saveUser(user: User): void {
@@ -541,6 +605,38 @@ export const storageService = {
     }
     setItem(STORAGE_KEYS.USERS, list);
     syncDocToCloud('users', user.id, user);
+
+    // If teacher account, keep Teacher model & Halaqah groups completely in sync
+    if (user.role === 'guru' && user.teacherId) {
+      const teachers = this.getTeachers();
+      const tIdx = teachers.findIndex(t => t.id === user.teacherId);
+      if (tIdx >= 0) {
+        teachers[tIdx] = {
+          ...teachers[tIdx],
+          name: user.name,
+          email: user.email || teachers[tIdx].email,
+          phone: user.phone || teachers[tIdx].phone,
+          photo: user.avatar || teachers[tIdx].photo
+        };
+        setItem(STORAGE_KEYS.TEACHERS, teachers);
+        syncDocToCloud('teachers', user.teacherId, teachers[tIdx]);
+      }
+
+      // Sync Halaqah group teacher names
+      const halaqahs = getItem<HalaqahGroup[]>(STORAGE_KEYS.HALAQAH_GROUPS, INITIAL_HALAQAH_GROUPS);
+      let hlqChanged = false;
+      const updatedHlq = halaqahs.map(g => {
+        if (g.teacherId === user.teacherId && g.teacherName !== user.name) {
+          hlqChanged = true;
+          return { ...g, teacherName: user.name };
+        }
+        return g;
+      });
+      if (hlqChanged) {
+        setItem(STORAGE_KEYS.HALAQAH_GROUPS, updatedHlq);
+        syncCollectionToCloud('halaqah_groups', updatedHlq);
+      }
+    }
   },
   deleteUser(id: string): void {
     const list = this.getUsers().filter(u => u.id !== id);
@@ -586,10 +682,34 @@ export const storageService = {
           teacherId: t.id
         });
         createdCount++;
-      } else if (!existing.teacherId) {
-        existing.teacherId = t.id;
+      } else {
+        if (!existing.teacherId) {
+          existing.teacherId = t.id;
+        }
+        if (existing.name !== t.name) {
+          existing.name = t.name;
+        }
+        if (t.photo && !existing.avatar) {
+          existing.avatar = t.photo;
+        }
       }
     });
+
+    // Ensure all Halaqah Groups have synchronized teacherName
+    const halaqahs = this.getHalaqahGroups();
+    let hlqSynced = false;
+    const updatedHalaqahs = halaqahs.map(h => {
+      const tch = teachers.find(t => t.id === h.teacherId);
+      if (tch && tch.name !== h.teacherName) {
+        hlqSynced = true;
+        return { ...h, teacherName: tch.name };
+      }
+      return h;
+    });
+    if (hlqSynced) {
+      setItem(STORAGE_KEYS.HALAQAH_GROUPS, updatedHalaqahs);
+      syncCollectionToCloud('halaqah_groups', updatedHalaqahs);
+    }
 
     // Ensure all Students have accounts
     students.forEach(s => {
@@ -889,6 +1009,56 @@ export const storageService = {
     }
     setItem(STORAGE_KEYS.TEACHERS, list);
     syncDocToCloud('teachers', teacher.id, teacher);
+
+    // Sync all halaqah groups for this teacher
+    const halaqahs = this.getHalaqahGroups();
+    let hlqChanged = false;
+    const updatedHalaqahs = halaqahs.map(g => {
+      if (g.teacherId === teacher.id && g.teacherName !== teacher.name) {
+        hlqChanged = true;
+        return { ...g, teacherName: teacher.name };
+      }
+      return g;
+    });
+    if (hlqChanged) {
+      setItem(STORAGE_KEYS.HALAQAH_GROUPS, updatedHalaqahs);
+      syncCollectionToCloud('halaqah_groups', updatedHalaqahs);
+    }
+
+    // Sync user accounts for this teacher
+    const users = this.getUsers();
+    let userChanged = false;
+    const updatedUsers = users.map(u => {
+      if (u.teacherId === teacher.id || (u.email && teacher.email && u.email.toLowerCase() === teacher.email.toLowerCase())) {
+        userChanged = true;
+        return {
+          ...u,
+          name: teacher.name,
+          email: teacher.email || u.email,
+          phone: teacher.phone || u.phone,
+          avatar: teacher.photo || u.avatar,
+          teacherId: teacher.id
+        };
+      }
+      return u;
+    });
+    if (userChanged) {
+      setItem(STORAGE_KEYS.USERS, updatedUsers);
+      syncCollectionToCloud('users', updatedUsers);
+    }
+
+    // Sync currentUser if logged in as this teacher
+    const curr = getItem<User | null>(STORAGE_KEYS.CURRENT_USER, null);
+    if (curr && (curr.teacherId === teacher.id || (curr.email && teacher.email && curr.email.toLowerCase() === teacher.email.toLowerCase()))) {
+      this.setCurrentUser({
+        ...curr,
+        name: teacher.name,
+        email: teacher.email || curr.email,
+        phone: teacher.phone || curr.phone,
+        avatar: teacher.photo || curr.avatar,
+        teacherId: teacher.id
+      });
+    }
   },
   deleteTeacher(id: string): void {
     const list = this.getTeachers().filter(t => t.id !== id);
