@@ -917,7 +917,7 @@ export const storageService = {
     deleteDocFromCloud('classes', id);
   },
 
-  // Halaqah Groups (1 guru bisa 2 sampai 5 kelompok halaqah, input manual)
+  // Halaqah Groups (1 guru bisa 2 sampai 7 kelompok halaqah, input manual)
   getHalaqahGroups(): HalaqahGroup[] {
     const list = getItem<HalaqahGroup[]>(STORAGE_KEYS.HALAQAH_GROUPS, INITIAL_HALAQAH_GROUPS);
     let healed = false;

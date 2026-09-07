@@ -303,8 +303,8 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
       ? myTeacher.id 
       : (teacherId || (teachers[0]?.id || ''));
     const teacherExistingGroups = halaqahGroups.filter(g => g.teacherId === defaultTid);
-    if (teacherExistingGroups.length >= 5) {
-      alert('Guru ini sudah memiliki 5 kelompok halaqah (batas maksimal 2–5 kelompok). Silakan edit kelompok yang ada atau pilih guru lain.');
+    if (teacherExistingGroups.length >= 7) {
+      alert('Guru ini sudah memiliki 7 kelompok halaqah (batas maksimal 2–7 kelompok). Silakan edit kelompok yang ada atau pilih guru lain.');
       return;
     }
     const nextGroupNum = teacherExistingGroups.length + 1;
@@ -358,11 +358,11 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
       return;
     }
 
-    // If new, check max 5 groups per teacher
+    // If new, check max 7 groups per teacher
     if (!editingHalaqah) {
       const existing = halaqahGroups.filter(g => g.teacherId === halaqahFormData.teacherId);
-      if (existing.length >= 5) {
-        alert('Guru ini sudah memiliki 5 kelompok halaqah. Maksimal per guru adalah 5 kelompok.');
+      if (existing.length >= 7) {
+        alert('Guru ini sudah memiliki 7 kelompok halaqah. Maksimal per guru adalah 7 kelompok.');
         return;
       }
     }
@@ -510,7 +510,7 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
             }`}
           >
             <UserCheck className="w-4 h-4 text-[#D4AF37]" />
-            <span>Kelompok Halaqah (2-5 per Guru)</span>
+            <span>Kelompok Halaqah (2-7 per Guru)</span>
           </button>
         </div>
 
@@ -794,7 +794,7 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
         </div>
       )}
 
-      {/* TAB 3: HALAQAH & KELOMPOK GURU (1 GURU 2-5 KELOMPOK HALAQAH DENGAN INPUT MANUAL) */}
+      {/* TAB 3: HALAQAH & KELOMPOK GURU (1 GURU 2-7 KELOMPOK HALAQAH DENGAN INPUT MANUAL) */}
       {activeTab === 'halaqah' && (
         <div className="space-y-6 animate-in fade-in">
           
@@ -807,14 +807,14 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
                   Sistem Halaqah Multi-Kelompok
                 </span>
                 <span className="text-xs text-slate-500 font-medium">
-                  Rekomendasi: <strong>1 Guru mengampu 2 sampai 5 Kelompok Halaqah</strong>
+                  Rekomendasi: <strong>1 Guru mengampu 2 sampai 7 Kelompok Halaqah</strong>
                 </span>
               </div>
               <h3 className="font-extrabold text-slate-900 text-base sm:text-lg">
                 Distribusi & Manajemen Kelompok Halaqah Guru Tahfizh
               </h3>
               <p className="text-xs text-slate-500 max-w-3xl leading-relaxed">
-                Setiap Ustadz/Ustadzah dapat mengelola 2 hingga 5 kelompok halaqah mandiri secara terstruktur. Anda dapat menginput nama kelompok halaqah secara manual, menentukan jadwal, ruangan, serta memilih santri binaan berurutan abjad A-Z lengkap dengan foto profil gender santri.
+                Setiap Ustadz/Ustadzah dapat mengelola 2 hingga 7 kelompok halaqah mandiri secara terstruktur. Anda dapat menginput nama kelompok halaqah secara manual, menentukan jadwal, ruangan, serta memilih santri binaan berurutan abjad A-Z lengkap dengan foto profil gender santri.
               </p>
             </div>
 
@@ -913,9 +913,9 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
               .map((teacher) => {
                 const teacherHalaqahs = halaqahGroups.filter(g => g.teacherId === teacher.id);
                 const teacherGroupCount = teacherHalaqahs.length;
-                const isIdealGroupCount = teacherGroupCount >= 2 && teacherGroupCount <= 5;
+                const isIdealGroupCount = teacherGroupCount >= 2 && teacherGroupCount <= 7;
                 const isBelowMin = teacherGroupCount < 2;
-                const isAtMax = teacherGroupCount >= 5;
+                const isAtMax = teacherGroupCount >= 7;
 
                 // Total students across all halaqahs of this teacher
                 const allTeacherStudentIds = new Set(teacherHalaqahs.flatMap(g => g.studentIds || []));
@@ -961,7 +961,7 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
-                        {/* Status Badge 2-5 Kelompok */}
+                        {/* Status Badge 2-7 Kelompok */}
                         <div className="text-right">
                           <div className="flex items-center gap-1.5 justify-end">
                             <span className={`px-2.5 py-1 rounded-full text-xs font-extrabold border ${
@@ -971,15 +971,15 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
                                 ? 'bg-amber-50 text-amber-800 border-amber-200'
                                 : 'bg-blue-50 text-blue-800 border-blue-200'
                             }`}>
-                              {teacherGroupCount} / 5 Kelompok Halaqah
+                              {teacherGroupCount} / 7 Kelompok Halaqah
                             </span>
                           </div>
                           <span className="text-[10px] text-slate-400 block mt-0.5">
                             {isIdealGroupCount 
-                              ? '✓ Sesuai target (2–5 kelompok)' 
+                              ? '✓ Sesuai target (2–7 kelompok)' 
                               : isBelowMin 
-                              ? '⚠️ Disarankan tambah hingga 2–5 kelompok' 
-                              : 'Batas maksimal 5 kelompok'}
+                              ? '⚠️ Disarankan tambah hingga 2–7 kelompok' 
+                              : 'Batas maksimal 7 kelompok'}
                           </span>
                         </div>
 
@@ -1159,7 +1159,7 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
                             Ustadz/Ustadzah {teacher.name} belum memiliki kelompok halaqah.
                           </p>
                           <p className="text-[11px] text-slate-400 mt-0.5">
-                            Setiap guru dianjurkan memiliki 2 hingga 5 kelompok halaqah santri.
+                            Setiap guru dianjurkan memiliki 2 hingga 7 kelompok halaqah santri.
                           </p>
                           {canManageTeacherHalaqah(teacher.id) && (
                             <button
@@ -1654,7 +1654,7 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
         </div>
       )}
 
-      {/* MODAL: INPUT & EDIT HALAQAH MANUAL (1 GURU 2-5 KELOMPOK) */}
+      {/* MODAL: INPUT & EDIT HALAQAH MANUAL (1 GURU 2-7 KELOMPOK) */}
       {showHalaqahModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
@@ -1669,7 +1669,7 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
                     {editingHalaqah ? 'Edit Kelompok Halaqah' : 'Input Kelompok Halaqah Manual'}
                   </h3>
                   <p className="text-[11px] text-slate-300">
-                    Konfigurasi nama kelompok, jadwal, ruangan, dan santri binaan (1 Guru bisa 2–5 kelompok)
+                    Konfigurasi nama kelompok, jadwal, ruangan, dan santri binaan (1 Guru bisa 2–7 kelompok)
                   </p>
                 </div>
               </div>
@@ -1719,7 +1719,7 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
                     </select>
                   )}
                   <p className="text-[10px] text-slate-400">
-                    Setiap guru pengampu dapat mengelola 2 hingga 5 kelompok halaqah.
+                    Setiap guru pengampu dapat mengelola 2 hingga 7 kelompok halaqah.
                   </p>
                 </div>
 
