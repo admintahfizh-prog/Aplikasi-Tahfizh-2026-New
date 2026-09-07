@@ -140,6 +140,51 @@ let isCloudListenerAttached = false;
 type SyncCallback = () => void;
 const syncListeners: SyncCallback[] = [];
 
+// Safe merge helper: ensures incoming cloud snapshots NEVER wipe out local items that haven't synced yet
+function mergeCloudSnapshotWithLocal<T extends { id: string }>(
+  key: string,
+  cloudList: T[],
+  collectionName: string,
+  sortCompare?: (a: T, b: T) => number
+): T[] {
+  const localList = getItem<T[]>(key, []);
+  const cloudMap = new Map<string, T>();
+  
+  cloudList.forEach(item => {
+    if (item && item.id) {
+      cloudMap.set(String(item.id), item);
+    }
+  });
+
+  const missingInCloud: T[] = [];
+  localList.forEach(localItem => {
+    if (localItem && localItem.id) {
+      const idStr = String(localItem.id);
+      if (!cloudMap.has(idStr)) {
+        // Keep local item that hasn't arrived in cloud yet
+        cloudMap.set(idStr, localItem);
+        missingInCloud.push(localItem);
+      }
+    }
+  });
+
+  let merged = Array.from(cloudMap.values());
+  if (sortCompare) {
+    merged.sort(sortCompare);
+  }
+
+  setItem(key, merged);
+
+  // If there were local items not yet in Cloud, auto-push to Cloud in background
+  if (missingInCloud.length > 0) {
+    syncCollectionToCloud(collectionName, missingInCloud).catch(e =>
+      console.warn(`[Cloud Sync] Auto-syncing missing ${collectionName} to cloud:`, e)
+    );
+  }
+
+  return merged;
+}
+
 export const storageService = {
   // Subscribe to realtime cloud updates
   onSyncChange(cb: SyncCallback) {
@@ -166,94 +211,120 @@ export const storageService = {
       // 1. Memorization Records
       onSnapshot(collection(db, 'memorization_records'), (snap) => {
         const list: MemorizationRecord[] = [];
-        snap.forEach(d => list.push(d.data() as MemorizationRecord));
-        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.MEMORIZATION)) {
-          setItem(STORAGE_KEYS.MEMORIZATION, list);
-          this.notifyListeners();
-        }
+        snap.forEach(d => {
+          const item = d.data() as MemorizationRecord;
+          if (item) list.push({ ...item, id: item.id || d.id });
+        });
+        mergeCloudSnapshotWithLocal(
+          STORAGE_KEYS.MEMORIZATION,
+          list,
+          'memorization_records',
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        this.notifyListeners();
       }, (err) => console.warn('[Cloud Sync] Memorization listener warning:', err));
 
       // 2. Ummi Records
       onSnapshot(collection(db, 'ummi_records'), (snap) => {
         const list: UmmiRecord[] = [];
-        snap.forEach(d => list.push(d.data() as UmmiRecord));
-        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.UMMI)) {
-          setItem(STORAGE_KEYS.UMMI, list);
-          this.notifyListeners();
-        }
+        snap.forEach(d => {
+          const item = d.data() as UmmiRecord;
+          if (item) list.push({ ...item, id: item.id || d.id });
+        });
+        mergeCloudSnapshotWithLocal(
+          STORAGE_KEYS.UMMI,
+          list,
+          'ummi_records',
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        this.notifyListeners();
       }, (err) => console.warn('[Cloud Sync] Ummi listener warning:', err));
 
       // 3. Students
       onSnapshot(collection(db, 'students'), (snap) => {
         const list: Student[] = [];
-        snap.forEach(d => list.push(d.data() as Student));
-        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.STUDENTS)) {
-          setItem(STORAGE_KEYS.STUDENTS, list);
-          this.notifyListeners();
-        }
+        snap.forEach(d => {
+          const item = d.data() as Student;
+          if (item) list.push({ ...item, id: item.id || d.id });
+        });
+        mergeCloudSnapshotWithLocal(STORAGE_KEYS.STUDENTS, list, 'students');
+        this.notifyListeners();
       }, (err) => console.warn('[Cloud Sync] Students listener warning:', err));
 
       // 4. Teachers
       onSnapshot(collection(db, 'teachers'), (snap) => {
         const list: Teacher[] = [];
-        snap.forEach(d => list.push(d.data() as Teacher));
-        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.TEACHERS)) {
-          setItem(STORAGE_KEYS.TEACHERS, list);
-          this.notifyListeners();
-        }
+        snap.forEach(d => {
+          const item = d.data() as Teacher;
+          if (item) list.push({ ...item, id: item.id || d.id });
+        });
+        mergeCloudSnapshotWithLocal(STORAGE_KEYS.TEACHERS, list, 'teachers');
+        this.notifyListeners();
       }, (err) => console.warn('[Cloud Sync] Teachers listener warning:', err));
 
       // 5. Classes
       onSnapshot(collection(db, 'classes'), (snap) => {
         const list: ClassItem[] = [];
-        snap.forEach(d => list.push(d.data() as ClassItem));
-        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.CLASSES)) {
-          setItem(STORAGE_KEYS.CLASSES, list);
-          this.notifyListeners();
-        }
+        snap.forEach(d => {
+          const item = d.data() as ClassItem;
+          if (item) list.push({ ...item, id: item.id || d.id });
+        });
+        mergeCloudSnapshotWithLocal(STORAGE_KEYS.CLASSES, list, 'classes');
+        this.notifyListeners();
       }, (err) => console.warn('[Cloud Sync] Classes listener warning:', err));
 
-      // 5b. Halaqah Groups
+      // 5b. Halaqah Groups (Intelligent Realtime Sync)
       onSnapshot(collection(db, 'halaqah_groups'), (snap) => {
         const list: HalaqahGroup[] = [];
-        snap.forEach(d => list.push(d.data() as HalaqahGroup));
-        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.HALAQAH_GROUPS)) {
-          setItem(STORAGE_KEYS.HALAQAH_GROUPS, list);
-          this.notifyListeners();
-        }
+        snap.forEach(d => {
+          const item = d.data() as HalaqahGroup;
+          if (item) list.push({ ...item, id: item.id || d.id });
+        });
+        mergeCloudSnapshotWithLocal(
+          STORAGE_KEYS.HALAQAH_GROUPS,
+          list,
+          'halaqah_groups',
+          (a, b) => (a.name || '').localeCompare(b.name || '', 'id', { numeric: true, sensitivity: 'base' })
+        );
+        this.notifyListeners();
       }, (err) => console.warn('[Cloud Sync] Halaqah Groups listener warning:', err));
 
       // 6. Targets
       onSnapshot(collection(db, 'targets'), (snap) => {
         const list: TargetProgress[] = [];
-        snap.forEach(d => list.push(d.data() as TargetProgress));
-        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.TARGETS)) {
-          setItem(STORAGE_KEYS.TARGETS, list);
-          this.notifyListeners();
-        }
+        snap.forEach(d => {
+          const item = d.data() as TargetProgress;
+          if (item) list.push({ ...item, id: item.id || d.id });
+        });
+        mergeCloudSnapshotWithLocal(STORAGE_KEYS.TARGETS, list, 'targets');
+        this.notifyListeners();
       }, (err) => console.warn('[Cloud Sync] Targets listener warning:', err));
 
       // 7. Materials
       onSnapshot(collection(db, 'materials'), (snap) => {
         const list: LearningMaterial[] = [];
-        snap.forEach(d => list.push(d.data() as LearningMaterial));
-        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.MATERIALS)) {
-          setItem(STORAGE_KEYS.MATERIALS, list);
-          this.notifyListeners();
-        }
+        snap.forEach(d => {
+          const item = d.data() as LearningMaterial;
+          if (item) list.push({ ...item, id: item.id || d.id });
+        });
+        mergeCloudSnapshotWithLocal(STORAGE_KEYS.MATERIALS, list, 'materials');
+        this.notifyListeners();
       }, (err) => console.warn('[Cloud Sync] Materials listener warning:', err));
 
       // 8. Violations
       onSnapshot(collection(db, 'violations'), (snap) => {
         const list: TahfizhViolation[] = [];
-        snap.forEach(d => list.push(d.data() as TahfizhViolation));
-        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.VIOLATIONS)) {
-          setItem(STORAGE_KEYS.VIOLATIONS, list);
-          this.notifyListeners();
-        }
+        snap.forEach(d => {
+          const item = d.data() as TahfizhViolation;
+          if (item) list.push({ ...item, id: item.id || d.id });
+        });
+        mergeCloudSnapshotWithLocal(
+          STORAGE_KEYS.VIOLATIONS,
+          list,
+          'violations',
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        this.notifyListeners();
       }, (err) => console.warn('[Cloud Sync] Violations listener warning:', err));
 
       // 9. Matrikulasi Students
@@ -354,7 +425,12 @@ export const storageService = {
       // 3b. Fetch & Merge Halaqah Groups
       const hlqSnap = await getDocs(collection(db, 'halaqah_groups'));
       const cloudHalaqah: HalaqahGroup[] = [];
-      hlqSnap.forEach(d => cloudHalaqah.push(d.data() as HalaqahGroup));
+      hlqSnap.forEach(d => {
+        const item = d.data() as HalaqahGroup;
+        if (item) {
+          cloudHalaqah.push({ ...item, id: item.id || d.id });
+        }
+      });
       const mergedHalaqah = await mergeTwoWay('halaqah_groups', this.getHalaqahGroups(), cloudHalaqah);
       setItem(STORAGE_KEYS.HALAQAH_GROUPS, mergedHalaqah);
 
@@ -843,25 +919,68 @@ export const storageService = {
 
   // Halaqah Groups (1 guru bisa 2 sampai 5 kelompok halaqah, input manual)
   getHalaqahGroups(): HalaqahGroup[] {
-    const list = getItem(STORAGE_KEYS.HALAQAH_GROUPS, INITIAL_HALAQAH_GROUPS);
-    return [...list].sort((a, b) =>
-      a.name.localeCompare(b.name, 'id', { numeric: true, sensitivity: 'base' })
+    const list = getItem<HalaqahGroup[]>(STORAGE_KEYS.HALAQAH_GROUPS, INITIAL_HALAQAH_GROUPS);
+    let healed = false;
+    const sanitized = list.map((g, index) => {
+      const gId = g.id ? String(g.id).trim() : '';
+      if (!gId || gId === 'undefined' || gId === 'null') {
+        healed = true;
+        return {
+          ...g,
+          id: `hlq-legacy-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 6)}`
+        };
+      }
+      return g;
+    });
+
+    if (healed) {
+      setItem(STORAGE_KEYS.HALAQAH_GROUPS, sanitized);
+      syncCollectionToCloud('halaqah_groups', sanitized).catch(e => console.warn(e));
+    }
+
+    return [...sanitized].sort((a, b) =>
+      (a.name || '').localeCompare(b.name || '', 'id', { numeric: true, sensitivity: 'base' })
     );
   },
   getHalaqahGroupsByTeacher(teacherId: string): HalaqahGroup[] {
     return this.getHalaqahGroups().filter(g => g.teacherId === teacherId);
   },
-  saveHalaqahGroup(group: HalaqahGroup): HalaqahGroup {
+  saveHalaqahGroup(group: Partial<HalaqahGroup> & { name: string; teacherId: string }): HalaqahGroup {
     const list = this.getHalaqahGroups();
-    const idx = list.findIndex(g => g.id === group.id);
+    const rawId = group.id ? String(group.id).trim() : '';
+    const validId = (rawId && rawId !== 'undefined' && rawId !== 'null')
+      ? rawId
+      : `hlq-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    
+    const teacher = this.getTeachers().find(t => t.id === group.teacherId);
+
+    const resolvedGroup: HalaqahGroup = {
+      id: validId,
+      name: (group.name || '').trim(),
+      teacherId: group.teacherId,
+      teacherName: group.teacherName || teacher?.name || 'Ustadz / Ustadzah',
+      description: (group.description || '').trim(),
+      schedule: (group.schedule || 'Senin - Kamis, 07.00 - 08.15').trim(),
+      room: (group.room || 'Masjid Utama Lt. 1').trim(),
+      maxCapacity: Number(group.maxCapacity) || 12,
+      studentIds: Array.isArray(group.studentIds) ? group.studentIds : [],
+      createdAt: group.createdAt || new Date().toISOString()
+    };
+
+    const idx = list.findIndex(g => g.id === validId);
     if (idx >= 0) {
-      list[idx] = group;
+      list[idx] = resolvedGroup;
     } else {
-      list.push(group);
+      list.push(resolvedGroup);
     }
     setItem(STORAGE_KEYS.HALAQAH_GROUPS, list);
-    syncDocToCloud('halaqah_groups', group.id, group);
-    return group;
+    
+    // Immediate Cloud Sync & notification
+    syncDocToCloud('halaqah_groups', resolvedGroup.id, resolvedGroup).catch(e =>
+      console.warn('[Cloud Sync] Error syncing halaqah group:', e)
+    );
+    this.notifyListeners();
+    return resolvedGroup;
   },
   deleteHalaqahGroup(id: string): void {
     const list = this.getHalaqahGroups().filter(g => g.id !== id);

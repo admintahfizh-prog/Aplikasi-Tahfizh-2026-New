@@ -31,6 +31,7 @@ import {
   TahfizhViolation,
   MatrikulasiStudent,
   MatrikulasiRecord,
+  HalaqahGroup,
   AppSettings, 
   UserProfile, 
   Role 
@@ -55,6 +56,7 @@ export default function App() {
   const [students, setStudents] = useState<Student[]>(() => storageService.getStudents());
   const [teachers, setTeachers] = useState<Teacher[]>(() => storageService.getTeachers());
   const [classes, setClasses] = useState<ClassItem[]>(() => storageService.getClasses());
+  const [halaqahGroups, setHalaqahGroups] = useState<HalaqahGroup[]>(() => storageService.getHalaqahGroups());
   const [records, setRecords] = useState<MemorizationRecord[]>(() => storageService.getMemorizationRecords());
   const [ummiRecords, setUmmiRecords] = useState<UmmiRecord[]>(() => storageService.getUmmiRecords());
   const [violations, setViolations] = useState<TahfizhViolation[]>(() => storageService.getViolations());
@@ -69,6 +71,7 @@ export default function App() {
     setStudents(storageService.getStudents());
     setTeachers(storageService.getTeachers());
     setClasses(storageService.getClasses());
+    setHalaqahGroups(storageService.getHalaqahGroups());
     setRecords(storageService.getMemorizationRecords());
     setUmmiRecords(storageService.getUmmiRecords());
     setViolations(storageService.getViolations());
@@ -334,6 +337,7 @@ export default function App() {
               teachers={teachers}
               classes={classes}
               students={students}
+              halaqahGroups={halaqahGroups}
               userRole={currentUser.role}
               currentUser={currentUser}
               onOpenProfile={() => setIsProfileModalOpen(true)}

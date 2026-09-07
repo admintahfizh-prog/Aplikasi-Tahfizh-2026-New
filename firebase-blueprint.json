@@ -103,6 +103,11 @@
         "name": { "type": "string" },
         "teacherId": { "type": "string" },
         "teacherName": { "type": "string" },
+        "description": { "type": "string" },
+        "schedule": { "type": "string" },
+        "room": { "type": "string" },
+        "maxCapacity": { "type": "number" },
+        "createdAt": { "type": "string" },
         "studentIds": { "type": "array" }
       },
       "required": ["id", "name", "teacherId"]

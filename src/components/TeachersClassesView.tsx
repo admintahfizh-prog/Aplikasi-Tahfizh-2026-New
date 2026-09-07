@@ -37,6 +37,7 @@ interface TeachersClassesViewProps {
   teachers: Teacher[];
   classes: ClassItem[];
   students: Student[];
+  halaqahGroups?: HalaqahGroup[];
   userRole: Role;
   currentUser?: User;
   onOpenProfile?: () => void;
@@ -47,6 +48,7 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
   teachers,
   classes,
   students,
+  halaqahGroups: propHalaqahGroups,
   userRole,
   currentUser,
   onOpenProfile,
@@ -90,12 +92,22 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
     return false;
   };
 
-  // Halaqah Groups State
-  const [halaqahGroups, setHalaqahGroups] = useState<HalaqahGroup[]>(() => storageService.getHalaqahGroups());
+  // Halaqah Groups State with Realtime Synchronization
+  const [halaqahGroups, setHalaqahGroups] = useState<HalaqahGroup[]>(() => 
+    propHalaqahGroups && propHalaqahGroups.length > 0 ? propHalaqahGroups : storageService.getHalaqahGroups()
+  );
 
   useEffect(() => {
-    setHalaqahGroups(storageService.getHalaqahGroups());
-  }, [teachers, students]);
+    if (propHalaqahGroups && propHalaqahGroups.length > 0) {
+      setHalaqahGroups(propHalaqahGroups);
+    } else {
+      setHalaqahGroups(storageService.getHalaqahGroups());
+    }
+    const unsub = storageService.onSyncChange(() => {
+      setHalaqahGroups(storageService.getHalaqahGroups());
+    });
+    return () => unsub();
+  }, [teachers, students, propHalaqahGroups]);
 
   // Halaqah Manual Input Modal State
   const [showHalaqahModal, setShowHalaqahModal] = useState(false);
@@ -296,8 +308,10 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
       return;
     }
     const nextGroupNum = teacherExistingGroups.length + 1;
+    const newId = `hlq-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     setEditingHalaqah(null);
     setHalaqahFormData({
+      id: newId,
       name: `Halaqah ${nextGroupNum}`,
       teacherId: defaultTid,
       description: 'Tahsin Ummi & Tahfizh Al-Qur\'an',
