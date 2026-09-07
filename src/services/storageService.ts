@@ -330,22 +330,28 @@ export const storageService = {
       // 9. Matrikulasi Students
       onSnapshot(collection(db, 'matrikulasi_students'), (snap) => {
         const list: MatrikulasiStudent[] = [];
-        snap.forEach(d => list.push(d.data() as MatrikulasiStudent));
-        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.MATRIKULASI_STUDENTS)) {
-          setItem(STORAGE_KEYS.MATRIKULASI_STUDENTS, list);
-          this.notifyListeners();
-        }
+        snap.forEach(d => {
+          const item = d.data() as MatrikulasiStudent;
+          if (item) list.push({ ...item, id: item.id || d.id });
+        });
+        mergeCloudSnapshotWithLocal(STORAGE_KEYS.MATRIKULASI_STUDENTS, list, 'matrikulasi_students');
+        this.notifyListeners();
       }, (err) => console.warn('[Cloud Sync] Matrikulasi students listener warning:', err));
 
       // 10. Matrikulasi Records
       onSnapshot(collection(db, 'matrikulasi_records'), (snap) => {
         const list: MatrikulasiRecord[] = [];
-        snap.forEach(d => list.push(d.data() as MatrikulasiRecord));
-        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.MATRIKULASI_RECORDS)) {
-          setItem(STORAGE_KEYS.MATRIKULASI_RECORDS, list);
-          this.notifyListeners();
-        }
+        snap.forEach(d => {
+          const item = d.data() as MatrikulasiRecord;
+          if (item) list.push({ ...item, id: item.id || d.id });
+        });
+        mergeCloudSnapshotWithLocal(
+          STORAGE_KEYS.MATRIKULASI_RECORDS, 
+          list, 
+          'matrikulasi_records',
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        this.notifyListeners();
       }, (err) => console.warn('[Cloud Sync] Matrikulasi records listener warning:', err));
 
       // 11. Users
@@ -890,6 +896,42 @@ export const storageService = {
       console.warn('[Auth] Remote check fallback warning:', err);
     }
     return res;
+  },
+
+  /**
+   * Filter accessible students for privacy.
+   * If user is 'wali', strictly returns only the student(s) belonging to this parent/student.
+   * Other students are completely hidden for privacy.
+   */
+  getAccessibleStudents(user: User | null, customStudents?: Student[]): Student[] {
+    const all = customStudents || this.getStudents();
+    if (!user) return [];
+    if (user.role !== 'wali') return all;
+
+    const cleanPhone = user.phone ? user.phone.replace(/\D/g, '') : '';
+    const cleanUsername = user.username ? user.username.trim().toLowerCase() : '';
+    const cleanEmail = user.email ? user.email.trim().toLowerCase() : '';
+
+    const matched = all.filter(s => {
+      // 1. Direct match by studentId
+      if (user.studentId && s.id === user.studentId) return true;
+      // 2. Match by NIS or NISN
+      if (cleanUsername && (s.nis?.toLowerCase() === cleanUsername || s.nisn === cleanUsername)) return true;
+      // 3. Match by Parent Phone
+      if (cleanPhone && s.parentPhone && s.parentPhone.replace(/\D/g, '') === cleanPhone) return true;
+      // 4. Match by Parent Email
+      if (cleanEmail && s.parentEmail && s.parentEmail.trim().toLowerCase() === cleanEmail) return true;
+      return false;
+    });
+
+    if (matched.length > 0) return matched;
+
+    // Fallback if not matched by attributes
+    if (user.studentId) {
+      const byId = all.find(s => s.id === user.studentId);
+      if (byId) return [byId];
+    }
+    return all.length > 0 ? [all[0]] : [];
   },
 
   // Classes

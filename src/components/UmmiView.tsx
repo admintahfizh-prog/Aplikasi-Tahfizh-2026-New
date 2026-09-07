@@ -129,10 +129,16 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
             <BookMarked className="w-5 h-5 text-[#D4AF37]" />
-            Kurikulum & Pembelajaran Metode Ummi Dewasa (Jilid 1–3)
+            {userRole === 'wali'
+              ? (students.length === 1 ? `Perkembangan Metode Ummi: ${students[0].name}` : "Perkembangan Metode Ummi Ananda")
+              : "Kurikulum & Pembelajaran Metode Ummi Dewasa (Jilid 1–3)"
+            }
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Katalog materi resmi Buku Ummi Dewasa Jilid 1 sampai 3, Tilawah Mushaf Al-Qur'an, Ayat Gharib, dan Teori Kaidah Tajwid Ummi Foundation
+            {userRole === 'wali'
+              ? "Katalog kurikulum Talaqqi Ummi dan riwayat evaluasi berkala kenaikan jilid khusus ananda tercinta (Privasi Terjaga)."
+              : "Katalog materi resmi Buku Ummi Dewasa Jilid 1 sampai 3, Tilawah Mushaf Al-Qur'an, Ayat Gharib, dan Teori Kaidah Tajwid Ummi Foundation"
+            }
           </p>
         </div>
 
@@ -166,23 +172,42 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-          {studentDistribution.map((item) => (
-            <button
-              key={item.jilid}
-              onClick={() => setSelectedJilidTab(item.jilid)}
-              className={`p-2.5 rounded-lg border text-center transition cursor-pointer ${
-                selectedJilidTab === item.jilid
-                  ? 'bg-[#1E293B] text-white border-slate-800 shadow-xs ring-2 ring-[#D4AF37]'
-                  : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
-              }`}
-            >
-              <span className="text-[11px] font-bold block truncate">{item.jilid}</span>
-              <span className="text-base font-extrabold mt-0.5 block">{item.count}</span>
-              <span className="text-[9px] opacity-75">Santri Aktif</span>
-            </button>
-          ))}
-        </div>
+        {userRole === 'wali' && students[0] ? (
+          <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">Jenjang & Capaian Saat Ini</span>
+              <h4 className="text-base font-bold text-emerald-950 mt-0.5">
+                {students[0].name} • {students[0].currentUmmiJilid || 'Jilid 1'} (Halaman {students[0].currentUmmiPage || 1})
+              </h4>
+              <p className="text-xs text-emerald-700 mt-1">
+                Fokus pembelajaran: Pemantapan makharijul huruf, kaidah tajwid praktis, dan ketertiban bacaan tartil.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="px-3.5 py-2 rounded-xl bg-white border border-emerald-300 text-xs font-extrabold text-emerald-800 shadow-xs">
+                {students[0].currentUmmiJilid || 'Jilid 1'}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+            {studentDistribution.map((item) => (
+              <button
+                key={item.jilid}
+                onClick={() => setSelectedJilidTab(item.jilid)}
+                className={`p-2.5 rounded-lg border text-center transition cursor-pointer ${
+                  selectedJilidTab === item.jilid
+                    ? 'bg-[#1E293B] text-white border-slate-800 shadow-xs ring-2 ring-[#D4AF37]'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+                }`}
+              >
+                <span className="text-[11px] font-bold block truncate">{item.jilid}</span>
+                <span className="text-base font-extrabold mt-0.5 block">{item.count}</span>
+                <span className="text-[9px] opacity-75">Santri Aktif</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* KOMPREHENSIF: MODUL & MATERI DETAIL JILID 1 - 6 */}

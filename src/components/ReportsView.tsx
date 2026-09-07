@@ -15,7 +15,7 @@ import {
   UserCheck,
   FileCheck2
 } from 'lucide-react';
-import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, AppSettings } from '../types';
+import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, AppSettings, Role, User } from '../types';
 import { storageService } from '../services/storageService';
 import { StudentRaportCard } from './StudentRaportCard';
 
@@ -26,6 +26,8 @@ interface ReportsViewProps {
   records: MemorizationRecord[];
   ummiRecords: UmmiRecord[];
   settings: AppSettings;
+  userRole?: Role;
+  currentUser?: User | null;
   onOpenStudentDetail: (studentId: string) => void;
 }
 
@@ -36,8 +38,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   records,
   ummiRecords,
   settings,
+  userRole,
+  currentUser,
   onOpenStudentDetail
 }) => {
+  const isWali = userRole === 'wali';
   const [reportType, setReportType] = useState<'raport_individu' | 'hafalan' | 'ummi' | 'rekap_nilai' | 'raport_kelas'>('raport_individu');
   const [selectedClass, setSelectedClass] = useState<string>('');
   const [selectedTeacher, setSelectedTeacher] = useState<string>('');
@@ -45,6 +50,20 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [sortBy, setSortBy] = useState<'class-asc' | 'class-desc' | 'name-asc' | 'score-desc' | 'juz-desc'>('class-asc');
   const [selectedIndividualStudentId, setSelectedIndividualStudentId] = useState<string>(students[0]?.id || '');
+
+  // If user is wali, always lock to raport_individu
+  React.useEffect(() => {
+    if (isWali && reportType !== 'raport_individu') {
+      setReportType('raport_individu');
+    }
+  }, [isWali, reportType]);
+
+  // Keep selectedIndividualStudentId updated
+  React.useEffect(() => {
+    if (students.length > 0 && (!selectedIndividualStudentId || !students.some(s => s.id === selectedIndividualStudentId))) {
+      setSelectedIndividualStudentId(students[0].id);
+    }
+  }, [students, selectedIndividualStudentId]);
 
   const filteredStudents = students.filter(s => {
     const matchClass = !selectedClass || s.classId === selectedClass;
@@ -190,34 +209,46 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
       {/* Filter Selection Tabs */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3 no-print">
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
-          {[
-            { id: 'raport_individu', label: '1. Raport Individu Santri (Format Resmi)', icon: FileCheck2, highlight: true },
-            { id: 'hafalan', label: '2. Rekap Capaian Hafalan Al-Qur\'an', icon: BookOpen },
-            { id: 'ummi', label: '3. Rekap Pembelajaran Metode Ummi', icon: BookMarked },
-            { id: 'rekap_nilai', label: '4. Rekapitulasi Nilai & Evaluasi', icon: Award },
-            { id: 'raport_kelas', label: '5. Buku Induk Tahfizh Kelas', icon: Layers },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = reportType === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setReportType(tab.id as any)}
-                className={`px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
-                  isActive
-                    ? 'bg-[#1E293B] text-white shadow-xs font-bold'
-                    : tab.highlight
-                    ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold'
-                    : 'bg-slate-50 hover:bg-slate-100 text-slate-600'
-                }`}
-              >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-[#D4AF37]' : tab.highlight ? 'text-amber-600' : 'text-slate-400'}`} />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
+        {!isWali ? (
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
+            {[
+              { id: 'raport_individu', label: '1. Raport Individu Santri (Format Resmi)', icon: FileCheck2, highlight: true },
+              { id: 'hafalan', label: '2. Rekap Capaian Hafalan Al-Qur\'an', icon: BookOpen },
+              { id: 'ummi', label: '3. Rekap Pembelajaran Metode Ummi', icon: BookMarked },
+              { id: 'rekap_nilai', label: '4. Rekapitulasi Nilai & Evaluasi', icon: Award },
+              { id: 'raport_kelas', label: '5. Buku Induk Tahfizh Kelas', icon: Layers },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = reportType === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setReportType(tab.id as any)}
+                  className={`px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                    isActive
+                      ? 'bg-[#1E293B] text-white shadow-xs font-bold'
+                      : tab.highlight
+                      ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold'
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-[#D4AF37]' : tab.highlight ? 'text-amber-600' : 'text-slate-400'}`} />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+              <FileCheck2 className="w-4 h-4 text-[#D4AF37]" />
+              <span>Raport Resmi Santri: <span className="text-[#8C7015]">{currentIndividualStudent?.name || 'Pribadi'}</span></span>
+            </div>
+            <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+              Privasi Santri Terjaga
+            </span>
+          </div>
+        )}
 
         {reportType !== 'raport_individu' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -292,6 +323,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           settings={settings}
           allStudents={students}
           classes={classes}
+          userRole={userRole}
           onSelectStudent={(id) => setSelectedIndividualStudentId(id)}
         />
       )}

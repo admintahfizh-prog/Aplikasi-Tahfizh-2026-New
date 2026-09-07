@@ -123,7 +123,41 @@ export default function App() {
     setIsDailyInputOpen(true);
   };
 
+  // Determine accessible students for privacy:
+  // If user role is 'wali', strictly restrict to only their own student/child(ren)
+  const accessibleStudents = React.useMemo(() => {
+    return storageService.getAccessibleStudents(currentUser, students);
+  }, [currentUser, students]);
+
+  const accessibleStudentIds = React.useMemo(() => {
+    return new Set(accessibleStudents.map(s => s.id));
+  }, [accessibleStudents]);
+
+  const isWali = currentUser?.role === 'wali';
+
+  // Scoped data arrays for privacy enforcement
+  const viewStudents = isWali ? accessibleStudents : students;
+  const viewRecords = isWali ? records.filter(r => accessibleStudentIds.has(r.studentId)) : records;
+  const viewUmmiRecords = isWali ? ummiRecords.filter(r => accessibleStudentIds.has(r.studentId)) : ummiRecords;
+  const viewViolations = isWali ? violations.filter(v => accessibleStudentIds.has(v.studentId)) : violations;
+  const viewMatrikulasiStudents = isWali ? matrikulasiStudents.filter(m => accessibleStudentIds.has(m.studentId)) : matrikulasiStudents;
+  const viewMatrikulasiRecords = isWali ? matrikulasiRecords.filter(m => accessibleStudentIds.has(m.studentId)) : matrikulasiRecords;
+
+  // Enforce view protection: Wali users can only access their allowed personal views
+  useEffect(() => {
+    if (isWali) {
+      const allowedWaliViews = ['parent-portal', 'hafalan', 'ummi', 'matrikulasi', 'violations', 'pelanggaran', 'reports', 'student-detail'];
+      if (!allowedWaliViews.includes(currentView)) {
+        setCurrentView('parent-portal');
+      }
+    }
+  }, [isWali, currentView]);
+
   const handleOpenStudentDetail = (studentId: string) => {
+    if (isWali && !accessibleStudentIds.has(studentId)) {
+      console.warn('Akses ditolak: Privasi santri');
+      return;
+    }
     setSelectedStudentId(studentId);
     setCurrentView('student-detail');
   };
@@ -209,11 +243,11 @@ export default function App() {
           {currentView === 'student-detail' && selectedStudentId && (
             <StudentDetailView
               studentId={selectedStudentId}
-              students={students}
+              students={viewStudents}
               teachers={teachers}
               classes={classes}
-              records={records}
-              ummiRecords={ummiRecords}
+              records={viewRecords}
+              ummiRecords={viewUmmiRecords}
               settings={settings}
               userRole={currentUser.role}
               onRefreshData={loadAllData}
@@ -228,8 +262,8 @@ export default function App() {
           {/* VIEW: HAFALAN AL-QURAN */}
           {currentView === 'hafalan' && (
             <HafalanView
-              records={records}
-              students={students}
+              records={viewRecords}
+              students={viewStudents}
               teachers={teachers}
               classes={classes}
               userRole={currentUser.role}
@@ -242,8 +276,8 @@ export default function App() {
           {/* VIEW: METODE UMMI */}
           {currentView === 'ummi' && (
             <UmmiView
-              ummiRecords={ummiRecords}
-              students={students}
+              ummiRecords={viewUmmiRecords}
+              students={viewStudents}
               teachers={teachers}
               classes={classes}
               userRole={currentUser.role}
@@ -256,11 +290,11 @@ export default function App() {
           {/* VIEW: MATRIKULASI METODE IQRO (KELAS 8 & 9 - SELASA, RABU, KAMIS) */}
           {currentView === 'matrikulasi' && (
             <MatrikulasiView
-              students={students}
+              students={viewStudents}
               teachers={teachers}
               classes={classes}
-              matrikulasiStudents={matrikulasiStudents}
-              matrikulasiRecords={matrikulasiRecords}
+              matrikulasiStudents={viewMatrikulasiStudents}
+              matrikulasiRecords={viewMatrikulasiRecords}
               userRole={currentUser.role}
               settings={settings}
               onRefreshData={loadAllData}
@@ -271,10 +305,10 @@ export default function App() {
           {/* VIEW: PELANGGARAN TAHFIZH & KEDISIPLINAN */}
           {(currentView === 'violations' || currentView === 'pelanggaran') && (
             <ViolationsView
-              students={students}
+              students={viewStudents}
               teachers={teachers}
               classes={classes}
-              violations={violations}
+              violations={viewViolations}
               userRole={currentUser.role}
               onRefreshData={loadAllData}
               onOpenStudentDetail={handleOpenStudentDetail}
@@ -307,12 +341,14 @@ export default function App() {
           {/* VIEW: REPORTS & REKAP */}
           {currentView === 'reports' && (
             <ReportsView
-              students={students}
+              students={viewStudents}
               teachers={teachers}
               classes={classes}
-              records={records}
-              ummiRecords={ummiRecords}
+              records={viewRecords}
+              ummiRecords={viewUmmiRecords}
               settings={settings}
+              userRole={currentUser.role}
+              currentUser={currentUser}
               onOpenStudentDetail={handleOpenStudentDetail}
             />
           )}
@@ -320,11 +356,11 @@ export default function App() {
           {/* VIEW: PORTAL WALI SANTRI */}
           {currentView === 'parent-portal' && (
             <ParentPortalView
-              students={students}
+              students={viewStudents}
               teachers={teachers}
               classes={classes}
-              records={records}
-              ummiRecords={ummiRecords}
+              records={viewRecords}
+              ummiRecords={viewUmmiRecords}
               settings={settings}
               onOpenStudentDetail={handleOpenStudentDetail}
               currentUser={currentUser}

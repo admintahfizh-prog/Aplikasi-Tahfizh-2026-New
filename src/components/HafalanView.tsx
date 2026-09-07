@@ -148,10 +148,16 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-[#D4AF37]" />
-            Modul Hafalan Al-Qur'an
+            {userRole === 'wali' 
+              ? (students.length === 1 ? `Perkembangan Hafalan: ${students[0].name}` : "Perkembangan Hafalan Al-Qur'an Ananda")
+              : "Modul Hafalan Al-Qur'an"
+            }
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Rekapitulasi setoran Ziyadah (Hafalan Baru), Murojaah berkala, dan Ujian Tasmi' terorganisir per kelas
+            {userRole === 'wali'
+              ? "Riwayat lengkap setoran Ziyadah (Hafalan Baru), Muroja'ah berkala, dan Ujian Tasmi' Al-Qur'an ananda tercinta (Privasi Terjaga)."
+              : "Rekapitulasi setoran Ziyadah (Hafalan Baru), Murojaah berkala, dan Ujian Tasmi' terorganisir per kelas"
+            }
           </p>
         </div>
 

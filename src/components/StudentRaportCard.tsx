@@ -39,6 +39,7 @@ interface StudentRaportCardProps {
   settings: AppSettings;
   allStudents?: Student[];
   classes?: ClassItem[];
+  userRole?: string;
   onSelectStudent?: (studentId: string) => void;
   onClose?: () => void;
 }
@@ -52,9 +53,11 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
   settings,
   allStudents = [],
   classes = [],
+  userRole,
   onSelectStudent,
   onClose
 }) => {
+  const isWali = userRole === 'wali';
   // Class Filter & Sort for Quick Student Navigation
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>(student.classId || '');
   const [sortBy, setSortBy] = useState<'class-asc' | 'name-asc' | 'nis-asc'>('class-asc');
@@ -685,7 +688,34 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
 
         {/* Student Switcher & Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-          {allStudents.length > 1 && onSelectStudent && (
+          {/* Wali with single child: Show badge */}
+          {isWali && allStudents.length <= 1 && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Raport Resmi Santri Pribadi</span>
+            </div>
+          )}
+
+          {/* Wali with multiple children (siblings): Allow switching only between siblings */}
+          {isWali && allStudents.length > 1 && onSelectStudent && (
+            <div className="flex items-center gap-1.5 bg-slate-100 rounded-xl p-1.5 border border-slate-200">
+              <span className="text-[11px] font-bold text-slate-600 pl-1.5">Pilih Ananda:</span>
+              <select
+                value={student.id}
+                onChange={(e) => onSelectStudent(e.target.value)}
+                className="bg-white text-xs font-bold text-slate-800 px-2 py-1 rounded-lg border border-slate-200 focus:outline-none"
+              >
+                {allStudents.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.nis})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Admin / Guru: Full switcher across classes and students */}
+          {!isWali && allStudents.length > 1 && onSelectStudent && (
             <div className="flex items-center gap-1.5 bg-slate-100 rounded-xl p-1.5 border border-slate-200">
               {/* Filter Rombel Kelas */}
               {classes.length > 0 && (
@@ -744,17 +774,19 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             </div>
           )}
 
-          <button
-            onClick={() => setIsCustomizing(!isCustomizing)}
-            className={`px-3 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer ${
-              isCustomizing 
-                ? 'bg-amber-500 text-slate-950 border-amber-600' 
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-            }`}
-          >
-            <Edit3 className="w-3.5 h-3.5" />
-            <span>{isCustomizing ? 'Tutup Editor' : 'Sesuaikan Nilai'}</span>
-          </button>
+          {!isWali && (
+            <button
+              onClick={() => setIsCustomizing(!isCustomizing)}
+              className={`px-3 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer ${
+                isCustomizing 
+                  ? 'bg-amber-500 text-slate-950 border-amber-600' 
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+              }`}
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>{isCustomizing ? 'Tutup Editor' : 'Sesuaikan Nilai'}</span>
+            </button>
+          )}
 
           <button
             onClick={handleShareWhatsApp}

@@ -336,13 +336,19 @@ export const ViolationsView: React.FC<ViolationsViewProps> = ({
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/20 text-[#D4AF37] text-xs font-semibold border border-amber-400/30">
               <ShieldAlert className="w-3.5 h-3.5" />
-              Monitoring Kedisiplinan Halaqah
+              {userRole === 'wali' ? 'Privasi Santri Terjaga' : 'Monitoring Kedisiplinan Halaqah'}
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-              Pelanggaran & Pembinaan Tahfizh
+              {userRole === 'wali' 
+                ? (students.length === 1 ? `Catatan Kedisiplinan: ${students[0].name}` : 'Catatan Kedisiplinan Ananda')
+                : 'Pelanggaran & Pembinaan Tahfizh'
+              }
             </h1>
             <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-              Pencatatan kedisiplinan santri mencakup: <strong>Tidak Setoran</strong>, <strong>Kurang Baris/Ayat</strong>, <strong>Tidak Membawa Buku Mutaba'ah</strong>, dan <strong>Tidak Membawa Buku Ummi</strong> beserta tindakan edukatif dan notifikasi WhatsApp orang tua.
+              {userRole === 'wali'
+                ? "Rekam jejak pembinaan kedisiplinan setoran hafalan Al-Qur'an dan kepatuhan membawa sarana belajar khusus ananda tercinta."
+                : "Pencatatan kedisiplinan santri mencakup: Tidak Setoran, Kurang Baris/Ayat, Tidak Membawa Buku Mutaba'ah, dan Tidak Membawa Buku Ummi beserta tindakan edukatif dan notifikasi WhatsApp orang tua."
+              }
             </p>
           </div>
 
@@ -368,6 +374,19 @@ export const ViolationsView: React.FC<ViolationsViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Wali Positive Feedback when 0 violations */}
+      {userRole === 'wali' && violations.length === 0 && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center space-y-2 shadow-xs">
+          <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-emerald-950">Alhamdulillah, Kedisiplinan Terjaga Sangat Baik</h3>
+          <p className="text-xs text-emerald-700 max-w-md mx-auto">
+            Ananda {students[0]?.name || ''} tidak memiliki catatan pelanggaran kedisiplinan halaqah tahfizh ataupun pembelajaran Ummi. Terus dukung dan dampingi ananda dengan penuh kasih sayang.
+          </p>
+        </div>
+      )}
 
       {/* 4 Core Violation Categories Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -516,7 +535,7 @@ export const ViolationsView: React.FC<ViolationsViewProps> = ({
                   <th className="py-3 px-4">Kronologi & Keterangan</th>
                   <th className="py-3 px-4">Tindakan Pembinaan</th>
                   <th className="py-3 px-4 text-center">Status</th>
-                  <th className="py-3 px-4 text-right">Aksi</th>
+                  {userRole !== 'wali' && <th className="py-3 px-4 text-right">Aksi</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -552,12 +571,9 @@ export const ViolationsView: React.FC<ViolationsViewProps> = ({
                             className="shrink-0"
                           />
                           <div>
-                            <button
-                              onClick={() => student && onOpenStudentDetail && onOpenStudentDetail(student.id)}
-                              className="font-bold text-slate-900 hover:text-[#8C7015] hover:underline text-left cursor-pointer"
-                            >
+                            <span className="font-bold text-slate-900 text-left block">
                               {student?.name || 'Santri'}
-                            </button>
+                            </span>
                             <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5">
                               <span className="font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded">
                                 {studentClass?.name || 'Kelas'}
@@ -603,68 +619,90 @@ export const ViolationsView: React.FC<ViolationsViewProps> = ({
 
                       {/* Status */}
                       <td className="py-3 px-4 align-top text-center whitespace-nowrap">
-                        <button
-                          onClick={() => handleToggleResolved(v)}
-                          title="Klik untuk ubah status"
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition cursor-pointer ${
-                            isResolved
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                              : v.status === 'Dalam Pembinaan'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-                              : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
-                          }`}
-                        >
-                          {isResolved ? (
-                            <>
-                              <Check className="w-3 h-3 text-emerald-600" />
-                              <span>Tuntas</span>
-                            </>
-                          ) : (
-                            <>
-                              <Clock className="w-3 h-3" />
-                              <span>{v.status}</span>
-                            </>
-                          )}
-                        </button>
+                        {userRole !== 'wali' ? (
+                          <button
+                            onClick={() => handleToggleResolved(v)}
+                            title="Klik untuk ubah status"
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition cursor-pointer ${
+                              isResolved
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                : v.status === 'Dalam Pembinaan'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                                : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                            }`}
+                          >
+                            {isResolved ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-600" />
+                                <span>Tuntas</span>
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="w-3 h-3" />
+                                <span>{v.status}</span>
+                              </>
+                            )}
+                          </button>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                              isResolved
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : v.status === 'Dalam Pembinaan'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-rose-50 text-rose-700 border-rose-200'
+                            }`}
+                          >
+                            {isResolved ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-600" />
+                                <span>Tuntas</span>
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="w-3 h-3" />
+                                <span>{v.status}</span>
+                              </>
+                            )}
+                          </span>
+                        )}
                         {isResolved && v.resolvedDate && (
                           <span className="text-[9px] text-slate-400 block mt-0.5 font-mono">{v.resolvedDate}</span>
                         )}
                       </td>
 
                       {/* Aksi */}
-                      <td className="py-3 px-4 align-top text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {student && (
+                      {userRole !== 'wali' && (
+                        <td className="py-3 px-4 align-top text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {student && (
+                              <button
+                                onClick={() => handleSendWhatsApp(v, student)}
+                                title="Kirim Notifikasi WA ke Orang Tua"
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition border border-emerald-200 cursor-pointer"
+                              >
+                                <Phone className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
                             <button
-                              onClick={() => handleSendWhatsApp(v, student)}
-                              title="Kirim Notifikasi WA ke Orang Tua"
-                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition border border-emerald-200 cursor-pointer"
+                              onClick={() => handleOpenEditModal(v)}
+                              title="Edit Catatan"
+                              className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                             >
-                              <Phone className="w-3.5 h-3.5" />
+                              <Edit3 className="w-3.5 h-3.5" />
                             </button>
-                          )}
 
-                          {userRole !== 'wali' && (
-                            <>
-                              <button
-                                onClick={() => handleOpenEditModal(v)}
-                                title="Edit Catatan"
-                                className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-
-                              <button
-                                onClick={() => handleDelete(v.id)}
-                                title="Hapus Catatan"
-                                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
+                            <button
+                              onClick={() => handleDelete(v.id)}
+                              title="Hapus Catatan"
+                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
 
                     </tr>
                   );

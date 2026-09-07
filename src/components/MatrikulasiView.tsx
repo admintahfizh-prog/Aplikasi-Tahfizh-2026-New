@@ -415,10 +415,16 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
             
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
               <BookOpen className="w-6 h-6 text-[#D4AF37]" />
-              Matrikulasi Bimbingan Metode Iqro
+              {userRole === 'wali' 
+                ? (students.length === 1 ? `Perkembangan Matrikulasi Iqro: ${students[0].name}` : 'Perkembangan Matrikulasi Iqro Ananda')
+                : 'Matrikulasi Bimbingan Metode Iqro'
+              }
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 max-w-3xl leading-relaxed">
-              Program akselerasi dan perbaikan makharijul huruf serta kelancaran membaca Al-Qur'an secara intensif dengan buku panduan Iqro Jilid 1–6 untuk santri terpilih kelas 8 dan 9.
+              {userRole === 'wali'
+                ? "Laporan perkembangan intensif akselerasi makharijul huruf dan tajwid praktis Metode Iqro khusus ananda tercinta (Privasi Terjaga)."
+                : "Program akselerasi dan perbaikan makharijul huruf serta kelancaran membaca Al-Qur'an secara intensif dengan buku panduan Iqro Jilid 1–6 untuk santri terpilih kelas 8 dan 9."
+              }
             </p>
           </div>
 
@@ -446,6 +452,19 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
             )}
           </div>
         </div>
+
+        {/* Wali info if student is not enrolled in Matrikulasi */}
+        {userRole === 'wali' && matrikulasiStudents.length === 0 && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 my-3 text-center space-y-1.5">
+            <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <h3 className="text-sm font-bold text-emerald-950">Ananda Tidak Terdaftar Dalam Bimbingan Matrikulasi</h3>
+            <p className="text-xs text-emerald-700 max-w-md mx-auto">
+              Program matrikulasi Iqro adalah pembinaan akselerasi khusus santri yang memerlukan pemantapan bacaan awal. Ananda {students[0]?.name || ''} mengikuti pembelajaran tahfizh dan tilawah reguler dengan baik.
+            </p>
+          </div>
+        )}
 
         {/* Highlight Schedule Pill */}
         <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">

@@ -101,18 +101,26 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
 
           {/* Child Selector & Mode Switcher */}
           <div className="flex flex-col gap-2">
-            <div className="bg-slate-800 p-2.5 rounded-lg border border-slate-700 space-y-1">
-              <label className="block text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider">Pilih Putra/Putri:</label>
-              <select
-                value={selectedStudentId}
-                onChange={(e) => setSelectedStudentId(e.target.value)}
-                className="w-full py-1.5 px-3 bg-white text-slate-900 font-bold rounded-lg text-xs focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
-              >
-                {students.map(s => (
-                  <option key={s.id} value={s.id}>{s.name} (Kelas {classes.find(c => c.id === s.classId)?.name})</option>
-                ))}
-              </select>
-            </div>
+            {students.length > 1 ? (
+              <div className="bg-slate-800 p-2.5 rounded-lg border border-slate-700 space-y-1">
+                <label className="block text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider">Pilih Putra/Putri:</label>
+                <select
+                  value={selectedStudentId}
+                  onChange={(e) => setSelectedStudentId(e.target.value)}
+                  className="w-full py-1.5 px-3 bg-white text-slate-900 font-bold rounded-lg text-xs focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                >
+                  {students.map(s => (
+                    <option key={s.id} value={s.id}>{s.name} (Kelas {classes.find(c => c.id === s.classId)?.name})</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700 min-w-[200px]">
+                <span className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider block">Data Pribadi Santri</span>
+                <span className="text-xs font-bold text-white block truncate">{student.name}</span>
+                <span className="text-[10px] text-slate-300">NIS: {student.nis} • Kelas {studentClass?.name}</span>
+              </div>
+            )}
 
             <div className="flex gap-1.5">
               <button
@@ -153,6 +161,8 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
           ummiRecords={studentUmmiRecords}
           settings={settings}
           allStudents={students}
+          classes={classes}
+          userRole={currentUser?.role || 'wali'}
           onSelectStudent={(id) => setSelectedStudentId(id)}
         />
       )}
