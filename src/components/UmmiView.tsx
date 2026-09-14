@@ -87,42 +87,23 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
     return map;
   }, [ummiRecords]);
 
-  // Santri & Kelas yang berhak mengikuti UMMI (Khusus Jenjang Kelas 7 pada tahun ajaran ini)
-  const ummiClasses = useMemo(() => {
-    const list = classes.length > 0 ? classes : [
+  // Compute enriched classes
+  const enrichedClasses = useMemo(() => {
+    const activeClasses = classes.length > 0 ? classes : [
       { id: 'c-7a', name: '7A', level: 7, academicYear: '2026/2027', homeroomTeacherId: teachers[0]?.id || '' },
       { id: 'c-7b', name: '7B', level: 7, academicYear: '2026/2027', homeroomTeacherId: teachers[1]?.id || '' }
     ];
-    // Seluruh kelas 8 dan 9 TIDAK masuk jilid Ummi
-    return list.filter(c => {
-      if (c.level === 8 || c.level === 9) return false;
-      if (c.name.startsWith('8') || c.name.startsWith('9')) return false;
-      return true;
-    });
-  }, [classes, teachers]);
 
-  const ummiStudents = useMemo(() => {
-    return students.filter(s => {
-      const cls = classes.find(c => c.id === s.classId);
-      if (cls && (cls.level === 8 || cls.level === 9 || cls.name.startsWith('8') || cls.name.startsWith('9'))) {
-        return false;
-      }
-      return !s.classId?.includes('8') && !s.classId?.includes('9');
-    });
-  }, [students, classes]);
-
-  // Compute enriched classes khusus kelas 7
-  const enrichedClasses = useMemo(() => {
-    return ummiClasses
+    return activeClasses
       .filter(c => !selectedClassFilter || c.id === selectedClassFilter)
       .filter(c => {
         if (userRole === 'wali') {
-          return ummiStudents.some(s => s.classId === c.id);
+          return students.some(s => s.classId === c.id);
         }
         return true;
       })
       .map(c => {
-        const classStudents = ummiStudents.filter(s => {
+        const classStudents = students.filter(s => {
           if (s.classId !== c.id) return false;
           if (!searchTerm) return true;
           const term = searchTerm.toLowerCase();
@@ -143,18 +124,17 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
           students: classStudents
         };
       });
-  }, [ummiClasses, ummiStudents, studentLatestUmmiRecords, selectedClassFilter, searchTerm, teachers, userRole]);
+  }, [classes, students, studentLatestUmmiRecords, selectedClassFilter, searchTerm, teachers]);
 
-  // Calculate students count per jilid (hanya santri kelas 7 yang menempuh Ummi)
+  // Calculate students count per jilid
   const studentDistribution = UMMI_JILIDS.map(j => ({
     jilid: j,
-    count: ummiStudents.filter(s => s.currentUmmiJilid === j).length
+    count: students.filter(s => s.currentUmmiJilid === j).length
   }));
 
-  // Filter records for log view (hanya untuk santri peserta Ummi)
+  // Filter records for log view
   const filteredRecords = ummiRecords.filter(r => {
-    const std = ummiStudents.find(s => s.id === r.studentId);
-    if (!std) return false;
+    const std = students.find(s => s.id === r.studentId);
     const matchSearch = 
       (std?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       r.materialName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -269,17 +249,6 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
         </div>
       </div>
 
-      {/* Banner Kebijakan Kurikulum: Kelas 8 & 9 Tidak Mengikuti Ummi */}
-      <div className="bg-amber-50/90 border border-amber-200 rounded-xl p-3.5 flex items-start gap-3 text-xs text-amber-900 shadow-xs">
-        <div className="p-1.5 bg-amber-100 rounded-lg text-amber-800 shrink-0 mt-0.5">
-          <AlertCircle className="w-4 h-4" />
-        </div>
-        <div className="leading-relaxed">
-          <strong className="font-bold text-amber-950 block mb-0.5">Kebijakan Kurikulum Tahun Ajaran 2026/2027:</strong>
-          Pembelajaran Al-Qur'an Metode UMMI diselenggarakan khusus untuk <strong>Jenjang Kelas 7</strong> (Tahsin & Transisi). Seluruh santri <strong>Kelas 8 dan Kelas 9 tidak mengikuti pembelajaran UMMI</strong> dan fokus penuh pada penambahan hafalan (Ziyadah) serta pemantapan (Muroja'ah) Al-Qur'an.
-        </div>
-      </div>
-
       {/* Primary View Switcher Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-2">
@@ -292,11 +261,11 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
             }`}
           >
             <GraduationCap className="w-4 h-4 text-[#D4AF37]" />
-            <span>Semua Kelas 7: Capaian Terakhir Santri</span>
+            <span>Semua Kelas: Capaian Terakhir Santri</span>
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
               activeTab === 'all-classes' ? 'bg-[#D4AF37] text-slate-950' : 'bg-slate-100 text-slate-700'
             }`}>
-              {ummiStudents.length} Santri (Kelas 7)
+              {students.length} Santri
             </span>
           </button>
 
@@ -329,30 +298,24 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
             <span>Silabus & Panduan Talaqqi</span>
           </button>
         </div>
-      </div>
 
-      {/* Class Navigator Bar - Tampilkan Semua Kelas Langsung Tanpa Geser ke Kanan */}
-      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-bold text-slate-700 mr-1 flex items-center gap-1.5">
-            <Layers className="w-3.5 h-3.5 text-[#D4AF37]" />
-            <span>Pilih Kelas Ummi:</span>
-          </span>
+        {/* Quick Class Selector Bar */}
+        <div className="flex items-center gap-1.5 overflow-x-auto py-1">
           <button
             onClick={() => setSelectedClassFilter('')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer shrink-0 ${
               selectedClassFilter === '' 
-                ? 'bg-[#1E293B] text-white shadow-xs font-black' 
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                ? 'bg-slate-900 text-white' 
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            Tampilkan Semua Kelas ({ummiClasses.length} Rombel Kelas 7)
+            Semua Kelas
           </button>
-          {ummiClasses.map(c => (
+          {classes.map(c => (
             <button
               key={c.id}
               onClick={() => setSelectedClassFilter(selectedClassFilter === c.id ? '' : c.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer shrink-0 ${
                 selectedClassFilter === c.id
                   ? 'bg-[#D4AF37] text-slate-950 font-black shadow-2xs'
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'

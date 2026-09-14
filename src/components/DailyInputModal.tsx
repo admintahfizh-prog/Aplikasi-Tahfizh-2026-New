@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   CheckCircle2, 
@@ -186,58 +186,17 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
   const endSurah = SURAH_LIST.find(s => s.number === selectedEndSurahNumber) || startSurah;
   const isMultiSurah = selectedStartSurahNumber !== selectedEndSurahNumber;
 
-  const availableClasses = useMemo(() => {
-    if (activeTab === 'ummi') {
-      return classes.filter(c => c.level === 7 || c.name.startsWith('7'));
+  const selectedStudent = students.find(s => s.id === selectedStudentId) || students[0];
+  const selectedClass = classes.find(c => c.id === selectedClassId) || classes[0];
+  const filteredStudents = students.filter(s => {
+    if (filterMode === 'halaqah' && currentTeacher) {
+      return s.teacherId === currentTeacher.id;
     }
-    return classes;
-  }, [classes, activeTab]);
-
-  const filteredStudents = useMemo(() => {
-    return students.filter(s => {
-      if (activeTab === 'ummi') {
-        const cls = classes.find(c => c.id === s.classId);
-        if (cls && (cls.level === 8 || cls.level === 9 || cls.name.startsWith('8') || cls.name.startsWith('9'))) {
-          return false;
-        }
-        if (s.classId?.includes('8') || s.classId?.includes('9')) {
-          return false;
-        }
-      }
-      if (filterMode === 'halaqah' && currentTeacher) {
-        return s.teacherId === currentTeacher.id;
-      }
-      if (filterMode === 'all') {
-        return true;
-      }
-      return !selectedClassId || s.classId === selectedClassId;
-    });
-  }, [students, activeTab, classes, filterMode, currentTeacher, selectedClassId]);
-
-  const selectedStudent = students.find(s => s.id === selectedStudentId) || filteredStudents[0] || students[0];
-  const selectedClass = classes.find(c => c.id === selectedClassId) || availableClasses[0] || classes[0];
-
-  const handleSwitchTab = (tab: 'quran' | 'ummi') => {
-    setActiveTab(tab);
-    if (tab === 'ummi') {
-      const cls = classes.find(c => c.id === selectedClassId);
-      const isGrade8Or9 = (cls && (cls.level === 8 || cls.level === 9 || cls.name.startsWith('8') || cls.name.startsWith('9'))) ||
-        selectedClassId.includes('8') || selectedClassId.includes('9');
-      if (isGrade8Or9 || !selectedClassId) {
-        const firstGrade7Class = classes.find(c => c.level === 7 || c.name.startsWith('7')) || classes[0];
-        if (firstGrade7Class) {
-          setSelectedClassId(firstGrade7Class.id);
-          const firstInClass = students.find(s => s.classId === firstGrade7Class.id);
-          if (firstInClass) {
-            setSelectedStudentId(firstInClass.id);
-            if (firstInClass.currentUmmiJilid && firstInClass.currentUmmiJilid !== '-') {
-              setUmmiJilid(firstInClass.currentUmmiJilid);
-            }
-          }
-        }
-      }
+    if (filterMode === 'all') {
+      return true;
     }
-  };
+    return !selectedClassId || s.classId === selectedClassId;
+  });
 
   // Calculate final score for Quran
   const calculateFinalQuranScore = (): number => {
@@ -564,9 +523,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
               {/* Class Selector (Active when filterMode === 'class') */}
               {filterMode === 'class' ? (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">
-                    Rombel Kelas {activeTab === 'ummi' && <span className="text-amber-700 font-bold">(Khusus Kelas 7)</span>}
-                  </label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Rombel Kelas</label>
                   <select
                     value={selectedClassId}
                     onChange={(e) => {
@@ -576,7 +533,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                     }}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
                   >
-                    {availableClasses.map(c => (
+                    {classes.map(c => (
                       <option key={c.id} value={c.id}>{c.name} ({c.grade})</option>
                     ))}
                   </select>
@@ -607,7 +564,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                   onChange={(e) => {
                     setSelectedStudentId(e.target.value);
                     const std = students.find(s => s.id === e.target.value);
-                    if (std?.currentUmmiJilid && std.currentUmmiJilid !== '-') setUmmiJilid(std.currentUmmiJilid);
+                    if (std?.currentUmmiJilid) setUmmiJilid(std.currentUmmiJilid);
                     if (std?.currentUmmiPage) setUmmiPage(std.currentUmmiPage);
                   }}
                   className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
@@ -654,13 +611,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                 </div>
                 <div className="flex items-center gap-3 text-slate-600">
                   <span>Capaian: <strong className="text-[#8C7015]">{selectedStudent.totalJuzHafal} Juz</strong></span>
-                  <span>
-                    Ummi: {selectedStudent.currentUmmiJilid && selectedStudent.currentUmmiJilid !== '-' ? (
-                      <strong className="text-slate-800">{selectedStudent.currentUmmiJilid} Hal. {selectedStudent.currentUmmiPage}</strong>
-                    ) : (
-                      <strong className="text-slate-500 font-normal italic">Tidak Ikut (Kls 8/9 Fokus Tahfizh)</strong>
-                    )}
-                  </span>
+                  <span>Ummi: <strong className="text-slate-800">{selectedStudent.currentUmmiJilid} Hal. {selectedStudent.currentUmmiPage}</strong></span>
                 </div>
               </div>
             )}
@@ -669,8 +620,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
           {/* Step 2: Tab Switcher (Quran vs Ummi) */}
           <div className="flex items-center border-b border-slate-200">
             <button
-              type="button"
-              onClick={() => handleSwitchTab('quran')}
+              onClick={() => setActiveTab('quran')}
               className={`flex-1 py-3 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition cursor-pointer ${
                 activeTab === 'quran'
                   ? 'border-[#D4AF37] text-slate-900 bg-[#D4AF37]/10'
@@ -681,8 +631,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
               Hafalan Al-Qur'an (Ziyadah / Murojaah / Tasmi')
             </button>
             <button
-              type="button"
-              onClick={() => handleSwitchTab('ummi')}
+              onClick={() => setActiveTab('ummi')}
               className={`flex-1 py-3 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition cursor-pointer ${
                 activeTab === 'ummi'
                   ? 'border-[#1E293B] text-slate-900 bg-slate-100'
@@ -690,22 +639,9 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
               }`}
             >
               <BookMarked className="w-4 h-4 text-[#1E293B]" />
-              <span>Pembelajaran Metode Ummi</span>
-              <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 font-bold px-1.5 py-0.2 rounded">
-                Khusus Kelas 7
-              </span>
+              Pembelajaran Metode Ummi Dewasa (Jilid 1-3)
             </button>
           </div>
-
-          {/* Ummi Notice */}
-          {activeTab === 'ummi' && (
-            <div className="p-3 bg-amber-50/90 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-amber-700" />
-              <span>
-                <strong>Ketentuan Tahun Ini:</strong> Kelas 8 dan 9 tidak mengikuti pembelajaran UMMI dan dialihkan fokus penuh pada Tahfizh Al-Qur'an. Pilihan rombel di atas hanya menampilkan Kelas 7.
-              </span>
-            </div>
-          )}
 
           {/* TAB 1: FORM HAFALAN AL-QUR'AN */}
           {activeTab === 'quran' && (

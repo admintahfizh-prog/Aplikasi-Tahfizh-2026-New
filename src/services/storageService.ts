@@ -1215,28 +1215,12 @@ export const storageService = {
   // Students
   getStudents(): Student[] {
     const list = getItem(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
-    const classes = getItem<ClassItem[]>(STORAGE_KEYS.CLASSES, INITIAL_CLASSES);
     let modified = false;
     const sanitized = list.map(s => {
       let updatedJilid = s.currentUmmiJilid;
-      let updatedPage = s.currentUmmiPage;
-
-      // Siswa kelas 8 dan 9 TIDAK mengikuti pembelajaran Ummi pada tahun ajaran ini
-      const cls = classes.find(c => c.id === s.classId);
-      const isGrade8Or9 = (cls && (cls.level === 8 || cls.level === 9 || cls.name.startsWith('8') || cls.name.startsWith('9'))) ||
-        s.classId.includes('8') || s.classId.includes('9');
-
-      if (isGrade8Or9) {
-        if (updatedJilid !== '-' && updatedJilid !== undefined) {
-          updatedJilid = '-';
-          updatedPage = 0;
-          modified = true;
-        }
-      } else {
-        if (s.currentUmmiJilid === 'Jilid 4') updatedJilid = 'Jilid 2';
-        else if (s.currentUmmiJilid === 'Jilid 5') updatedJilid = 'Jilid 2';
-        else if (s.currentUmmiJilid === 'Jilid 6') updatedJilid = 'Jilid 3';
-      }
+      if (s.currentUmmiJilid === 'Jilid 4') updatedJilid = 'Jilid 2';
+      else if (s.currentUmmiJilid === 'Jilid 5') updatedJilid = 'Jilid 2';
+      else if (s.currentUmmiJilid === 'Jilid 6') updatedJilid = 'Jilid 3';
 
       let updatedPhoto = s.photo;
       if (updatedPhoto && updatedPhoto.includes('unsplash')) {
@@ -1244,9 +1228,9 @@ export const storageService = {
         modified = true;
       }
 
-      if (updatedJilid !== s.currentUmmiJilid || updatedPage !== s.currentUmmiPage || updatedPhoto !== s.photo) {
+      if (updatedJilid !== s.currentUmmiJilid || updatedPhoto !== s.photo) {
         modified = true;
-        return { ...s, currentUmmiJilid: updatedJilid || '-', currentUmmiPage: updatedPage || 0, photo: updatedPhoto || '' };
+        return { ...s, currentUmmiJilid: updatedJilid, photo: updatedPhoto || '' };
       }
       return s;
     });

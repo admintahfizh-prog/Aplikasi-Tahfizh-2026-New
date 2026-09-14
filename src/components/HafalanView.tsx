@@ -285,30 +285,24 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
             </span>
           </button>
         </div>
-      </div>
 
-      {/* Class Navigator Bar - Tampilkan Semua Kelas Langsung Tanpa Geser ke Kanan */}
-      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-bold text-slate-700 mr-1 flex items-center gap-1.5">
-            <Layers className="w-3.5 h-3.5 text-[#D4AF37]" />
-            <span>Pilih Kelas:</span>
-          </span>
+        {/* Quick Class Selector Bar */}
+        <div className="flex items-center gap-1.5 overflow-x-auto py-1">
           <button
             onClick={() => setSelectedClassFilter('')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer shrink-0 ${
               selectedClassFilter === '' 
-                ? 'bg-[#1E293B] text-white shadow-xs font-black' 
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                ? 'bg-slate-900 text-white' 
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            Tampilkan Semua Kelas ({classes.length} Rombel)
+            Semua Kelas
           </button>
           {classes.map(c => (
             <button
               key={c.id}
               onClick={() => setSelectedClassFilter(selectedClassFilter === c.id ? '' : c.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer shrink-0 ${
                 selectedClassFilter === c.id
                   ? 'bg-[#D4AF37] text-slate-950 font-black shadow-2xs'
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'

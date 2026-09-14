@@ -273,35 +273,37 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
       {/* Filter and Class Navigator Toolbar */}
       <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs space-y-3">
         
-        {/* Class Selection Pills - Tampilkan Semua Kelas Langsung Tanpa Geser ke Kanan */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-bold text-slate-700 mr-1 flex items-center gap-1.5">
-            <Layers className="w-3.5 h-3.5 text-[#D4AF37]" />
-            <span>Pilih Kelas:</span>
-          </span>
-          <button
-            onClick={() => setSelectedClassFilter('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-              selectedClassFilter === 'all'
-                ? 'bg-[#1E293B] text-white shadow-xs font-black'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            Tampilkan Semua Kelas ({classes.length} Rombel)
-          </button>
-          {classes.map(c => (
+        {/* Class Selection Pills */}
+        <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-xs font-bold text-slate-700 mr-1 flex items-center gap-1">
+              <Layers className="w-3.5 h-3.5 text-[#D4AF37]" />
+              Kelas:
+            </span>
             <button
-              key={c.id}
-              onClick={() => setSelectedClassFilter(c.id)}
+              onClick={() => setSelectedClassFilter('all')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                selectedClassFilter === c.id
-                  ? 'bg-[#D4AF37] text-slate-950 font-black shadow-2xs'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                selectedClassFilter === 'all'
+                  ? 'bg-[#1E293B] text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              Kelas {c.name}
+              Tampilkan Semua Kelas ({classes.length})
             </button>
-          ))}
+            {classes.map(c => (
+              <button
+                key={c.id}
+                onClick={() => setSelectedClassFilter(c.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  selectedClassFilter === c.id
+                    ? 'bg-[#D4AF37] text-slate-950 font-black shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Kelas {c.name}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-100">
