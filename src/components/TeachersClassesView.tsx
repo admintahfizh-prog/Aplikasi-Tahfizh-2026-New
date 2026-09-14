@@ -27,7 +27,8 @@ import {
   UserPlus,
   Clock,
   MapPin,
-  FileText
+  FileText,
+  Target
 } from 'lucide-react';
 import { Teacher, ClassItem, Student, Role, User, HalaqahGroup } from '../types';
 import { storageService } from '../services/storageService';
@@ -168,6 +169,78 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
   const [teacherPasswordInput, setTeacherPasswordInput] = useState('');
   const [teacherUsernameInput, setTeacherUsernameInput] = useState('');
   const [showPassModalEye, setShowPassModalEye] = useState(false);
+
+  // Halaqah Target Modal State (Input Target di Menu Halaqah)
+  const [showHalaqahTargetModal, setShowHalaqahTargetModal] = useState(false);
+  const [targetGroup, setTargetGroup] = useState<HalaqahGroup | null>(null);
+  const [targetStudentId, setTargetStudentId] = useState<string>('all');
+  const [halaqahTargetForm, setHalaqahTargetForm] = useState<{
+    targetType: 'Tahunan' | 'Semester' | 'Bulanan';
+    targetJuz: number;
+    deadline: string;
+  }>({
+    targetType: 'Tahunan',
+    targetJuz: 4.0,
+    deadline: '2026-12-31'
+  });
+  const [targetSaveSuccess, setTargetSaveSuccess] = useState<string | null>(null);
+
+  const handleOpenTargetModalForHalaqah = (group: HalaqahGroup, preselectedStudentId: string = 'all') => {
+    setTargetGroup(group);
+    setTargetStudentId(preselectedStudentId);
+    setHalaqahTargetForm({
+      targetType: 'Tahunan',
+      targetJuz: 4.0,
+      deadline: '2026-12-31'
+    });
+    setTargetSaveSuccess(null);
+    setShowHalaqahTargetModal(true);
+  };
+
+  const handleSaveHalaqahTarget = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetGroup) return;
+
+    const studentIdsToApply = targetStudentId === 'all'
+      ? (targetGroup.studentIds || [])
+      : [targetStudentId];
+
+    if (studentIdsToApply.length === 0) {
+      alert('Tidak ada santri yang dipilih untuk diterapkan target.');
+      return;
+    }
+
+    const existingTargets = storageService.getTargets();
+
+    studentIdsToApply.forEach(stdId => {
+      const std = students.find(s => s.id === stdId);
+      const achievedJuz = std?.totalJuzHafal || 0;
+      const percentage = Math.min(100, Math.round((achievedJuz / halaqahTargetForm.targetJuz) * 100));
+      const remainingJuz = Math.max(0, Number((halaqahTargetForm.targetJuz - achievedJuz).toFixed(1)));
+      const status = percentage >= 70 ? 'on-track' : percentage >= 40 ? 'needs-attention' : 'behind';
+
+      const existing = existingTargets.find(t => t.studentId === stdId);
+      const newTargetItem: any = {
+        id: existing?.id || 'target-' + Date.now() + '-' + stdId,
+        studentId: stdId,
+        targetType: halaqahTargetForm.targetType,
+        targetJuz: Number(halaqahTargetForm.targetJuz),
+        achievedJuz,
+        percentage,
+        remainingJuz,
+        deadline: halaqahTargetForm.deadline,
+        status
+      };
+      storageService.saveTarget(newTargetItem);
+    });
+
+    onRefreshData();
+    setTargetSaveSuccess(`Target ${halaqahTargetForm.targetJuz} Juz berhasil disimpan untuk ${studentIdsToApply.length} santri!`);
+    setTimeout(() => {
+      setShowHalaqahTargetModal(false);
+      setTargetSaveSuccess(null);
+    }, 1200);
+  };
 
   const handleOpenTeacherPasswordModal = (teacher: Teacher) => {
     let u = storageService.getUserByTeacherId(teacher.id);
@@ -1094,6 +1167,16 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
                                                 {canManageGroup(group) && (
                                                   <button
                                                     type="button"
+                                                    onClick={() => handleOpenTargetModalForHalaqah(group, std.id)}
+                                                    className="p-1 text-[#D4AF37] hover:text-slate-900 rounded transition cursor-pointer"
+                                                    title={`Atur Target Hafalan untuk ${std.name}`}
+                                                  >
+                                                    <Target className="w-3.5 h-3.5" />
+                                                  </button>
+                                                )}
+                                                {canManageGroup(group) && (
+                                                  <button
+                                                    type="button"
                                                     onClick={(e) => {
                                                       e.stopPropagation();
                                                       handleQuickRemoveStudentFromGroup(group.id, std.id);
@@ -1125,6 +1208,19 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
                                     )}
                                   </div>
                                 </div>
+
+                                {/* Quick Target Button for entire halaqah */}
+                                {canManageGroup(group) && groupStudents.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenTargetModalForHalaqah(group, 'all')}
+                                    className="w-full py-1.5 px-3 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-2xs"
+                                    title="Atur Target Hafalan untuk seluruh santri di halaqah ini"
+                                  >
+                                    <Target className="w-3.5 h-3.5 text-[#D4AF37]" />
+                                    <span>Input Target Halaqah</span>
+                                  </button>
+                                )}
 
                                 {/* Card Actions */}
                                 {canManageGroup(group) && (
@@ -1962,6 +2058,166 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL INPUT & ATUR TARGET HALAQAH */}
+      {showHalaqahTargetModal && targetGroup && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200">
+            <div className="flex justify-between items-center pb-3 border-b border-slate-200">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-[#D4AF37]">
+                  <Target className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">
+                    Atur Target Hafalan Halaqah
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Kelompok: <strong className="text-slate-800">{targetGroup.name}</strong>
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowHalaqahTargetModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {targetSaveSuccess ? (
+              <div className="p-6 bg-emerald-50 rounded-xl border border-emerald-200 text-center space-y-2">
+                <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
+                <h4 className="font-bold text-emerald-950 text-sm">Berhasil Menyimpan Target!</h4>
+                <p className="text-xs text-emerald-700">{targetSaveSuccess}</p>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveHalaqahTarget} className="space-y-4 text-xs">
+                
+                {/* Pilih Sasaran: Seluruh Halaqah atau Santri Spesifik */}
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1.5">
+                    Terapkan Target Untuk:
+                  </label>
+                  <select
+                    value={targetStudentId}
+                    onChange={(e) => setTargetStudentId(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-bold focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                  >
+                    <option value="all">
+                      👥 Seluruh Santri di Halaqah Ini ({(targetGroup.studentIds || []).length} Santri Sekaligus)
+                    </option>
+                    {(targetGroup.studentIds || []).map(sid => {
+                      const std = students.find(s => s.id === sid);
+                      const cls = classes.find(c => c.id === std?.classId);
+                      return (
+                        <option key={sid} value={sid}>
+                          👤 Santri: {std?.name || sid} ({cls?.name || 'Kelas'}) - Telah hafal: {std?.totalJuzHafal || 0} Juz
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {/* Periode & Target Juz */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">
+                      Periode Target:
+                    </label>
+                    <select
+                      value={halaqahTargetForm.targetType}
+                      onChange={(e) => setHalaqahTargetForm({ ...halaqahTargetForm, targetType: e.target.value as any })}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-medium focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                    >
+                      <option value="Tahunan">Tahunan (Standar Akademik)</option>
+                      <option value="Semester">Semester</option>
+                      <option value="Bulanan">Bulanan</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">
+                      Target Jumlah (Juz):
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      max="30"
+                      value={halaqahTargetForm.targetJuz}
+                      onChange={(e) => setHalaqahTargetForm({ ...halaqahTargetForm, targetJuz: parseFloat(e.target.value) || 1 })}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 font-bold focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Presets */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] text-slate-500 font-semibold">Pilihan Cepat Target:</span>
+                  {[1.0, 2.0, 3.0, 4.0, 5.0].map(val => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setHalaqahTargetForm(prev => ({ ...prev, targetJuz: val }))}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold border transition cursor-pointer ${
+                        halaqahTargetForm.targetJuz === val
+                          ? 'bg-[#1E293B] text-[#D4AF37] border-slate-800'
+                          : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                      }`}
+                    >
+                      {val} Juz
+                    </button>
+                  ))}
+                </div>
+
+                {/* Deadline */}
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">
+                    Tenggat Waktu (Deadline Target):
+                  </label>
+                  <input
+                    type="date"
+                    value={halaqahTargetForm.deadline}
+                    onChange={(e) => setHalaqahTargetForm({ ...halaqahTargetForm, deadline: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-medium focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                  />
+                </div>
+
+                {/* Preview Info */}
+                <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200 text-slate-600 text-[11px] space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                    <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>Sinkronisasi Otomatis ke Menu Target & Dashboard</span>
+                  </div>
+                  <p>
+                    Target ini akan otomatis terhubung ke perhitungan progres hafalan real-time santri, kartu monitoring, dan tampak di tabel target seluruh kelas.
+                  </p>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="pt-2 flex justify-end gap-2 border-t border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setShowHalaqahTargetModal(false)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-[#1E293B] hover:bg-slate-800 text-white font-bold rounded-lg shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Target className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>Terapkan Target Sekarang</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
           </div>
         </div>
       )}

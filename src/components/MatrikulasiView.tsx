@@ -682,12 +682,29 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
                       </div>
                     </div>
                     {userRole !== 'wali' && (
-                      <button
-                        onClick={() => handleOpenRecordModal(item)}
-                        className="px-2 py-1 rounded bg-[#1E293B] text-[#D4AF37] hover:bg-slate-800 text-[10px] font-bold shrink-0 transition cursor-pointer"
-                      >
-                        Input
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => handleOpenRecordModal(item)}
+                          className="px-2 py-1 rounded bg-[#1E293B] text-[#D4AF37] hover:bg-slate-800 text-[10px] font-bold transition cursor-pointer"
+                          title="Input Sesi Bimbingan"
+                        >
+                          Input
+                        </button>
+                        <button
+                          onClick={() => handleOpenEditStudentModal(item)}
+                          className="p-1 text-slate-400 hover:text-blue-600 rounded transition cursor-pointer"
+                          title="Edit Santri Matrikulasi"
+                        >
+                          <Edit className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteMatStudent(item.id, item.student?.name || '')}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
+                          title="Hapus Dari Matrikulasi"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -729,12 +746,29 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
                       </div>
                     </div>
                     {userRole !== 'wali' && (
-                      <button
-                        onClick={() => handleOpenRecordModal(item)}
-                        className="px-2 py-1 rounded bg-[#1E293B] text-[#D4AF37] hover:bg-slate-800 text-[10px] font-bold shrink-0 transition cursor-pointer"
-                      >
-                        Input
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => handleOpenRecordModal(item)}
+                          className="px-2 py-1 rounded bg-[#1E293B] text-[#D4AF37] hover:bg-slate-800 text-[10px] font-bold transition cursor-pointer"
+                          title="Input Sesi Bimbingan"
+                        >
+                          Input
+                        </button>
+                        <button
+                          onClick={() => handleOpenEditStudentModal(item)}
+                          className="p-1 text-slate-400 hover:text-blue-600 rounded transition cursor-pointer"
+                          title="Edit Santri Matrikulasi"
+                        >
+                          <Edit className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteMatStudent(item.id, item.student?.name || '')}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
+                          title="Hapus Dari Matrikulasi"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -776,12 +810,29 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
                       </div>
                     </div>
                     {userRole !== 'wali' && (
-                      <button
-                        onClick={() => handleOpenRecordModal(item)}
-                        className="px-2 py-1 rounded bg-[#1E293B] text-[#D4AF37] hover:bg-slate-800 text-[10px] font-bold shrink-0 transition cursor-pointer"
-                      >
-                        Input
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => handleOpenRecordModal(item)}
+                          className="px-2 py-1 rounded bg-[#1E293B] text-[#D4AF37] hover:bg-slate-800 text-[10px] font-bold transition cursor-pointer"
+                          title="Input Sesi Bimbingan"
+                        >
+                          Input
+                        </button>
+                        <button
+                          onClick={() => handleOpenEditStudentModal(item)}
+                          className="p-1 text-slate-400 hover:text-blue-600 rounded transition cursor-pointer"
+                          title="Edit Santri Matrikulasi"
+                        >
+                          <Edit className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteMatStudent(item.id, item.student?.name || '')}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
+                          title="Hapus Dari Matrikulasi"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}

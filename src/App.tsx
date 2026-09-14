@@ -43,14 +43,54 @@ export default function App() {
     return storageService.getCurrentUser();
   });
 
-  // Navigation State
-  const [currentView, setCurrentView] = useState<string>('dashboard');
-  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  // Navigation State with localStorage persistence
+  const [currentView, setCurrentView] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('tahfizh_active_view');
+      const user = storageService.getCurrentUser();
+      if (user?.role === 'wali') {
+        const allowedWaliViews = ['parent-portal', 'hafalan', 'ummi', 'reports', 'matrikulasi', 'violations', 'student-detail'];
+        if (saved && allowedWaliViews.includes(saved)) return saved;
+        return 'parent-portal';
+      }
+      if (saved) return saved;
+    } catch (e) {}
+    return 'dashboard';
+  });
 
-  // Modal State
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('tahfizh_selected_student_id') || null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  // Modal & Edit State
   const [isDailyInputOpen, setIsDailyInputOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [prefilledStudentId, setPrefilledStudentId] = useState<string | undefined>(undefined);
+  const [editingMemorizationRecord, setEditingMemorizationRecord] = useState<MemorizationRecord | null>(null);
+  const [editingUmmiRecord, setEditingUmmiRecord] = useState<UmmiRecord | null>(null);
+
+  // Synchronize navigation view to localStorage
+  useEffect(() => {
+    try {
+      if (currentView) {
+        localStorage.setItem('tahfizh_active_view', currentView);
+      }
+    } catch (e) {}
+  }, [currentView]);
+
+  useEffect(() => {
+    try {
+      if (selectedStudentId) {
+        localStorage.setItem('tahfizh_selected_student_id', selectedStudentId);
+      } else {
+        localStorage.removeItem('tahfizh_selected_student_id');
+      }
+    } catch (e) {}
+  }, [selectedStudentId]);
 
   // Data Store States
   const [students, setStudents] = useState<Student[]>(() => storageService.getStudents());
@@ -119,8 +159,38 @@ export default function App() {
   };
 
   const handleOpenDailyInput = (studentId?: string) => {
+    setEditingMemorizationRecord(null);
+    setEditingUmmiRecord(null);
     setPrefilledStudentId(studentId);
     setIsDailyInputOpen(true);
+  };
+
+  const handleEditMemorization = (record: MemorizationRecord) => {
+    setEditingMemorizationRecord(record);
+    setEditingUmmiRecord(null);
+    setPrefilledStudentId(record.studentId);
+    setIsDailyInputOpen(true);
+  };
+
+  const handleEditUmmi = (record: UmmiRecord) => {
+    setEditingUmmiRecord(record);
+    setEditingMemorizationRecord(null);
+    setPrefilledStudentId(record.studentId);
+    setIsDailyInputOpen(true);
+  };
+
+  const handleDeleteMemorization = (id: string) => {
+    if (window.confirm('Apakah Anda yakin ingin menghapus data capaian hafalan ini?')) {
+      storageService.deleteMemorizationRecord(id);
+      loadAllData();
+    }
+  };
+
+  const handleDeleteUmmi = (id: string) => {
+    if (window.confirm('Apakah Anda yakin ingin menghapus data capaian Ummi ini?')) {
+      storageService.deleteUmmiRecord(id);
+      loadAllData();
+    }
   };
 
   // Determine accessible students for privacy:
@@ -142,11 +212,12 @@ export default function App() {
   const viewViolations = isWali ? violations.filter(v => accessibleStudentIds.has(v.studentId)) : violations;
   const viewMatrikulasiStudents = isWali ? matrikulasiStudents.filter(m => accessibleStudentIds.has(m.studentId)) : matrikulasiStudents;
   const viewMatrikulasiRecords = isWali ? matrikulasiRecords.filter(m => accessibleStudentIds.has(m.studentId)) : matrikulasiRecords;
+  const viewTargets = isWali ? targets.filter(t => accessibleStudentIds.has(t.studentId)) : targets;
 
   // Enforce view protection: Wali users can only access their allowed personal views
   useEffect(() => {
     if (isWali) {
-      const allowedWaliViews = ['parent-portal', 'hafalan', 'ummi', 'matrikulasi', 'violations', 'pelanggaran', 'reports', 'student-detail'];
+      const allowedWaliViews = ['parent-portal', 'hafalan', 'ummi', 'matrikulasi', 'violations', 'pelanggaran', 'reports', 'targets', 'student-detail'];
       if (!allowedWaliViews.includes(currentView)) {
         setCurrentView('parent-portal');
       }
@@ -267,9 +338,11 @@ export default function App() {
               teachers={teachers}
               classes={classes}
               userRole={currentUser.role}
-              onOpenDailyInput={() => handleOpenDailyInput()}
+              onOpenDailyInput={(studentId) => handleOpenDailyInput(studentId)}
               onRefreshData={loadAllData}
               onOpenStudentDetail={handleOpenStudentDetail}
+              onEditRecord={handleEditMemorization}
+              onDeleteRecord={handleDeleteMemorization}
             />
           )}
 
@@ -281,9 +354,11 @@ export default function App() {
               teachers={teachers}
               classes={classes}
               userRole={currentUser.role}
-              onOpenDailyInput={() => handleOpenDailyInput()}
+              onOpenDailyInput={(studentId) => handleOpenDailyInput(studentId)}
               onRefreshData={loadAllData}
               onOpenStudentDetail={handleOpenStudentDetail}
+              onEditRecord={handleEditUmmi}
+              onDeleteRecord={handleDeleteUmmi}
             />
           )}
 
@@ -329,8 +404,8 @@ export default function App() {
           {/* VIEW: TARGETS & CAPAIAN */}
           {currentView === 'targets' && (
             <TargetsView
-              targets={targets}
-              students={students}
+              targets={viewTargets}
+              students={viewStudents}
               classes={classes}
               userRole={currentUser.role}
               onRefreshData={loadAllData}
@@ -408,10 +483,14 @@ export default function App() {
         onClose={() => {
           setIsDailyInputOpen(false);
           setPrefilledStudentId(undefined);
+          setEditingMemorizationRecord(null);
+          setEditingUmmiRecord(null);
         }}
         students={students}
         classes={classes}
         allTeachers={teachers}
+        editRecord={editingMemorizationRecord}
+        editUmmiRecord={editingUmmiRecord}
         currentTeacher={
           teachers.find(t => 
             (currentUser?.teacherId && t.id === currentUser.teacherId) || 
@@ -423,8 +502,16 @@ export default function App() {
           storageService.addMemorizationRecord(record);
           loadAllData();
         }}
+        onUpdateMemorization={(record) => {
+          storageService.updateMemorizationRecord(record);
+          loadAllData();
+        }}
         onSaveUmmi={(record) => {
           storageService.addUmmiRecord(record);
+          loadAllData();
+        }}
+        onUpdateUmmi={(record) => {
+          storageService.updateUmmiRecord(record);
           loadAllData();
         }}
         preSelectedStudentId={prefilledStudentId}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, 
   CheckCircle2, 
@@ -12,7 +12,9 @@ import {
   ChevronRight,
   ShieldAlert,
   Flame,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Info,
+  Edit3
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -36,6 +38,12 @@ import {
   calculateCategory 
 } from '../data/quranData';
 import { UMMI_JILIDS, UMMI_SYLLABUS } from '../data/ummiData';
+import { 
+  GRADE_CONVERSION_TABLE, 
+  getGradeFromScore, 
+  getGradeFromLetter, 
+  GradeLetter 
+} from '../utils/gradeConversion';
 import { AvatarBadge } from './AvatarBadge';
 
 interface DailyInputModalProps {
@@ -46,10 +54,15 @@ interface DailyInputModalProps {
   currentTeacher?: Teacher;
   allTeachers?: Teacher[];
   onSaveMemorization?: (record: MemorizationRecord) => void;
+  onUpdateMemorization?: (record: MemorizationRecord) => void;
   onSaveUmmi?: (record: UmmiRecord) => void;
+  onUpdateUmmi?: (record: UmmiRecord) => void;
   preSelectedStudentId?: string;
   initialStudentId?: string;
   onSaveSuccess?: () => void;
+  editRecord?: MemorizationRecord | null;
+  editUmmiRecord?: UmmiRecord | null;
+  defaultTab?: 'quran' | 'ummi';
 }
 
 export const DailyInputModal: React.FC<DailyInputModalProps> = ({
@@ -60,13 +73,22 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
   currentTeacher,
   allTeachers = [],
   onSaveMemorization,
+  onUpdateMemorization,
   onSaveUmmi,
+  onUpdateUmmi,
   preSelectedStudentId,
   initialStudentId,
-  onSaveSuccess
+  onSaveSuccess,
+  editRecord = null,
+  editUmmiRecord = null,
+  defaultTab = 'quran'
 }) => {
   // Mode: 'quran' | 'ummi'
-  const [activeTab, setActiveTab] = useState<'quran' | 'ummi'>('quran');
+  const [activeTab, setActiveTab] = useState<'quran' | 'ummi'>(() => {
+    if (editUmmiRecord) return 'ummi';
+    if (editRecord) return 'quran';
+    return defaultTab;
+  });
 
   const effectiveInitialStudentId = preSelectedStudentId || initialStudentId;
 
@@ -104,13 +126,46 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
   const [ummiScore, setUmmiScore] = useState<number>(88);
   const [ummiNotes, setUmmiNotes] = useState<string>('Lancar dan memahami kaidah dengan baik.');
 
+  // Grade Guide Modal
+  const [showGradeGuide, setShowGradeGuide] = useState<boolean>(false);
+
   // Verification Modal Step
   const [showVerificationModal, setShowVerificationModal] = useState<boolean>(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  // Sync preSelectedStudent
+  // Sync state when editRecord or editUmmiRecord changes
   useEffect(() => {
-    if (preSelectedStudentId) {
+    if (editRecord) {
+      setActiveTab('quran');
+      setSelectedStudentId(editRecord.studentId);
+      setRecordDate(editRecord.date);
+      setSelectedStartSurahNumber(editRecord.surahNumber);
+      setSelectedEndSurahNumber(editRecord.endSurahNumber || editRecord.surahNumber);
+      setStartAyah(editRecord.startAyah);
+      setEndAyah(editRecord.endAyah);
+      setSetoranType(editRecord.type);
+      if (editRecord.scores) {
+        setScores(editRecord.scores);
+      }
+      setNotes(editRecord.notes || '');
+      if (editRecord.tasmiHalamanCount) {
+        setTasmiHalaman(editRecord.tasmiHalamanCount);
+      }
+      const std = students.find(s => s.id === editRecord.studentId);
+      if (std) setSelectedClassId(std.classId);
+    } else if (editUmmiRecord) {
+      setActiveTab('ummi');
+      setSelectedStudentId(editUmmiRecord.studentId);
+      setRecordDate(editUmmiRecord.date);
+      setUmmiJilid(editUmmiRecord.jilid);
+      setUmmiPage(editUmmiRecord.page);
+      setUmmiMaterial(editUmmiRecord.materialName);
+      setUmmiScore(editUmmiRecord.score);
+      setUmmiStatus(editUmmiRecord.status);
+      setUmmiNotes(editUmmiRecord.notes || '');
+      const std = students.find(s => s.id === editUmmiRecord.studentId);
+      if (std) setSelectedClassId(std.classId);
+    } else if (preSelectedStudentId) {
       setSelectedStudentId(preSelectedStudentId);
       const std = students.find(s => s.id === preSelectedStudentId);
       if (std) {
@@ -123,7 +178,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
         }
       }
     }
-  }, [preSelectedStudentId, students]);
+  }, [editRecord, editUmmiRecord, preSelectedStudentId, students]);
 
   if (!isOpen) return null;
 
@@ -131,17 +186,58 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
   const endSurah = SURAH_LIST.find(s => s.number === selectedEndSurahNumber) || startSurah;
   const isMultiSurah = selectedStartSurahNumber !== selectedEndSurahNumber;
 
-  const selectedStudent = students.find(s => s.id === selectedStudentId) || students[0];
-  const selectedClass = classes.find(c => c.id === selectedClassId) || classes[0];
-  const filteredStudents = students.filter(s => {
-    if (filterMode === 'halaqah' && currentTeacher) {
-      return s.teacherId === currentTeacher.id;
+  const availableClasses = useMemo(() => {
+    if (activeTab === 'ummi') {
+      return classes.filter(c => c.level === 7 || c.name.startsWith('7'));
     }
-    if (filterMode === 'all') {
-      return true;
+    return classes;
+  }, [classes, activeTab]);
+
+  const filteredStudents = useMemo(() => {
+    return students.filter(s => {
+      if (activeTab === 'ummi') {
+        const cls = classes.find(c => c.id === s.classId);
+        if (cls && (cls.level === 8 || cls.level === 9 || cls.name.startsWith('8') || cls.name.startsWith('9'))) {
+          return false;
+        }
+        if (s.classId?.includes('8') || s.classId?.includes('9')) {
+          return false;
+        }
+      }
+      if (filterMode === 'halaqah' && currentTeacher) {
+        return s.teacherId === currentTeacher.id;
+      }
+      if (filterMode === 'all') {
+        return true;
+      }
+      return !selectedClassId || s.classId === selectedClassId;
+    });
+  }, [students, activeTab, classes, filterMode, currentTeacher, selectedClassId]);
+
+  const selectedStudent = students.find(s => s.id === selectedStudentId) || filteredStudents[0] || students[0];
+  const selectedClass = classes.find(c => c.id === selectedClassId) || availableClasses[0] || classes[0];
+
+  const handleSwitchTab = (tab: 'quran' | 'ummi') => {
+    setActiveTab(tab);
+    if (tab === 'ummi') {
+      const cls = classes.find(c => c.id === selectedClassId);
+      const isGrade8Or9 = (cls && (cls.level === 8 || cls.level === 9 || cls.name.startsWith('8') || cls.name.startsWith('9'))) ||
+        selectedClassId.includes('8') || selectedClassId.includes('9');
+      if (isGrade8Or9 || !selectedClassId) {
+        const firstGrade7Class = classes.find(c => c.level === 7 || c.name.startsWith('7')) || classes[0];
+        if (firstGrade7Class) {
+          setSelectedClassId(firstGrade7Class.id);
+          const firstInClass = students.find(s => s.classId === firstGrade7Class.id);
+          if (firstInClass) {
+            setSelectedStudentId(firstInClass.id);
+            if (firstInClass.currentUmmiJilid && firstInClass.currentUmmiJilid !== '-') {
+              setUmmiJilid(firstInClass.currentUmmiJilid);
+            }
+          }
+        }
+      }
     }
-    return !selectedClassId || s.classId === selectedClassId;
-  });
+  };
 
   // Calculate final score for Quran
   const calculateFinalQuranScore = (): number => {
@@ -272,46 +368,78 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
     const teacherId = currentTeacher?.id || selectedStudent?.teacherId || allTeachers[0]?.id || 't-1';
 
     if (activeTab === 'quran') {
-      const newRecord: MemorizationRecord = {
-        id: 'rec-' + Date.now(),
-        studentId: selectedStudent.id,
-        teacherId: teacherId,
-        date: recordDate,
-        juz: startSurah.juzNumber,
-        surahNumber: startSurah.number,
-        surahName: startSurah.name,
-        startAyah: Number(startAyah),
-        endSurahNumber: endSurah.number,
-        endSurahName: endSurah.name,
-        endAyah: Number(endAyah),
-        totalAyah: totalAyahCalculated,
-        type: setoranType,
-        scores: { ...scores },
-        finalScore: finalQuranScore,
-        category: scoreCategory,
-        notes: notes.trim(),
-        verified: true,
-        tasmiHalamanCount: setoranType === 'Tasmi\'' ? tasmiHalaman : undefined
-      };
-
-      if (onSaveMemorization) {
+      if (editRecord && onUpdateMemorization) {
+        const updatedRecord: MemorizationRecord = {
+          ...editRecord,
+          studentId: selectedStudent.id,
+          date: recordDate,
+          juz: startSurah.juzNumber,
+          surahNumber: startSurah.number,
+          surahName: startSurah.name,
+          startAyah: Number(startAyah),
+          endSurahNumber: endSurah.number,
+          endSurahName: endSurah.name,
+          endAyah: Number(endAyah),
+          totalAyah: totalAyahCalculated,
+          type: setoranType,
+          scores: { ...scores },
+          finalScore: finalQuranScore,
+          category: scoreCategory,
+          notes: notes.trim(),
+          tasmiHalamanCount: setoranType === 'Tasmi\'' ? tasmiHalaman : undefined
+        };
+        onUpdateMemorization(updatedRecord);
+      } else if (onSaveMemorization) {
+        const newRecord: MemorizationRecord = {
+          id: 'rec-' + Date.now(),
+          studentId: selectedStudent.id,
+          teacherId: teacherId,
+          date: recordDate,
+          juz: startSurah.juzNumber,
+          surahNumber: startSurah.number,
+          surahName: startSurah.name,
+          startAyah: Number(startAyah),
+          endSurahNumber: endSurah.number,
+          endSurahName: endSurah.name,
+          endAyah: Number(endAyah),
+          totalAyah: totalAyahCalculated,
+          type: setoranType,
+          scores: { ...scores },
+          finalScore: finalQuranScore,
+          category: scoreCategory,
+          notes: notes.trim(),
+          verified: true,
+          tasmiHalamanCount: setoranType === 'Tasmi\'' ? tasmiHalaman : undefined
+        };
         onSaveMemorization(newRecord);
       }
     } else {
-      const newUmmiRecord: UmmiRecord = {
-        id: 'ummi-' + Date.now(),
-        studentId: selectedStudent.id,
-        teacherId: teacherId,
-        date: recordDate,
-        jilid: ummiJilid,
-        page: Number(ummiPage),
-        materialName: ummiMaterial.trim(),
-        score: Number(ummiScore),
-        status: ummiStatus,
-        notes: ummiNotes.trim()
-      };
-
-      if (onSaveUmmi) {
+      if (editUmmiRecord && onUpdateUmmi) {
+        const updatedUmmiRecord: UmmiRecord = {
+          ...editUmmiRecord,
+          studentId: selectedStudent.id,
+          date: recordDate,
+          jilid: ummiJilid,
+          page: Number(ummiPage),
+          materialName: ummiMaterial.trim(),
+          score: Number(ummiScore),
+          status: ummiStatus,
+          notes: ummiNotes.trim()
+        };
+        onUpdateUmmi(updatedUmmiRecord);
+      } else if (onSaveUmmi) {
+        const newUmmiRecord: UmmiRecord = {
+          id: 'ummi-' + Date.now(),
+          studentId: selectedStudent.id,
+          teacherId: teacherId,
+          date: recordDate,
+          jilid: ummiJilid,
+          page: Number(ummiPage),
+          materialName: ummiMaterial.trim(),
+          score: Number(ummiScore),
+          status: ummiStatus,
+          notes: ummiNotes.trim()
+        };
         onSaveUmmi(newUmmiRecord);
       }
     }
@@ -436,7 +564,9 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
               {/* Class Selector (Active when filterMode === 'class') */}
               {filterMode === 'class' ? (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Rombel Kelas</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    Rombel Kelas {activeTab === 'ummi' && <span className="text-amber-700 font-bold">(Khusus Kelas 7)</span>}
+                  </label>
                   <select
                     value={selectedClassId}
                     onChange={(e) => {
@@ -446,7 +576,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                     }}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
                   >
-                    {classes.map(c => (
+                    {availableClasses.map(c => (
                       <option key={c.id} value={c.id}>{c.name} ({c.grade})</option>
                     ))}
                   </select>
@@ -477,7 +607,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                   onChange={(e) => {
                     setSelectedStudentId(e.target.value);
                     const std = students.find(s => s.id === e.target.value);
-                    if (std?.currentUmmiJilid) setUmmiJilid(std.currentUmmiJilid);
+                    if (std?.currentUmmiJilid && std.currentUmmiJilid !== '-') setUmmiJilid(std.currentUmmiJilid);
                     if (std?.currentUmmiPage) setUmmiPage(std.currentUmmiPage);
                   }}
                   className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
@@ -524,7 +654,13 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                 </div>
                 <div className="flex items-center gap-3 text-slate-600">
                   <span>Capaian: <strong className="text-[#8C7015]">{selectedStudent.totalJuzHafal} Juz</strong></span>
-                  <span>Ummi: <strong className="text-slate-800">{selectedStudent.currentUmmiJilid} Hal. {selectedStudent.currentUmmiPage}</strong></span>
+                  <span>
+                    Ummi: {selectedStudent.currentUmmiJilid && selectedStudent.currentUmmiJilid !== '-' ? (
+                      <strong className="text-slate-800">{selectedStudent.currentUmmiJilid} Hal. {selectedStudent.currentUmmiPage}</strong>
+                    ) : (
+                      <strong className="text-slate-500 font-normal italic">Tidak Ikut (Kls 8/9 Fokus Tahfizh)</strong>
+                    )}
+                  </span>
                 </div>
               </div>
             )}
@@ -533,7 +669,8 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
           {/* Step 2: Tab Switcher (Quran vs Ummi) */}
           <div className="flex items-center border-b border-slate-200">
             <button
-              onClick={() => setActiveTab('quran')}
+              type="button"
+              onClick={() => handleSwitchTab('quran')}
               className={`flex-1 py-3 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition cursor-pointer ${
                 activeTab === 'quran'
                   ? 'border-[#D4AF37] text-slate-900 bg-[#D4AF37]/10'
@@ -544,7 +681,8 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
               Hafalan Al-Qur'an (Ziyadah / Murojaah / Tasmi')
             </button>
             <button
-              onClick={() => setActiveTab('ummi')}
+              type="button"
+              onClick={() => handleSwitchTab('ummi')}
               className={`flex-1 py-3 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition cursor-pointer ${
                 activeTab === 'ummi'
                   ? 'border-[#1E293B] text-slate-900 bg-slate-100'
@@ -552,9 +690,22 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
               }`}
             >
               <BookMarked className="w-4 h-4 text-[#1E293B]" />
-              Pembelajaran Metode Ummi Dewasa (Jilid 1-3)
+              <span>Pembelajaran Metode Ummi</span>
+              <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 font-bold px-1.5 py-0.2 rounded">
+                Khusus Kelas 7
+              </span>
             </button>
           </div>
+
+          {/* Ummi Notice */}
+          {activeTab === 'ummi' && (
+            <div className="p-3 bg-amber-50/90 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-amber-700" />
+              <span>
+                <strong>Ketentuan Tahun Ini:</strong> Kelas 8 dan 9 tidak mengikuti pembelajaran UMMI dan dialihkan fokus penuh pada Tahfizh Al-Qur'an. Pilihan rombel di atas hanya menampilkan Kelas 7.
+              </span>
+            </div>
+          )}
 
           {/* TAB 1: FORM HAFALAN AL-QUR'AN */}
           {activeTab === 'quran' && (
@@ -837,17 +988,125 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                   ))}
                 </div>
 
+                {/* Penilaian Huruf (A, B, C, D) Standar Ummi & Tahfizh */}
+                <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Award className="w-4 h-4 text-amber-700" />
+                      <span className="text-xs font-bold text-slate-800">Skala Penilaian Huruf (A, B, C, D) Standar Ummi</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowGradeGuide(!showGradeGuide)}
+                      className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Info className="w-3.5 h-3.5" />
+                      {showGradeGuide ? 'Tutup Pedoman' : 'Lihat Pedoman Standar'}
+                    </button>
+                  </div>
+
+                  {/* Quick Grade Buttons */}
+                  <div className="grid grid-cols-3 sm:grid-cols-9 gap-1.5">
+                    {GRADE_CONVERSION_TABLE.map((item) => {
+                      const isSelected = getGradeFromScore(finalQuranScore).letter === item.letter;
+                      return (
+                        <button
+                          key={item.letter}
+                          type="button"
+                          onClick={() => handleScorePreset(item.scoreStandard)}
+                          className={`p-2 rounded-lg text-center border transition cursor-pointer flex flex-col items-center justify-center ${
+                            isSelected
+                              ? 'bg-[#1E293B] text-[#D4AF37] border-slate-900 ring-2 ring-[#D4AF37]/50 shadow-xs'
+                              : 'bg-white hover:bg-amber-100 text-slate-800 border-slate-200'
+                          }`}
+                        >
+                          <span className="text-sm font-black">{item.letter}</span>
+                          <span className="text-[10px] font-mono opacity-80">{item.scoreStandard}</span>
+                          <span className={`text-[9px] font-bold px-1 rounded mt-0.5 ${
+                            item.canAdvance ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                          }`}>
+                            {item.canAdvance ? 'Lanjut' : 'Ulangi'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Active Grade Rule Details */}
+                  {(() => {
+                    const currentGrade = getGradeFromScore(finalQuranScore);
+                    return (
+                      <div className="p-2.5 bg-white rounded-lg border border-amber-200 text-xs text-slate-700 flex items-start gap-2.5">
+                        <div className="w-8 h-8 rounded-md bg-[#1E293B] text-[#D4AF37] flex items-center justify-center font-black shrink-0 text-sm">
+                          {currentGrade.letter}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-900">
+                              Grade {currentGrade.letter} (Nilai: {finalQuranScore}) • {currentGrade.errors}
+                            </span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                              currentGrade.canAdvance ? 'bg-blue-600 text-white' : 'bg-amber-500 text-slate-900'
+                            }`}>
+                              {currentGrade.actionDescription}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+                            {currentGrade.ruleDescription}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Expandable Grade Guide Table */}
+                  {showGradeGuide && (
+                    <div className="mt-2 p-3 bg-white rounded-xl border border-slate-300 shadow-xs overflow-x-auto">
+                      <h4 className="text-xs font-bold text-slate-900 mb-2 flex items-center gap-1.5">
+                        <BookOpen className="w-4 h-4 text-emerald-700" />
+                        Daftar Konversi Nilai Pengajaran Al-Qur'an Standar Ummi
+                      </h4>
+                      <table className="w-full text-left text-[11px] border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 text-slate-700 border-b border-slate-200">
+                            <th className="p-1.5 font-bold">Huruf</th>
+                            <th className="p-1.5 font-bold">Nilai</th>
+                            <th className="p-1.5 font-bold">Salah</th>
+                            <th className="p-1.5 font-bold">Keterangan / Kaidah Penilaian</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {GRADE_CONVERSION_TABLE.map((row) => (
+                            <tr key={row.letter} className="hover:bg-slate-50">
+                              <td className="p-1.5 font-bold text-slate-900">{row.letter}</td>
+                              <td className="p-1.5 font-mono">{row.scoreRange} ({row.scoreStandard})</td>
+                              <td className="p-1.5">{row.errors}</td>
+                              <td className="p-1.5 text-slate-600">{row.ruleDescription}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p className="text-[10px] text-slate-500 mt-2 italic bg-slate-50 p-2 rounded border border-slate-200">
+                        *) Catatan: Jika siswa salah dalam membaca namun belum bisa memperbaiki atau tetap salah, maka belum bisa dinaikkan (ulangi halaman).
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 {/* Score Summary Output */}
                 <div className="mt-2 p-3 bg-[#1E293B] text-white rounded-xl flex items-center justify-between border border-slate-700">
                   <div>
-                    <p className="text-[11px] text-slate-400 font-medium">Nilai Akhir Otomatis</p>
+                    <p className="text-[11px] text-slate-400 font-medium">Nilai Akhir & Predikat Huruf</p>
                     <div className="flex items-baseline gap-2">
                       <span className="text-2xl font-black text-[#D4AF37] font-serif">{finalQuranScore}</span>
                       <span className="text-xs text-slate-400">/ 100</span>
+                      <span className="ml-2 px-2 py-0.5 rounded bg-blue-600 text-white text-xs font-black">
+                        Grade {getGradeFromScore(finalQuranScore).letter}
+                      </span>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-[11px] text-slate-400 font-medium">Kategori</p>
+                    <p className="text-[11px] text-slate-400 font-medium">Status Kategori</p>
                     <span className={`inline-block px-3 py-1 rounded-full text-xs font-extrabold ${
                       finalQuranScore >= 90 ? 'bg-[#D4AF37] text-slate-900' :
                       finalQuranScore >= 80 ? 'bg-blue-600 text-white' :
@@ -992,14 +1251,24 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                 <div className="flex justify-between items-center text-xs mb-2">
                   <span className="font-bold text-slate-800">Nilai Evaluasi Ummi (0–100)</span>
-                  <span className="text-lg font-bold text-[#8C7015]">{ummiScore}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-bold text-[#8C7015]">{ummiScore}</span>
+                    <span className="px-2 py-0.5 rounded bg-blue-600 text-white text-xs font-black">
+                      Grade {getGradeFromScore(ummiScore).letter}
+                    </span>
+                  </div>
                 </div>
                 <input
                   type="range"
                   min="50"
                   max="100"
                   value={ummiScore}
-                  onChange={(e) => setUmmiScore(Number(e.target.value))}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setUmmiScore(val);
+                    const grade = getGradeFromScore(val);
+                    setUmmiStatus(grade.canAdvance ? 'Lulus' : 'Perlu Mengulang');
+                  }}
                   className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#D4AF37]"
                 />
                 <div className="flex justify-between text-[10px] text-slate-400 mt-1">
@@ -1008,6 +1277,114 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                   <span>85 (Baik)</span>
                   <span>100 (Mumtaz)</span>
                 </div>
+              </div>
+
+              {/* Penilaian Huruf (A, B, C, D) Standar Ummi */}
+              <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Award className="w-4 h-4 text-amber-700" />
+                    <span className="text-xs font-bold text-slate-800">Skala Penilaian Huruf Metode Ummi (Buku Panduan)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowGradeGuide(!showGradeGuide)}
+                    className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Info className="w-3.5 h-3.5" />
+                    {showGradeGuide ? 'Tutup Pedoman' : 'Lihat Pedoman Standar'}
+                  </button>
+                </div>
+
+                {/* Quick Grade Buttons */}
+                <div className="grid grid-cols-3 sm:grid-cols-9 gap-1.5">
+                  {GRADE_CONVERSION_TABLE.map((item) => {
+                    const isSelected = getGradeFromScore(ummiScore).letter === item.letter;
+                    return (
+                      <button
+                        key={item.letter}
+                        type="button"
+                        onClick={() => {
+                          setUmmiScore(item.scoreStandard);
+                          setUmmiStatus(item.canAdvance ? 'Lulus' : 'Perlu Mengulang');
+                        }}
+                        className={`p-2 rounded-lg text-center border transition cursor-pointer flex flex-col items-center justify-center ${
+                          isSelected
+                            ? 'bg-[#1E293B] text-[#D4AF37] border-slate-900 ring-2 ring-[#D4AF37]/50 shadow-xs'
+                            : 'bg-white hover:bg-amber-100 text-slate-800 border-slate-200'
+                        }`}
+                      >
+                        <span className="text-sm font-black">{item.letter}</span>
+                        <span className="text-[10px] font-mono opacity-80">{item.scoreStandard}</span>
+                        <span className={`text-[9px] font-bold px-1 rounded mt-0.5 ${
+                          item.canAdvance ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                        }`}>
+                          {item.canAdvance ? 'Lanjut' : 'Ulangi'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Active Grade Rule Details */}
+                {(() => {
+                  const currentGrade = getGradeFromScore(ummiScore);
+                  return (
+                    <div className="p-2.5 bg-white rounded-lg border border-amber-200 text-xs text-slate-700 flex items-start gap-2.5">
+                      <div className="w-8 h-8 rounded-md bg-[#1E293B] text-[#D4AF37] flex items-center justify-center font-black shrink-0 text-sm">
+                        {currentGrade.letter}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900">
+                            Grade {currentGrade.letter} (Nilai: {ummiScore}) • {currentGrade.errors}
+                          </span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                            currentGrade.canAdvance ? 'bg-blue-600 text-white' : 'bg-amber-500 text-slate-900'
+                          }`}>
+                            {currentGrade.actionDescription}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+                          {currentGrade.ruleDescription}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Expandable Grade Guide Table */}
+                {showGradeGuide && (
+                  <div className="mt-2 p-3 bg-white rounded-xl border border-slate-300 shadow-xs overflow-x-auto">
+                    <h4 className="text-xs font-bold text-slate-900 mb-2 flex items-center gap-1.5">
+                      <BookOpen className="w-4 h-4 text-emerald-700" />
+                      Daftar Konversi Nilai Pengajaran Al-Qur'an Standar Ummi
+                    </h4>
+                    <table className="w-full text-left text-[11px] border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-700 border-b border-slate-200">
+                          <th className="p-1.5 font-bold">Huruf</th>
+                          <th className="p-1.5 font-bold">Nilai</th>
+                          <th className="p-1.5 font-bold">Salah</th>
+                          <th className="p-1.5 font-bold">Keterangan / Kaidah Penilaian</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {GRADE_CONVERSION_TABLE.map((row) => (
+                          <tr key={row.letter} className="hover:bg-slate-50">
+                            <td className="p-1.5 font-bold text-slate-900">{row.letter}</td>
+                            <td className="p-1.5 font-mono">{row.scoreRange} ({row.scoreStandard})</td>
+                            <td className="p-1.5">{row.errors}</td>
+                            <td className="p-1.5 text-slate-600">{row.ruleDescription}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <p className="text-[10px] text-slate-500 mt-2 italic bg-slate-50 p-2 rounded border border-slate-200">
+                      *) Catatan: Jika siswa salah dalam membaca namun belum bisa memperbaiki atau tetap salah, maka belum bisa dinaikkan (ulangi halaman).
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Ummi Notes */}
@@ -1045,7 +1422,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
               className="px-4 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs shadow-xs transition flex items-center gap-2 cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4 text-[#D4AF37]" />
-              <span>Verifikasi & Simpan Data</span>
+              <span>{editRecord || editUmmiRecord ? 'Simpan Perubahan Data' : 'Verifikasi & Simpan Data'}</span>
             </button>
           </div>
         </div>

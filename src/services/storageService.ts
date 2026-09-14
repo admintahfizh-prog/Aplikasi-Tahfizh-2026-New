@@ -1215,12 +1215,28 @@ export const storageService = {
   // Students
   getStudents(): Student[] {
     const list = getItem(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
+    const classes = getItem<ClassItem[]>(STORAGE_KEYS.CLASSES, INITIAL_CLASSES);
     let modified = false;
     const sanitized = list.map(s => {
       let updatedJilid = s.currentUmmiJilid;
-      if (s.currentUmmiJilid === 'Jilid 4') updatedJilid = 'Jilid 2';
-      else if (s.currentUmmiJilid === 'Jilid 5') updatedJilid = 'Jilid 2';
-      else if (s.currentUmmiJilid === 'Jilid 6') updatedJilid = 'Jilid 3';
+      let updatedPage = s.currentUmmiPage;
+
+      // Siswa kelas 8 dan 9 TIDAK mengikuti pembelajaran Ummi pada tahun ajaran ini
+      const cls = classes.find(c => c.id === s.classId);
+      const isGrade8Or9 = (cls && (cls.level === 8 || cls.level === 9 || cls.name.startsWith('8') || cls.name.startsWith('9'))) ||
+        s.classId.includes('8') || s.classId.includes('9');
+
+      if (isGrade8Or9) {
+        if (updatedJilid !== '-' && updatedJilid !== undefined) {
+          updatedJilid = '-';
+          updatedPage = 0;
+          modified = true;
+        }
+      } else {
+        if (s.currentUmmiJilid === 'Jilid 4') updatedJilid = 'Jilid 2';
+        else if (s.currentUmmiJilid === 'Jilid 5') updatedJilid = 'Jilid 2';
+        else if (s.currentUmmiJilid === 'Jilid 6') updatedJilid = 'Jilid 3';
+      }
 
       let updatedPhoto = s.photo;
       if (updatedPhoto && updatedPhoto.includes('unsplash')) {
@@ -1228,9 +1244,9 @@ export const storageService = {
         modified = true;
       }
 
-      if (updatedJilid !== s.currentUmmiJilid || updatedPhoto !== s.photo) {
+      if (updatedJilid !== s.currentUmmiJilid || updatedPage !== s.currentUmmiPage || updatedPhoto !== s.photo) {
         modified = true;
-        return { ...s, currentUmmiJilid: updatedJilid, photo: updatedPhoto || '' };
+        return { ...s, currentUmmiJilid: updatedJilid || '-', currentUmmiPage: updatedPage || 0, photo: updatedPhoto || '' };
       }
       return s;
     });
@@ -1450,6 +1466,39 @@ export const storageService = {
     return [headers.join(','), ...rows].join('\n');
   },
 
+  // Export all Ummi records to CSV
+  exportUmmiToCSV(): string {
+    const records = this.getUmmiRecords();
+    const students = this.getStudents();
+    const teachers = this.getTeachers();
+    const classes = this.getClasses();
+
+    const headers = ['Tanggal', 'NIS', 'Nama Santri', 'Kelas', 'Guru Pengampu', 'Jilid', 'Halaman Mulai', 'Halaman Selesai', 'Materi', 'Nilai Huruf', 'Nilai Kelancaran', 'Nilai Makhraj', 'Nilai Tajwid', 'Status Kenaikan', 'Catatan'];
+    const rows = records.map(r => {
+      const std = students.find(s => s.id === r.studentId);
+      const cls = classes.find(c => c.id === std?.classId)?.name || '-';
+      const tch = teachers.find(t => t.id === r.teacherId)?.name || '-';
+      return [
+        `"${r.date}"`,
+        `"${std?.nis || '-'}"`,
+        `"${std?.name || '-'}"`,
+        `"${cls}"`,
+        `"${tch}"`,
+        `"${r.jilid}"`,
+        r.startPage,
+        r.endPage,
+        `"${r.materialName || '-'}"`,
+        `"${r.grade || '-'}"`,
+        r.fluencyScore,
+        r.makhrajScore,
+        r.tajweedScore,
+        `"${r.isPassed ? 'Lanjut' : 'Ulang'}"`,
+        `"${(r.notes || '').replace(/"/g, '""')}"`
+      ].join(',');
+    });
+    return [headers.join(','), ...rows].join('\n');
+  },
+
   // Memorization Records
   getMemorizationRecords(): MemorizationRecord[] {
     return getItem(STORAGE_KEYS.MEMORIZATION, INITIAL_MEMORIZATION_RECORDS);
@@ -1461,44 +1510,90 @@ export const storageService = {
     syncDocToCloud('memorization_records', record.id, record);
 
     // Update Student stats
-    const student = this.getStudentById(record.studentId);
-    if (student) {
-      const studentRecords = list.filter(r => r.studentId === student.id);
-      const totalScore = studentRecords.reduce((acc, r) => acc + r.finalScore, 0);
-      const avgScore = Math.round(totalScore / studentRecords.length);
+    this.recalculateStudentMemorizationStats(record.studentId, record);
+  },
+  updateMemorizationRecord(record: MemorizationRecord): void {
+    const list = this.getMemorizationRecords();
+    const idx = list.findIndex(r => r.id === record.id);
+    if (idx >= 0) {
+      list[idx] = record;
+    } else {
+      list.unshift(record);
+    }
+    setItem(STORAGE_KEYS.MEMORIZATION, list);
+    syncDocToCloud('memorization_records', record.id, record);
 
-      const totalAyahs = studentRecords.reduce((acc, r) => acc + r.totalAyah, 0);
-      const uniqueSurahs = new Set(studentRecords.map(r => r.surahNumber)).size;
-      const approxJuz = Number(Math.min(30, (totalAyahs / 200)).toFixed(1));
-      const lastSurahText = rEndSurah(record);
+    // Recalculate stats for this student
+    this.recalculateStudentMemorizationStats(record.studentId);
+  },
+  deleteMemorizationRecord(id: string): void {
+    const list = this.getMemorizationRecords();
+    const record = list.find(r => r.id === id);
+    const studentId = record?.studentId;
 
+    const filtered = list.filter(r => r.id !== id);
+    setItem(STORAGE_KEYS.MEMORIZATION, filtered);
+    deleteDocFromCloud('memorization_records', id);
+
+    if (studentId) {
+      this.recalculateStudentMemorizationStats(studentId);
+    }
+  },
+
+  recalculateStudentMemorizationStats(studentId: string, latestRecordForNotif?: MemorizationRecord): void {
+    const student = this.getStudentById(studentId);
+    if (!student) return;
+
+    const allRecords = this.getMemorizationRecords();
+    const studentRecords = allRecords
+      .filter(r => r.studentId === student.id)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    if (studentRecords.length === 0) {
       const updatedStudent: Student = {
         ...student,
-        totalAyahHafal: totalAyahs,
-        totalSurahHafal: Math.max(student.totalSurahHafal, uniqueSurahs),
-        totalJuzHafal: Math.max(student.totalJuzHafal, approxJuz),
-        lastHafalan: lastSurahText,
-        lastHafalanDate: record.date,
-        avgScore: avgScore
+        totalAyahHafal: 0,
+        totalSurahHafal: 0,
+        totalJuzHafal: 0,
+        lastHafalan: '-',
+        lastHafalanDate: '-',
+        avgScore: 0
       };
       this.saveStudent(updatedStudent);
-      this.updateStudentTargetProgress(student.id, updatedStudent.totalJuzHafal);
+      return;
+    }
 
+    const totalScore = studentRecords.reduce((acc, r) => acc + r.finalScore, 0);
+    const avgScore = Math.round(totalScore / studentRecords.length);
+    const totalAyahs = studentRecords.reduce((acc, r) => acc + r.totalAyah, 0);
+    const uniqueSurahs = new Set(studentRecords.map(r => r.surahNumber)).size;
+    const approxJuz = Number(Math.min(30, (totalAyahs / 200)).toFixed(1));
+    const latestRec = studentRecords[0];
+    const lastSurahText = rEndSurah(latestRec);
+
+    const updatedStudent: Student = {
+      ...student,
+      totalAyahHafal: totalAyahs,
+      totalSurahHafal: Math.max(student.totalSurahHafal, uniqueSurahs),
+      totalJuzHafal: Math.max(student.totalJuzHafal, approxJuz),
+      lastHafalan: lastSurahText,
+      lastHafalanDate: latestRec.date,
+      avgScore: avgScore
+    };
+    this.saveStudent(updatedStudent);
+    this.updateStudentTargetProgress(student.id, updatedStudent.totalJuzHafal);
+
+    if (latestRecordForNotif) {
       this.addNotification({
         id: 'notif-' + Date.now(),
-        title: `Setoran ${record.type}: ${student.name}`,
-        message: `Ananda ${student.nickname || student.name} berhasil menyetorkan ${lastSurahText} dengan nilai ${record.finalScore} (${record.category}).`,
+        title: `Setoran ${latestRecordForNotif.type}: ${student.name}`,
+        message: `Ananda ${student.nickname || student.name} berhasil menyetorkan ${lastSurahText} dengan nilai ${latestRecordForNotif.finalScore} (${latestRecordForNotif.category}).`,
         date: new Date().toISOString().replace('T', ' ').slice(0, 16),
-        type: record.finalScore >= 80 ? 'success' : 'warning',
+        type: latestRecordForNotif.finalScore >= 80 ? 'success' : 'warning',
         read: false,
         studentId: student.id
       });
     }
-  },
-  deleteMemorizationRecord(id: string): void {
-    const list = this.getMemorizationRecords().filter(r => r.id !== id);
-    setItem(STORAGE_KEYS.MEMORIZATION, list);
-    deleteDocFromCloud('memorization_records', id);
   },
 
   // Ummi Records
@@ -1537,10 +1632,55 @@ export const storageService = {
       this.saveStudent(updatedStudent);
     }
   },
-  deleteUmmiRecord(id: string): void {
-    const list = this.getUmmiRecords().filter(r => r.id !== id);
+  updateUmmiRecord(record: UmmiRecord): void {
+    const list = this.getUmmiRecords();
+    const idx = list.findIndex(r => r.id === record.id);
+    if (idx >= 0) {
+      list[idx] = record;
+    } else {
+      list.unshift(record);
+    }
     setItem(STORAGE_KEYS.UMMI, list);
+    syncDocToCloud('ummi_records', record.id, record);
+
+    // Refresh latest ummi progress on student
+    const studentRecords = list
+      .filter(r => r.studentId === record.studentId)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    if (studentRecords.length > 0) {
+      const student = this.getStudentById(record.studentId);
+      if (student) {
+        const top = studentRecords[0];
+        this.saveStudent({
+          ...student,
+          currentUmmiJilid: top.jilid,
+          currentUmmiPage: top.page
+        });
+      }
+    }
+  },
+  deleteUmmiRecord(id: string): void {
+    const list = this.getUmmiRecords();
+    const record = list.find(r => r.id === id);
+    const studentId = record?.studentId;
+
+    const filtered = list.filter(r => r.id !== id);
+    setItem(STORAGE_KEYS.UMMI, filtered);
     deleteDocFromCloud('ummi_records', id);
+
+    if (studentId) {
+      const remaining = filtered
+        .filter(r => r.studentId === studentId)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const student = this.getStudentById(studentId);
+      if (student && remaining.length > 0) {
+        this.saveStudent({
+          ...student,
+          currentUmmiJilid: remaining[0].jilid,
+          currentUmmiPage: remaining[0].page
+        });
+      }
+    }
   },
 
   // Targets & Capaian
