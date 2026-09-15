@@ -30,6 +30,7 @@ import {
 import { INITIAL_MATERIALS } from '../data/ummiData';
 import { calculateCategory } from '../data/quranData';
 import { INITIAL_MATRIKULASI_STUDENTS, INITIAL_MATRIKULASI_RECORDS } from '../data/iqroData';
+import { isGrade8or9Student } from '../utils/gradeHelper';
 import { 
   db, 
   collection, 
@@ -1215,12 +1216,32 @@ export const storageService = {
   // Students
   getStudents(): Student[] {
     const list = getItem(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
+    const classes = getItem(STORAGE_KEYS.CLASSES, INITIAL_CLASSES);
     let modified = false;
     const sanitized = list.map(s => {
       let updatedJilid = s.currentUmmiJilid;
-      if (s.currentUmmiJilid === 'Jilid 4') updatedJilid = 'Jilid 2';
-      else if (s.currentUmmiJilid === 'Jilid 5') updatedJilid = 'Jilid 2';
-      else if (s.currentUmmiJilid === 'Jilid 6') updatedJilid = 'Jilid 3';
+      let updatedPage = s.currentUmmiPage;
+
+      // Kebijakan Tahun Ajaran Ini:
+      // Seluruh Kelas 8 dan 9 TIDAK mengikuti pembelajaran UMMI dan TIDAK masuk jilid Ummi.
+      // Kelas 7 tetap tidak berubah.
+      const isGrade89 = isGrade8or9Student(s, classes);
+      if (isGrade89) {
+        if (s.currentUmmiJilid !== '-' || (s.currentUmmiPage && s.currentUmmiPage > 0)) {
+          updatedJilid = '-';
+          updatedPage = 0;
+          modified = true;
+        }
+      } else {
+        // Kelas 7 atau lainnya yang mengikuti Ummi
+        if (s.id === 'std-5' && (s.currentUmmiJilid !== 'Jilid 3' || s.currentUmmiPage !== 18)) {
+          updatedJilid = 'Jilid 3';
+          updatedPage = 18;
+          modified = true;
+        } else if (s.currentUmmiJilid === 'Jilid 4') { updatedJilid = 'Jilid 2'; modified = true; }
+        else if (s.currentUmmiJilid === 'Jilid 5') { updatedJilid = 'Jilid 2'; modified = true; }
+        else if (s.currentUmmiJilid === 'Jilid 6') { updatedJilid = 'Jilid 3'; modified = true; }
+      }
 
       let updatedPhoto = s.photo;
       if (updatedPhoto && updatedPhoto.includes('unsplash')) {
@@ -1228,9 +1249,14 @@ export const storageService = {
         modified = true;
       }
 
-      if (updatedJilid !== s.currentUmmiJilid || updatedPhoto !== s.photo) {
+      if (updatedJilid !== s.currentUmmiJilid || updatedPage !== s.currentUmmiPage || updatedPhoto !== s.photo) {
         modified = true;
-        return { ...s, currentUmmiJilid: updatedJilid, photo: updatedPhoto || '' };
+        return { 
+          ...s, 
+          currentUmmiJilid: updatedJilid, 
+          currentUmmiPage: updatedPage !== undefined ? updatedPage : (isGrade89 ? 0 : 1), 
+          photo: updatedPhoto || '' 
+        };
       }
       return s;
     });
@@ -1247,14 +1273,23 @@ export const storageService = {
   },
   saveStudent(student: Student): void {
     const list = this.getStudents();
-    const idx = list.findIndex(s => s.id === student.id);
+    const classes = this.getClasses();
+    
+    // Pastikan jika santri kelas 8 atau 9 tidak masuk jilid Ummi
+    let sanitizedStudent = { ...student };
+    if (isGrade8or9Student(student, classes)) {
+      sanitizedStudent.currentUmmiJilid = '-';
+      sanitizedStudent.currentUmmiPage = 0;
+    }
+
+    const idx = list.findIndex(s => s.id === sanitizedStudent.id);
     if (idx >= 0) {
-      list[idx] = student;
+      list[idx] = sanitizedStudent;
     } else {
-      list.unshift(student);
+      list.unshift(sanitizedStudent);
     }
     setItem(STORAGE_KEYS.STUDENTS, list);
-    syncDocToCloud('students', student.id, student);
+    syncDocToCloud('students', sanitizedStudent.id, sanitizedStudent);
   },
   deleteStudent(id: string): void {
     const list = this.getStudents().filter(s => s.id !== id);
@@ -1586,6 +1621,16 @@ export const storageService = {
     let modified = false;
     const sanitized = list.map(r => {
       let updatedJilid = r.jilid;
+      if (r.id === 'ummi-3' && r.studentId === 'std-5' && r.jilid === 'Jilid 1') {
+        modified = true;
+        return {
+          ...r,
+          jilid: 'Jilid 3',
+          page: 18,
+          materialName: 'Ummi Dewasa Jilid 3: Hukum Mad Thabi\'i & Nun Sukun',
+          notes: 'Panjang 2 harakat belum stabil pada materi Jilid 3 hal. 18, perlu pengulangan talaqqi.'
+        };
+      }
       if (r.jilid === 'Jilid 4') updatedJilid = 'Jilid 2';
       else if (r.jilid === 'Jilid 5') updatedJilid = 'Jilid 2';
       else if (r.jilid === 'Jilid 6') updatedJilid = 'Jilid 3';
@@ -1608,12 +1653,15 @@ export const storageService = {
 
     const student = this.getStudentById(record.studentId);
     if (student) {
-      const updatedStudent: Student = {
-        ...student,
-        currentUmmiJilid: record.jilid,
-        currentUmmiPage: record.page
-      };
-      this.saveStudent(updatedStudent);
+      const classes = this.getClasses();
+      if (!isGrade8or9Student(student, classes)) {
+        const updatedStudent: Student = {
+          ...student,
+          currentUmmiJilid: record.jilid,
+          currentUmmiPage: record.page
+        };
+        this.saveStudent(updatedStudent);
+      }
     }
   },
   updateUmmiRecord(record: UmmiRecord): void {
@@ -1627,19 +1675,22 @@ export const storageService = {
     setItem(STORAGE_KEYS.UMMI, list);
     syncDocToCloud('ummi_records', record.id, record);
 
-    // Refresh latest ummi progress on student
+    // Refresh latest ummi progress on student (hanya kelas 7 yang mengikuti Ummi)
     const studentRecords = list
       .filter(r => r.studentId === record.studentId)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     if (studentRecords.length > 0) {
       const student = this.getStudentById(record.studentId);
       if (student) {
-        const top = studentRecords[0];
-        this.saveStudent({
-          ...student,
-          currentUmmiJilid: top.jilid,
-          currentUmmiPage: top.page
-        });
+        const classes = this.getClasses();
+        if (!isGrade8or9Student(student, classes)) {
+          const top = studentRecords[0];
+          this.saveStudent({
+            ...student,
+            currentUmmiJilid: top.jilid,
+            currentUmmiPage: top.page
+          });
+        }
       }
     }
   },

@@ -29,6 +29,7 @@ import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, AppSetting
 import { storageService } from '../services/storageService';
 import { LogoAlAzhar } from './LogoAlAzhar';
 import html2pdf from 'html2pdf.js';
+import { isGrade8or9Student } from '../utils/gradeHelper';
 
 interface StudentRaportCardProps {
   student: Student;
@@ -143,16 +144,22 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
 
   // Derive initial values based on latest Ummi input or student record
   const computeUmmiCapaian = (std: Student, rec?: UmmiRecord) => {
+    if (isGrade8or9Student(std, classes)) {
+      return '- (Tidak Mengikuti Ummi)';
+    }
     if (rec && rec.jilid && rec.page) {
       return `${rec.jilid} halaman ${rec.page}`;
     }
-    if (std.currentUmmiJilid) {
+    if (std.currentUmmiJilid && std.currentUmmiJilid !== '-') {
       return `${std.currentUmmiJilid} halaman ${std.currentUmmiPage || 1}`;
     }
     return 'Jilid 1 halaman 1';
   };
 
   const computeUmmiNilai = (std: Student, rec?: UmmiRecord) => {
+    if (isGrade8or9Student(std, classes)) {
+      return '-';
+    }
     if (rec && rec.score !== undefined && rec.score !== null) {
       return String(rec.score);
     }
@@ -635,6 +642,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
   const handleShareWhatsApp = () => {
     const phone = student.parentPhone.replace(/[^0-9]/g, '');
     const cleanPhone = phone.startsWith('0') ? '62' + phone.slice(1) : phone;
+    const isGrade8or9 = isGrade8or9Student(student, classes);
     const msg = encodeURIComponent(
       `*LAPORAN PERKEMBANGAN TAHFIZH & METODE UMMI*\n` +
       `*SMP ISLAM AL AZHAR 21 SUKOHARJO*\n` +
@@ -645,7 +653,9 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
       `*Halaqah:* ${halaqahType}\n\n` +
       `*I. Ketercapaian Tahfizh:* ${suratAyatCapaian} (Target: ${targetSuratAyat})\n` +
       `*II. Kedisiplinan:* A: ${alphaCount}, I: ${izinCount}, S: ${sakitCount}\n` +
-      `*III. Capaian UMMI:* ${ummiCapaianDescription} (Nilai: ${ummiNilaiScore || '-'})\n\n` +
+      (isGrade8or9 
+        ? `*III. Status Pembelajaran UMMI:* Tidak Mengikuti (Khusus Kelas 7)\n\n`
+        : `*III. Capaian UMMI:* ${ummiCapaianDescription} (Nilai: ${ummiNilaiScore || '-'})\n\n`) +
       `*Catatan Guru Pembimbing:* "${teacherNotes}"\n\n` +
       `_Laporan lengkap dapat diunduh di Portal Wali Santri SMPI Al Azhar 21._`
     );
@@ -989,11 +999,15 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                 <BookMarked className="w-3.5 h-3.5 text-[#D4AF37]" />
                 Capaian Metode Ummi Santri
               </span>
-              {latestUmmiRecord && (
+              {isGrade8or9Student(student, classes) ? (
+                <span className="text-[10px] bg-slate-100 text-slate-700 border border-slate-300 px-2 py-0.5 rounded font-medium">
+                  Kebijakan TP Ini: Kelas 8 & 9 Tidak Mengikuti Pembelajaran Ummi
+                </span>
+              ) : latestUmmiRecord ? (
                 <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded font-medium">
                   ✓ Otomatis dari input terakhir: {latestUmmiRecord.jilid} hal. {latestUmmiRecord.page} (Nilai: {latestUmmiRecord.score})
                 </span>
-              )}
+              ) : null}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

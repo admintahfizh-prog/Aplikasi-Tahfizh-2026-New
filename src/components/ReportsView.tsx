@@ -18,6 +18,7 @@ import {
 import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, AppSettings, Role, User } from '../types';
 import { storageService } from '../services/storageService';
 import { StudentRaportCard } from './StudentRaportCard';
+import { isGrade8or9Student } from '../utils/gradeHelper';
 
 interface ReportsViewProps {
   students: Student[];
@@ -97,6 +98,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     }
     return 0;
   });
+
+  const reportStudents = reportType === 'ummi'
+    ? sortedStudents.filter(std => !isGrade8or9Student(std, classes))
+    : sortedStudents;
 
   const currentIndividualStudent = students.find(s => s.id === selectedIndividualStudentId) || students[0];
   const currentStudentTeacher = teachers.find(t => t.id === currentIndividualStudent?.teacherId);
@@ -214,7 +219,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             {[
               { id: 'raport_individu', label: '1. Raport Individu Santri (Format Resmi)', icon: FileCheck2, highlight: true },
               { id: 'hafalan', label: '2. Rekap Capaian Hafalan Al-Qur\'an', icon: BookOpen },
-              { id: 'ummi', label: '3. Rekap Pembelajaran Metode Ummi', icon: BookMarked },
+              { id: 'ummi', label: '3. Rekap Pembelajaran Metode Ummi (Kelas 7)', icon: BookMarked },
               { id: 'rekap_nilai', label: '4. Rekapitulasi Nilai & Evaluasi', icon: Award },
               { id: 'raport_kelas', label: '5. Buku Induk Tahfizh Kelas', icon: Layers },
             ].map((tab) => {
@@ -349,7 +354,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           <div className="text-center space-y-1">
             <h3 className="text-sm sm:text-base font-bold uppercase tracking-wide text-slate-900">
               {reportType === 'hafalan' && 'REKAPITULASI CAPAIAN HAFALAN AL-QUR\'AN'}
-              {reportType === 'ummi' && 'REKAPITULASI PEMBELAJARAN METODE UMMI'}
+              {reportType === 'ummi' && 'REKAPITULASI PEMBELAJARAN METODE UMMI (KELAS 7)'}
               {reportType === 'rekap_nilai' && 'REKAPITULASI NILAI & EVALUASI TAJWID'}
               {reportType === 'raport_kelas' && 'BUKU INDUK MONITORING TAHFIZH & UMMI'}
             </h3>
@@ -357,6 +362,18 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               Kelas: <strong>{selectedClass ? classes.find(c => c.id === selectedClass)?.name : 'Semua Kelas'}</strong> • Periode: {settings.academicYear} ({settings.semester})
             </p>
           </div>
+
+          {reportType === 'ummi' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900 flex items-start gap-2.5 no-print">
+              <BookMarked className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Kebijakan TP Ini: Pembelajaran UMMI Khusus Jenjang Kelas 7</p>
+                <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                  Sesuai kebijakan kurikulum, seluruh santri Kelas 8 dan 9 tidak mengikuti pembelajaran UMMI dan tidak masuk jilid Ummi. Rekapitulasi di bawah ini menampilkan santri Kelas 7 yang aktif mengikuti program Metode Ummi.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Table Content */}
           <div className="overflow-x-auto">
@@ -408,7 +425,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {sortedStudents.map((std, idx) => {
+                {reportStudents.map((std, idx) => {
                   const cls = classes.find(c => c.id === std.classId);
                   const teacher = teachers.find(t => t.id === std.teacherId);
                   const percent = Math.min(100, Math.round((std.totalJuzHafal / std.targetJuz) * 100));
@@ -456,7 +473,13 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                       {reportType === 'raport_kelas' && (
                         <>
                           <td className="p-2 text-center border-r border-slate-200 font-bold">{std.totalJuzHafal} Juz</td>
-                          <td className="p-2 text-center border-r border-slate-200 font-bold text-emerald-800">{std.currentUmmiJilid}</td>
+                          <td className="p-2 text-center border-r border-slate-200 font-bold text-slate-800">
+                            {isGrade8or9Student(std, classes) ? (
+                              <span className="text-slate-400 font-normal italic">- (Non-Ummi)</span>
+                            ) : (
+                              <span className="text-emerald-800">{std.currentUmmiJilid || '-'}</span>
+                            )}
+                          </td>
                           <td className="p-2 text-center border-r border-slate-200 font-bold">{std.avgScore}</td>
                           <td className="p-2">{teacher?.name}</td>
                         </>
@@ -467,6 +490,17 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               </tbody>
             </table>
           </div>
+
+          {reportStudents.length === 0 && (
+            <div className="text-center py-10 text-slate-400 text-xs bg-slate-50 rounded-lg border border-dashed border-slate-200">
+              <p className="font-semibold text-slate-600">Tidak ada santri yang sesuai dengan kriteria / filter laporan ini.</p>
+              {reportType === 'ummi' && selectedClass && (
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Catatan: Kelas 8 dan 9 tidak mengikuti pembelajaran UMMI. Pilih kelas 7 untuk melihat data Ummi.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Lembar Tanda Tangan */}
           <div className="pt-8 grid grid-cols-2 text-center text-xs">

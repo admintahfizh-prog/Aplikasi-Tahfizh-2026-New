@@ -28,6 +28,7 @@ import { Student, Teacher, ClassItem, Role, User } from '../types';
 import { storageService } from '../services/storageService';
 import { UMMI_JILIDS } from '../data/ummiData';
 import { AvatarBadge } from './AvatarBadge';
+import { isGrade8or9Student, isGrade8or9Class } from '../utils/gradeHelper';
 
 interface StudentsViewProps {
   students: Student[];
@@ -481,10 +482,17 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                 <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 text-[11px]">
                   <div>
                     <span className="text-slate-400 block">Jilid Ummi:</span>
-                    <span className="font-bold text-slate-800 flex items-center gap-1">
-                      <BookMarked className="w-3 h-3 text-[#1E293B]" />
-                      {std.currentUmmiJilid} (Hal. {std.currentUmmiPage})
-                    </span>
+                    {isGrade8or9Student(std, classes) ? (
+                      <span className="text-slate-400 italic font-medium flex items-center gap-1 mt-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                        Tidak Ikut Ummi
+                      </span>
+                    ) : (
+                      <span className="font-bold text-slate-800 flex items-center gap-1">
+                        <BookMarked className="w-3 h-3 text-[#1E293B]" />
+                        {std.currentUmmiJilid} (Hal. {std.currentUmmiPage})
+                      </span>
+                    )}
                   </div>
                   <div>
                     <span className="text-slate-400 block">Rata-rata Nilai:</span>
@@ -661,7 +669,16 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                   <label className="block font-bold text-slate-700 mb-1">Kelas</label>
                   <select
                     value={formData.classId}
-                    onChange={(e) => setFormData({ ...formData, classId: e.target.value })}
+                    onChange={(e) => {
+                      const newClassId = e.target.value;
+                      const selectedCls = classes.find(c => c.id === newClassId);
+                      const is89 = isGrade8or9Class(selectedCls);
+                      setFormData({ 
+                        ...formData, 
+                        classId: newClassId,
+                        ...(is89 ? { currentUmmiJilid: '-', currentUmmiPage: 0 } : (formData.currentUmmiJilid === '-' ? { currentUmmiJilid: 'Jilid 1', currentUmmiPage: 1 } : {}))
+                      });
+                    }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-semibold focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
                   >
                     {classes.map(c => (
@@ -710,15 +727,21 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Jilid Ummi Saat Ini</label>
-                  <select
-                    value={formData.currentUmmiJilid}
-                    onChange={(e) => setFormData({ ...formData, currentUmmiJilid: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-semibold focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
-                  >
-                    {UMMI_JILIDS.map(j => (
-                      <option key={j} value={j}>{j}</option>
-                    ))}
-                  </select>
+                  {isGrade8or9Class(classes.find(c => c.id === formData.classId)) ? (
+                    <div className="bg-slate-100 border border-slate-200 rounded-lg p-2 text-xs text-slate-500 font-semibold italic">
+                      - (Kelas 8/9 Tidak Masuk Jilid Ummi)
+                    </div>
+                  ) : (
+                    <select
+                      value={formData.currentUmmiJilid}
+                      onChange={(e) => setFormData({ ...formData, currentUmmiJilid: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-semibold focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                    >
+                      {UMMI_JILIDS.map(j => (
+                        <option key={j} value={j}>{j}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
 

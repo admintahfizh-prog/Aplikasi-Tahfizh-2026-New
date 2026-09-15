@@ -38,6 +38,7 @@ import {
   calculateCategory 
 } from '../data/quranData';
 import { UMMI_JILIDS, UMMI_SYLLABUS } from '../data/ummiData';
+import { isGrade7Class, isGrade8or9Student, isUmmiEnrolledStudent } from '../utils/gradeHelper';
 import { 
   GRADE_CONVERSION_TABLE, 
   getGradeFromScore, 
@@ -188,7 +189,24 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
 
   const selectedStudent = students.find(s => s.id === selectedStudentId) || students[0];
   const selectedClass = classes.find(c => c.id === selectedClassId) || classes[0];
-  const filteredStudents = students.filter(s => {
+
+  // Rombel yang tampil: Untuk Ummi hanya Kelas 7
+  const availableClasses = classes.filter(c => {
+    if (activeTab === 'ummi') {
+      return isGrade7Class(c);
+    }
+    return true;
+  });
+
+  // Santri yang berhak: Untuk Ummi hanya Kelas 7 (Kelas 8 & 9 tidak mengikuti Ummi)
+  const poolStudents = students.filter(s => {
+    if (activeTab === 'ummi') {
+      return isUmmiEnrolledStudent(s, classes);
+    }
+    return true;
+  });
+
+  const filteredStudents = poolStudents.filter(s => {
     if (filterMode === 'halaqah' && currentTeacher) {
       return s.teacherId === currentTeacher.id;
     }
@@ -197,6 +215,32 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
     }
     return !selectedClassId || s.classId === selectedClassId;
   });
+
+  const handleTabSwitch = (newTab: 'quran' | 'ummi') => {
+    setActiveTab(newTab);
+    setValidationError(null);
+    if (newTab === 'ummi') {
+      // Jika santri terpilih adalah kelas 8 atau 9, alihkan ke santri kelas 7
+      if (selectedStudent && isGrade8or9Student(selectedStudent, classes)) {
+        const firstGrade7Student = students.find(s => isUmmiEnrolledStudent(s, classes));
+        if (firstGrade7Student) {
+          setSelectedStudentId(firstGrade7Student.id);
+          setSelectedClassId(firstGrade7Student.classId);
+          if (firstGrade7Student.currentUmmiJilid && firstGrade7Student.currentUmmiJilid !== '-') {
+            setUmmiJilid(firstGrade7Student.currentUmmiJilid);
+          }
+          if (firstGrade7Student.currentUmmiPage) {
+            setUmmiPage(firstGrade7Student.currentUmmiPage);
+          }
+        }
+      } else if (!availableClasses.some(c => c.id === selectedClassId)) {
+        const firstGrade7Class = classes.find(isGrade7Class);
+        if (firstGrade7Class) {
+          setSelectedClassId(firstGrade7Class.id);
+        }
+      }
+    }
+  };
 
   // Calculate final score for Quran
   const calculateFinalQuranScore = (): number => {
@@ -308,6 +352,10 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
         return;
       }
     } else {
+      if (isGrade8or9Student(selectedStudent, classes)) {
+        setValidationError('Santri Kelas 8 & 9 tidak mengikuti pembelajaran UMMI pada tahun ajaran ini. Silakan pilih santri Kelas 7 atau gunakan tab Hafalan Al-Qur\'an.');
+        return;
+      }
       if (ummiPage < 1) {
         setValidationError('Halaman jilid Ummi minimal adalah halaman 1.');
         return;
@@ -523,17 +571,19 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
               {/* Class Selector (Active when filterMode === 'class') */}
               {filterMode === 'class' ? (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Rombel Kelas</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    {activeTab === 'ummi' ? 'Rombel Kelas 7 (Ummi)' : 'Rombel Kelas'}
+                  </label>
                   <select
                     value={selectedClassId}
                     onChange={(e) => {
                       setSelectedClassId(e.target.value);
-                      const firstInClass = students.find(s => s.classId === e.target.value);
+                      const firstInClass = poolStudents.find(s => s.classId === e.target.value);
                       if (firstInClass) setSelectedStudentId(firstInClass.id);
                     }}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
                   >
-                    {classes.map(c => (
+                    {availableClasses.map(c => (
                       <option key={c.id} value={c.id}>{c.name} ({c.grade})</option>
                     ))}
                   </select>
@@ -564,7 +614,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                   onChange={(e) => {
                     setSelectedStudentId(e.target.value);
                     const std = students.find(s => s.id === e.target.value);
-                    if (std?.currentUmmiJilid) setUmmiJilid(std.currentUmmiJilid);
+                    if (std?.currentUmmiJilid && std.currentUmmiJilid !== '-') setUmmiJilid(std.currentUmmiJilid);
                     if (std?.currentUmmiPage) setUmmiPage(std.currentUmmiPage);
                   }}
                   className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
@@ -611,7 +661,13 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                 </div>
                 <div className="flex items-center gap-3 text-slate-600">
                   <span>Capaian: <strong className="text-[#8C7015]">{selectedStudent.totalJuzHafal} Juz</strong></span>
-                  <span>Ummi: <strong className="text-slate-800">{selectedStudent.currentUmmiJilid} Hal. {selectedStudent.currentUmmiPage}</strong></span>
+                  <span>
+                    Ummi: {isGrade8or9Student(selectedStudent, classes) ? (
+                      <span className="text-slate-400 italic">Tidak Masuk Jilid Ummi</span>
+                    ) : (
+                      <strong className="text-slate-800">{selectedStudent.currentUmmiJilid} Hal. {selectedStudent.currentUmmiPage}</strong>
+                    )}
+                  </span>
                 </div>
               </div>
             )}
@@ -620,7 +676,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
           {/* Step 2: Tab Switcher (Quran vs Ummi) */}
           <div className="flex items-center border-b border-slate-200">
             <button
-              onClick={() => setActiveTab('quran')}
+              onClick={() => handleTabSwitch('quran')}
               className={`flex-1 py-3 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition cursor-pointer ${
                 activeTab === 'quran'
                   ? 'border-[#D4AF37] text-slate-900 bg-[#D4AF37]/10'
@@ -631,7 +687,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
               Hafalan Al-Qur'an (Ziyadah / Murojaah / Tasmi')
             </button>
             <button
-              onClick={() => setActiveTab('ummi')}
+              onClick={() => handleTabSwitch('ummi')}
               className={`flex-1 py-3 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition cursor-pointer ${
                 activeTab === 'ummi'
                   ? 'border-[#1E293B] text-slate-900 bg-slate-100'
@@ -639,7 +695,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
               }`}
             >
               <BookMarked className="w-4 h-4 text-[#1E293B]" />
-              Pembelajaran Metode Ummi Dewasa (Jilid 1-3)
+              Pembelajaran Metode Ummi (Khusus Kelas 7)
             </button>
           </div>
 
@@ -1091,6 +1147,14 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
           {activeTab === 'ummi' && (
             <div className="space-y-4">
               
+              {/* Info Kebijakan Kelas 7 */}
+              <div className="bg-amber-50 border border-amber-200/90 rounded-xl p-3 text-xs text-amber-950 flex items-center gap-2.5">
+                <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                <p>
+                  <strong>Catatan Kurikulum TP Ini:</strong> Pembelajaran Metode Ummi dikhususkan untuk seluruh santri <strong>Kelas 7</strong>. Santri Kelas 8 dan 9 tidak mengikuti pembelajaran UMMI dan tidak masuk jilid Ummi.
+                </p>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
                 {/* Jilid */}
                 <div>

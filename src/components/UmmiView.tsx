@@ -31,6 +31,7 @@ import { UMMI_SYLLABUS, UMMI_JILIDS, UmmiTopicDetail } from '../data/ummiData';
 import { storageService } from '../services/storageService';
 import { AvatarBadge } from './AvatarBadge';
 import { getGradeFromScore, getGradeBadgeClass } from '../utils/gradeConversion';
+import { isGrade7Class, isUmmiEnrolledStudent, isGrade8or9Student } from '../utils/gradeHelper';
 
 interface UmmiViewProps {
   ummiRecords: UmmiRecord[];
@@ -61,6 +62,7 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
   const [activeTab, setActiveTab] = useState<'all-classes' | 'log' | 'syllabus'>('all-classes');
 
   const [selectedJilidTab, setSelectedJilidTab] = useState<string>('Jilid 1');
+  const [selectedJilidFilter, setSelectedJilidFilter] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClassFilter, setSelectedClassFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -87,30 +89,72 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
     return map;
   }, [ummiRecords]);
 
+  // Helper to get student's actual active/effective Ummi Jilid (terkini dari setoran evaluasi atau data santri)
+  const getStudentEffectiveJilid = (student: Student): string => {
+    const rec = studentLatestUmmiRecords.get(student.id);
+    return rec?.jilid || student.currentUmmiJilid || 'Jilid 1';
+  };
+
+  // Kebijakan TP Ini: Hanya Kelas 7 yang mengikuti pembelajaran Ummi
+  // Kelas 8 & 9 tidak mengikuti pembelajaran UMMI dan tidak masuk jilid Ummi
+  const ummiEligibleClasses = useMemo(() => {
+    const list = classes.filter(c => isGrade7Class(c));
+    if (list.length > 0) return list;
+    return [
+      { id: 'cls-7a', name: '7A', level: 7, grade: '7', academicYear: '2026/2027', homeroomTeacherId: teachers[0]?.id || '' },
+      { id: 'cls-7b', name: '7B', level: 7, grade: '7', academicYear: '2026/2027', homeroomTeacherId: teachers[1]?.id || '' }
+    ];
+  }, [classes, teachers]);
+
+  // Santri yang berhak mengikuti Ummi (Kelas 7 saja)
+  const ummiStudents = useMemo(() => {
+    return students.filter(s => isUmmiEnrolledStudent(s, classes));
+  }, [students, classes]);
+
+  // Calculate students count per jilid (Khusus santri Kelas 7 yang mengikuti Ummi)
+  // Pastikan sinkron sempurna antara angka rekap dan nama-nama santri yang tampil
+  const studentDistribution = useMemo(() => {
+    return UMMI_JILIDS.map(j => {
+      const matchingStudents = ummiStudents.filter(s => {
+        const rec = studentLatestUmmiRecords.get(s.id);
+        const effectiveJilid = rec?.jilid || s.currentUmmiJilid || 'Jilid 1';
+        return effectiveJilid === j;
+      });
+      return {
+        jilid: j,
+        count: matchingStudents.length,
+        students: matchingStudents
+      };
+    });
+  }, [ummiStudents, studentLatestUmmiRecords]);
+
   // Compute enriched classes
   const enrichedClasses = useMemo(() => {
-    const activeClasses = classes.length > 0 ? classes : [
-      { id: 'c-7a', name: '7A', level: 7, academicYear: '2026/2027', homeroomTeacherId: teachers[0]?.id || '' },
-      { id: 'c-7b', name: '7B', level: 7, academicYear: '2026/2027', homeroomTeacherId: teachers[1]?.id || '' }
-    ];
-
-    return activeClasses
+    return ummiEligibleClasses
       .filter(c => !selectedClassFilter || c.id === selectedClassFilter)
       .filter(c => {
         if (userRole === 'wali') {
-          return students.some(s => s.classId === c.id);
+          return ummiStudents.some(s => s.classId === c.id);
         }
         return true;
       })
       .map(c => {
-        const classStudents = students.filter(s => {
+        const classStudents = ummiStudents.filter(s => {
           if (s.classId !== c.id) return false;
+          
+          const rec = studentLatestUmmiRecords.get(s.id);
+          const effectiveJilid = rec?.jilid || s.currentUmmiJilid || 'Jilid 1';
+
+          if (selectedJilidFilter && effectiveJilid !== selectedJilidFilter) {
+            return false;
+          }
+
           if (!searchTerm) return true;
           const term = searchTerm.toLowerCase();
-          const rec = studentLatestUmmiRecords.get(s.id);
           return (
             s.name.toLowerCase().includes(term) ||
             s.nis.toLowerCase().includes(term) ||
+            effectiveJilid.toLowerCase().includes(term) ||
             (s.currentUmmiJilid || '').toLowerCase().includes(term) ||
             (rec?.materialName || '').toLowerCase().includes(term)
           );
@@ -124,17 +168,13 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
           students: classStudents
         };
       });
-  }, [classes, students, studentLatestUmmiRecords, selectedClassFilter, searchTerm, teachers]);
+  }, [ummiEligibleClasses, ummiStudents, studentLatestUmmiRecords, selectedClassFilter, selectedJilidFilter, searchTerm, teachers]);
 
-  // Calculate students count per jilid
-  const studentDistribution = UMMI_JILIDS.map(j => ({
-    jilid: j,
-    count: students.filter(s => s.currentUmmiJilid === j).length
-  }));
-
-  // Filter records for log view
+  // Filter records for log view (Hanya rekam santri yang mengikuti Ummi)
   const filteredRecords = ummiRecords.filter(r => {
     const std = students.find(s => s.id === r.studentId);
+    if (!isUmmiEnrolledStudent(std, classes)) return false;
+
     const matchSearch = 
       (std?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       r.materialName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -249,6 +289,19 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
         </div>
       </div>
 
+      {/* Policy Notice: Kelas 8 & 9 Tidak Mengikuti UMMI, Khusus Kelas 7 */}
+      <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-3.5 sm:p-4 text-xs text-amber-950 flex items-start gap-3 shadow-2xs">
+        <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+        <div className="space-y-0.5">
+          <p className="font-bold text-slate-900">
+            Kebijakan Kurikulum Pembelajaran Ummi TP 2026/2027:
+          </p>
+          <p className="text-slate-700 leading-relaxed">
+            Pada tahun pengajaran ini, <strong>seluruh santri Kelas 8 dan 9 tidak mengikuti pembelajaran UMMI dan tidak masuk jilid Ummi</strong>. Pembelajaran Metode Ummi dikhususkan untuk <strong>seluruh santri Kelas 7</strong> (tetap berjalan sesuai capaian jilid masing-masing). Santri Kelas 8 dan 9 difokuskan pada Program Tahfizh dan Matrikulasi.
+          </p>
+        </div>
+      </div>
+
       {/* Primary View Switcher Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-2">
@@ -265,7 +318,7 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
               activeTab === 'all-classes' ? 'bg-[#D4AF37] text-slate-950' : 'bg-slate-100 text-slate-700'
             }`}>
-              {students.length} Santri
+              {ummiStudents.length} Santri (Kelas 7)
             </span>
           </button>
 
@@ -282,7 +335,7 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
               activeTab === 'log' ? 'bg-[#D4AF37] text-slate-950' : 'bg-slate-100 text-slate-700'
             }`}>
-              {ummiRecords.length} Setoran
+              {filteredRecords.length} Setoran
             </span>
           </button>
 
@@ -299,7 +352,7 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
           </button>
         </div>
 
-        {/* Quick Class Selector Bar */}
+        {/* Quick Class Selector Bar (Khusus Rombel yang Mengikuti Ummi - Kelas 7) */}
         <div className="flex items-center gap-1.5 overflow-x-auto py-1">
           <button
             onClick={() => setSelectedClassFilter('')}
@@ -309,9 +362,9 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            Semua Kelas
+            Semua Kelas 7
           </button>
-          {classes.map(c => (
+          {ummiEligibleClasses.map(c => (
             <button
               key={c.id}
               onClick={() => setSelectedClassFilter(selectedClassFilter === c.id ? '' : c.id)}
@@ -327,33 +380,74 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
         </div>
       </div>
 
-      {/* Distribution Badges per Jilid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
-        {studentDistribution.map((item) => (
-          <div 
-            key={item.jilid}
-            onClick={() => {
-              setSelectedJilidTab(item.jilid);
-              if (activeTab === 'all-classes') {
-                setSearchTerm(item.jilid);
-              }
-            }}
-            className={`p-3 rounded-xl border transition cursor-pointer ${
-              selectedJilidTab === item.jilid
-                ? 'bg-slate-900 border-slate-900 text-white shadow-xs'
-                : 'bg-white border-slate-200 text-slate-800 hover:border-amber-300'
-            }`}
-          >
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="font-bold">{item.jilid}</span>
-              <BookOpen className={`w-3 h-3 ${selectedJilidTab === item.jilid ? 'text-[#D4AF37]' : 'text-slate-400'}`} />
+      {/* Distribution Badges per Jilid (Sinkron Sempurna Antara Rekap Angka & Data Nama) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+        {studentDistribution.map((item) => {
+          const isSelected = selectedJilidFilter === item.jilid || (activeTab === 'log' && selectedJilidTab === item.jilid);
+          const studentNames = item.students.map(s => s.name).join(', ');
+
+          return (
+            <div 
+              key={item.jilid}
+              onClick={() => {
+                if (activeTab === 'all-classes') {
+                  setSelectedJilidFilter(selectedJilidFilter === item.jilid ? '' : item.jilid);
+                  setSelectedJilidTab(item.jilid);
+                } else {
+                  setSelectedJilidTab(selectedJilidTab === item.jilid ? 'Semua Jilid' : item.jilid);
+                }
+              }}
+              title={item.count > 0 ? `Santri di ${item.jilid} (${item.count} Anak): ${studentNames}` : `Belum ada santri di ${item.jilid}`}
+              className={`p-3 rounded-xl border transition cursor-pointer relative group ${
+                isSelected
+                  ? 'bg-slate-900 border-slate-900 text-white shadow-xs ring-2 ring-[#D4AF37]'
+                  : 'bg-white border-slate-200 text-slate-800 hover:border-[#D4AF37] hover:shadow-2xs'
+              }`}
+            >
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="font-bold">{item.jilid}</span>
+                <BookOpen className={`w-3.5 h-3.5 ${isSelected ? 'text-[#D4AF37]' : 'text-slate-400'}`} />
+              </div>
+              <p className={`text-xl font-black mt-1 ${isSelected ? 'text-[#D4AF37]' : 'text-slate-900'}`}>
+                {item.count} <span className="text-[10px] font-normal text-slate-400">Santri</span>
+              </p>
+              {item.count > 0 ? (
+                <p className={`text-[10px] mt-1 truncate ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                  {item.students.map(s => s.nickname || s.name.split(' ')[0]).join(', ')}
+                </p>
+              ) : (
+                <p className="text-[10px] mt-1 text-slate-400 italic">0 santri</p>
+              )}
             </div>
-            <p className={`text-lg font-black mt-1 ${selectedJilidTab === item.jilid ? 'text-[#D4AF37]' : 'text-slate-900'}`}>
-              {item.count} <span className="text-[10px] font-normal text-slate-400">Santri</span>
-            </p>
-          </div>
-        ))}
+          );
+        })}
       </div>
+
+      {/* Active Jilid Filter Indicator Banner */}
+      {selectedJilidFilter && activeTab === 'all-classes' && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs animate-in fade-in">
+          <div className="flex items-center gap-2 flex-wrap">
+            <BookMarked className="w-4 h-4 text-amber-700 shrink-0" />
+            <span className="text-amber-900 font-medium">Filter Aktif:</span>
+            <span className="bg-[#1E293B] text-[#D4AF37] px-2.5 py-0.5 rounded-md font-bold text-xs">
+              {selectedJilidFilter}
+            </span>
+            <span className="text-slate-800 font-bold">
+              ({studentDistribution.find(d => d.jilid === selectedJilidFilter)?.count || 0} Santri):
+            </span>
+            <span className="text-slate-600 font-medium">
+              {studentDistribution.find(d => d.jilid === selectedJilidFilter)?.students.map(s => s.name).join(', ')}
+            </span>
+          </div>
+          <button
+            onClick={() => setSelectedJilidFilter('')}
+            className="text-xs text-rose-600 hover:text-rose-800 font-bold cursor-pointer flex items-center gap-1 hover:underline shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+            Tampilkan Semua Jilid
+          </button>
+        </div>
+      )}
 
       {/* Search Toolbar */}
       <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-3">

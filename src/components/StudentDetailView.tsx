@@ -36,6 +36,7 @@ import { JUZ_MAPPINGS } from '../data/quranData';
 import { storageService } from '../services/storageService';
 import { VIOLATION_PRESETS } from './ViolationsView';
 import { AvatarBadge } from './AvatarBadge';
+import { isGrade8or9Student } from '../utils/gradeHelper';
 
 interface StudentDetailViewProps {
   studentId: string;
@@ -123,8 +124,13 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
   const handleWhatsAppParent = () => {
     const phone = student.parentPhone.replace(/[^0-9]/g, '');
     const cleanPhone = phone.startsWith('0') ? '62' + phone.slice(1) : phone;
+    const isGrade8or9 = isGrade8or9Student(student, classes);
+    const ummiLine = isGrade8or9
+      ? '- Program: Fokus Tahfizh Al-Qur\'an (Kelas 8/9 Tidak Mengikuti Ummi)'
+      : `- Pembelajaran Ummi: ${student.currentUmmiJilid} (Halaman ${student.currentUmmiPage})`;
+
     const msg = encodeURIComponent(
-      `Assalamu'alaikum Warahmatullahi Wabarakatuh.\n\nYth. ${student.parentName},\nKami dari Tim Tahfizh ${settings.schoolName} menyampaikan perkembangan hafalan ananda ${student.name}:\n- Capaian Hafalan: ${student.totalJuzHafal} Juz dari Target ${student.targetJuz} Juz (${progressPercent}%)\n- Pembelajaran Ummi: ${student.currentUmmiJilid} (Halaman ${student.currentUmmiPage})\n- Rata-rata Nilai: ${student.avgScore}/100\n- Hafalan Terakhir: ${student.lastHafalan}\n\nJazaakumullah khairan atas kerjasamanya.`
+      `Assalamu'alaikum Warahmatullahi Wabarakatuh.\n\nYth. ${student.parentName},\nKami dari Tim Tahfizh ${settings.schoolName} menyampaikan perkembangan hafalan ananda ${student.name}:\n- Capaian Hafalan: ${student.totalJuzHafal} Juz dari Target ${student.targetJuz} Juz (${progressPercent}%)\n${ummiLine}\n- Rata-rata Nilai: ${student.avgScore}/100\n- Hafalan Terakhir: ${student.lastHafalan}\n\nJazaakumullah khairan atas kerjasamanya.`
     );
     window.open(`https://wa.me/${cleanPhone}?text=${msg}`, '_blank');
   };
@@ -288,9 +294,15 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
           </div>
           <div className="p-3 bg-white rounded-lg border border-slate-200 shadow-2xs">
             <span className="text-[11px] font-bold text-slate-400 uppercase">Jilid Ummi</span>
-            <p className="text-xs font-bold text-slate-800 truncate mt-2">
-              {student.currentUmmiJilid} (Hal. {student.currentUmmiPage})
-            </p>
+            {isGrade8or9Student(student, classes) ? (
+              <p className="text-xs font-semibold text-slate-400 italic truncate mt-2" title="Kelas 8 & 9 tidak mengikuti UMMI tahun ini">
+                Tidak Ikut Ummi
+              </p>
+            ) : (
+              <p className="text-xs font-bold text-slate-800 truncate mt-2">
+                {student.currentUmmiJilid} (Hal. {student.currentUmmiPage})
+              </p>
+            )}
           </div>
         </div>
 
@@ -347,7 +359,9 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
       <div className="flex items-center border-b border-slate-200 no-print overflow-x-auto">
         {[
           { id: 'hafalan', label: 'Riwayat Hafalan Al-Qur\'an', icon: BookOpen, count: studentRecords.length },
-          { id: 'ummi', label: 'Riwayat Metode Ummi', icon: BookMarked, count: studentUmmiRecords.length },
+          ...(!isGrade8or9Student(student, classes) ? [
+            { id: 'ummi', label: 'Riwayat Metode Ummi', icon: BookMarked, count: studentUmmiRecords.length }
+          ] : []),
           { id: 'kedisiplinan', label: 'Pelanggaran & Kedisiplinan', icon: ShieldAlert, count: studentViolations.length },
           { id: 'grafik', label: 'Grafik Perkembangan Nilai', icon: TrendingUp },
           { id: 'raport', label: 'Cetak Raport & Sertifikat', icon: Printer },
@@ -461,55 +475,65 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
 
       {/* TAB 2: RIWAYAT METODE UMMI */}
       {activeTab === 'ummi' && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 space-y-4">
-          <h3 className="text-sm font-bold text-slate-800">
-            Riwayat Pembelajaran & Evaluasi Metode Ummi
-          </h3>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-y border-slate-200 text-slate-600 font-semibold">
-                  <th className="py-2.5 px-3">Tanggal</th>
-                  <th className="py-2.5 px-3">Jilid</th>
-                  <th className="py-2.5 px-3">Halaman</th>
-                  <th className="py-2.5 px-3">Materi Pokok</th>
-                  <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3">Nilai</th>
-                  <th className="py-2.5 px-3">Catatan Pembimbing</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {studentUmmiRecords.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50 transition">
-                    <td className="py-3 px-3 font-mono text-slate-500">{u.date}</td>
-                    <td className="py-3 px-3 font-bold text-slate-800">{u.jilid}</td>
-                    <td className="py-3 px-3 font-semibold">Hal. {u.page}</td>
-                    <td className="py-3 px-3 font-medium text-slate-800">{u.materialName}</td>
-                    <td className="py-3 px-3">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        u.status === 'Lulus' ? 'bg-emerald-100 text-emerald-800' :
-                        u.status === 'Lancar' ? 'bg-blue-100 text-blue-800' :
-                        u.status === 'Sedang Dipelajari' ? 'bg-amber-100 text-amber-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {u.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 font-bold text-slate-900">{u.score}</td>
-                    <td className="py-3 px-3 text-slate-600 max-w-xs truncate" title={u.notes}>
-                      {u.notes || '-'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        isGrade8or9Student(student, classes) ? (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-8 text-center space-y-3">
+            <BookMarked className="w-10 h-10 text-slate-400 mx-auto" />
+            <h4 className="text-sm font-bold text-slate-800">Santri Kelas 8 & 9 Tidak Mengikuti Pembelajaran UMMI</h4>
+            <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+              Sesuai kebijakan kurikulum tahun ajaran ini, pembelajaran Metode Ummi dikhususkan untuk jenjang <strong>Kelas 7</strong>. Seluruh santri Kelas 8 dan 9 fokus pada program Tahfizh Al-Qur'an dan tidak masuk jilid Ummi.
+            </p>
           </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 space-y-4">
+            <h3 className="text-sm font-bold text-slate-800">
+              Riwayat Pembelajaran & Evaluasi Metode Ummi (Kelas 7)
+            </h3>
 
-          {studentUmmiRecords.length === 0 && (
-            <p className="text-center py-8 text-slate-400 text-xs">Belum ada evaluasi jilid Ummi.</p>
-          )}
-        </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-y border-slate-200 text-slate-600 font-semibold">
+                    <th className="py-2.5 px-3">Tanggal</th>
+                    <th className="py-2.5 px-3">Jilid</th>
+                    <th className="py-2.5 px-3">Halaman</th>
+                    <th className="py-2.5 px-3">Materi Pokok</th>
+                    <th className="py-2.5 px-3">Status</th>
+                    <th className="py-2.5 px-3">Nilai</th>
+                    <th className="py-2.5 px-3">Catatan Pembimbing</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {studentUmmiRecords.map((u) => (
+                    <tr key={u.id} className="hover:bg-slate-50 transition">
+                      <td className="py-3 px-3 font-mono text-slate-500">{u.date}</td>
+                      <td className="py-3 px-3 font-bold text-slate-800">{u.jilid}</td>
+                      <td className="py-3 px-3 font-semibold">Hal. {u.page}</td>
+                      <td className="py-3 px-3 font-medium text-slate-800">{u.materialName}</td>
+                      <td className="py-3 px-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          u.status === 'Lulus' ? 'bg-emerald-100 text-emerald-800' :
+                          u.status === 'Lancar' ? 'bg-blue-100 text-blue-800' :
+                          u.status === 'Sedang Dipelajari' ? 'bg-amber-100 text-amber-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {u.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 font-bold text-slate-900">{u.score}</td>
+                      <td className="py-3 px-3 text-slate-600 max-w-xs truncate" title={u.notes}>
+                        {u.notes || '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {studentUmmiRecords.length === 0 && (
+              <p className="text-center py-8 text-slate-400 text-xs">Belum ada evaluasi jilid Ummi.</p>
+            )}
+          </div>
+        )
       )}
 
       {/* TAB: PELANGGARAN & KEDISIPLINAN TAHFIZH */}
