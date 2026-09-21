@@ -6,7 +6,9 @@ export const UMMI_JILIDS = [
   'Jilid 3',
   'Al-Qur\'an',
   'Gharib',
-  'Tajwid'
+  'Tajwid',
+  'Munaqosyah',
+  'Tahfizh'
 ];
 
 export interface UmmiTopicDetail {
@@ -239,6 +241,68 @@ export const UMMI_SYLLABUS: UmmiSyllabusItem[] = [
         teachingTips: 'Latih santri menghafalkan bait-bait penting Tuhfatul Athfal dan menghubungkannya dengan praktik tilawah.'
       }
     ]
+  },
+  {
+    jilid: 'Munaqosyah',
+    title: 'Munaqosyah Al-Qur\'an Metode Ummi (Ujian Akhir Standarisasi Tartil, Fashahah, Gharib & Tajwid)',
+    totalPages: 1,
+    description: 'Tahap evaluasi komprehensif penjaminan mutu bacaan Al-Qur\'an santri yang telah menuntaskan seluruh jilid Ummi, Al-Qur\'an, Gharib, dan Tajwid. Menguji tartil tilawah, fashahah makharijul huruf, ketepatan hukum tajwid teoritis-praktis, serta hafalan ayat-ayat gharib musykilat oleh Tim Munaqisy resmi.',
+    keyTopics: [
+      'Ujian Tilawah Tartil Al-Qur\'an (Surat Pilihan & Maqra\' Acak)',
+      'Ujian Fashahah & Ketepatan Makharijul Huruf',
+      'Ujian Praktik & Teori Kaidah Tajwid Ilmiah',
+      'Ujian Bacaan Ayat-Ayat Gharib & Musykilat',
+      'Penilaian Sertifikasi & Kesiapan Wisuda Tahfidz-Ummi'
+    ],
+    modules: [
+      {
+        pageRange: 'Uji Tartil',
+        topicTitle: 'Uji Tilawah Tartil & Fashahah (Maqra\' Acak)',
+        arabicExample: 'وَرَتِّلِ الْقُرْاٰنَ تَرْتِيْلًا ۝ اِنَّا سَنُلْقِيْ عَلَيْكَ قَوْلًا ثَقِيْلًا',
+        rules: 'Membaca mushaf pada maqra\' yang ditentukan penguji secara tartil sempurna, menjaga konsistensi ketukan mad, waqaf & ibtida\', serta kelenturan harakat.',
+        competency: 'Lulus Ujian Munaqosyah Tartil dengan nilai fashahah minimal 85 (Mumtaz / Jayyid Jiddan).',
+        teachingTips: 'Simulasi munaqosyah berulang, latih ketenangan santri membaca di hadapan dewan penguji, dan drill waqaf ibtida\'.'
+      },
+      {
+        pageRange: 'Uji Teori & Gharib',
+        topicTitle: 'Uji Teori Kaidah Tajwid & Hafalan Gharib Musykilat',
+        arabicExample: 'مَجْر۪ىهَا • لَا تَأْمَ۫نَّا • ءَا۬عْجَمِيٌّ • بِّئْسَ الِاسْمُ الْفُسُوْقُ',
+        rules: 'Menjawab pertanyaan acak seputar hukum tajwid, makhraj, sifat huruf beserta dalil nadzam, serta melafalkan ayat gharib secara fasih.',
+        competency: 'Mampu menjelaskan hukum bacaan dan melafalkan ayat-ayat gharib tanpa kekeliruan.',
+        teachingTips: 'Gunakan kartu tanya jawab tajwid cepat dan drill sambung ayat gharib musykilat.'
+      }
+    ]
+  },
+  {
+    jilid: 'Tahfizh',
+    title: 'Program Pembiasaan & Matrikulasi Tahfizh Al-Qur\'an Berkaidah Tartil Ummi',
+    totalPages: 30,
+    description: 'Pembelajaran hafalan terstruktur Al-Qur\'an terintegrasi dengan Metode Ummi, memastikan setiap hafalan ayat baru (ziyadah) dan pengulangan (muraja\'ah) memenuhi standar tartil fashahah serta tajwid mutqin.',
+    keyTopics: [
+      'Ziyadah Hafalan Baru (Sabaq) Berkaidah Ummi',
+      'Muraja\'ah Harian Sabqi (Hafalan Terkini)',
+      'Muraja\'ah Manzil (Penguatan Keseluruhan Juz)',
+      'Tasmi\' Sekali Duduk 1/2 Juz s/d 1 Juz Penuh',
+      'Standarisasi Mutqin & Kenaikan Tingkat Hafalan'
+    ],
+    modules: [
+      {
+        pageRange: 'Juz 30 (Juz \'Amma)',
+        topicTitle: 'Ziyadah & Tasmi\' Juz 30 Mutqin',
+        arabicExample: 'عَمَّ يَتَسَاۤءَلُوْنَ ۝ عَنِ النَّبَاِ الْعَظِيْمِ ۝ الَّذِيْ هُمْ فِيْهِ مُخْتَلِفُوْنَ',
+        rules: 'Menghafal surat demi surat dari An-Naba\' hingga An-Nas dengan tajwid tartil, kesempurnaan harakat, dan kejelasan akhir ayat.',
+        competency: 'Lulus tasmi\' sekali duduk Juz 30 minimal nilai 85 tanpa kesalahan fatal lahn jaliy.',
+        teachingTips: 'Gunakan metode sima\'i berulang, simak berpasangan, dan berikan evaluasi harian bertarget.'
+      },
+      {
+        pageRange: 'Juz Lanjutan (1-29)',
+        topicTitle: 'Ziyadah Juz Lanjutan & Muraja\'ah Berkelanjutan',
+        arabicExample: 'الٓمٓ ۝ ذٰلِكَ الْكِتٰبُ لَا رَيْبَ ۛ فِيْهِ ۛ هُدًى لِّلْمُتَّقِيْنَ',
+        rules: 'Menambah hafalan pada juz target sesuai tingkatan santri, menjaga ritme muraja\'ah sabqi dan manzil secara tertib setiap halaqah.',
+        competency: 'Kelancaran setoran ziyadah harian minimal 1 halaman dan muraja\'ah 1/4 juz per halaqah.',
+        teachingTips: 'Pastikan sebelum santri menghafal mandiri, santri telah talaqqi membaca di depan guru agar makhraj dan harakat tidak keliru.'
+      }
+    ]
   }
 ];
 
@@ -460,5 +524,29 @@ export const INITIAL_MATERIALS: LearningMaterial[] = [
     description: 'Tempat keluarnya huruf dari tenggorokan bawah, tengah, dan atas.',
     content: 'Kaidah Pokok:\n• Aqshal Halq (Pangkal Tenggorokan): Hamzah (ء) & Ha besar (هـ).\n• Wasathal Halq (Tengah Tenggorokan): \'Ain (ع) & Haa kecil (ح).\n• Adnal Halq (Ujung Tenggorokan): Ghain (غ) & Kha (خ).',
     targetCompetence: 'Mampu membedakan artikulasi \'Ain dan Hamzah serta Haa dan Ha besar secara fasih.'
+  },
+  {
+    id: 'mat-munaqosyah-1',
+    title: 'Standarisasi Munaqosyah: Tilawah Tartil & Fashahah',
+    name: 'Standarisasi Munaqosyah: Tilawah Tartil & Fashahah',
+    category: 'Munaqosyah',
+    jilid: 'Munaqosyah',
+    level: 'Sertifikasi Akhir',
+    page: '1',
+    description: 'Panduan ujian akhir munaqosyah membaca Al-Qur\'an secara tartil, waqaf ibtida\', dan fashahah makharijul huruf.',
+    content: 'Indikator Penilaian Munaqosyah:\n• Ketukan mad konsisten 2, 4, 5, 6 harakat.\n• Kesempurnaan harakat fathah, kasrah, dhammah murni.\n• Ketepatan makhraj dan sifat huruf tanpa takalluf (berlebihan).',
+    targetCompetence: 'Lulus Munaqosyah Ummi dengan predikat Mumtaz (A) dari tim munaqisy.'
+  },
+  {
+    id: 'mat-tahfizh-1',
+    title: 'Tahfizh Al-Qur\'an: Metode Sabaq & Sabqi Tartil Ummi',
+    name: 'Tahfizh Al-Qur\'an: Metode Sabaq & Sabqi Tartil Ummi',
+    category: 'Tahfizh',
+    jilid: 'Tahfizh',
+    level: 'Tahfizh Harian',
+    page: '1-30',
+    description: 'Panduan setoran hafalan baru (ziyadah) dan muraja\'ah terpadu dengan standar tajwid metode Ummi.',
+    content: 'Alur Setoran Tahfizh:\n1. Talaqqi mandiri/dengan guru sebelum menghafal.\n2. Ziyadah hafalan baru minimal 1 halaman/hari.\n3. Sabqi: Muraja\'ah hafalan 5-7 hari terakhir.\n4. Manzil: Muraja\'ah siklus juz terdahulu secara berkala.',
+    targetCompetence: 'Hafalan Al-Qur\'an mutqin, tartil, dan fashih sesuai kaidah Ummi.'
   }
 ];

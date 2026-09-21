@@ -89,10 +89,23 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
     return map;
   }, [ummiRecords]);
 
+  // Helper to normalize/clean Jilid string
+  const normalizeUmmiJilid = (rawJilid?: string): string => {
+    if (!rawJilid || rawJilid === '-') return 'Jilid 1';
+    const trimmed = rawJilid.trim();
+    const lower = trimmed.toLowerCase();
+    if (lower === 'munaqasyah' || lower === 'munaqosyah') return 'Munaqosyah';
+    if (lower === 'tahfidz' || lower === 'tahfizh') return 'Tahfizh';
+    if (lower === 'alquran' || lower === "al-qur'an" || lower === 'al-quran') return "Al-Qur'an";
+    if (lower === 'ghorib' || lower === 'gharib') return 'Gharib';
+    if (lower === 'tajwid') return 'Tajwid';
+    return trimmed;
+  };
+
   // Helper to get student's actual active/effective Ummi Jilid (terkini dari setoran evaluasi atau data santri)
   const getStudentEffectiveJilid = (student: Student): string => {
     const rec = studentLatestUmmiRecords.get(student.id);
-    return rec?.jilid || student.currentUmmiJilid || 'Jilid 1';
+    return normalizeUmmiJilid(rec?.jilid || student.currentUmmiJilid);
   };
 
   // Kebijakan TP Ini: Hanya Kelas 7 yang mengikuti pembelajaran Ummi
@@ -116,9 +129,8 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
   const studentDistribution = useMemo(() => {
     return UMMI_JILIDS.map(j => {
       const matchingStudents = ummiStudents.filter(s => {
-        const rec = studentLatestUmmiRecords.get(s.id);
-        const effectiveJilid = rec?.jilid || s.currentUmmiJilid || 'Jilid 1';
-        return effectiveJilid === j;
+        const effectiveJilid = getStudentEffectiveJilid(s);
+        return effectiveJilid === j || effectiveJilid.toLowerCase() === j.toLowerCase();
       });
       return {
         jilid: j,
@@ -142,10 +154,10 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
         const classStudents = ummiStudents.filter(s => {
           if (s.classId !== c.id) return false;
           
+          const effectiveJilid = getStudentEffectiveJilid(s);
           const rec = studentLatestUmmiRecords.get(s.id);
-          const effectiveJilid = rec?.jilid || s.currentUmmiJilid || 'Jilid 1';
 
-          if (selectedJilidFilter && effectiveJilid !== selectedJilidFilter) {
+          if (selectedJilidFilter && effectiveJilid.toLowerCase() !== selectedJilidFilter.toLowerCase()) {
             return false;
           }
 
@@ -168,7 +180,7 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
           students: classStudents
         };
       });
-  }, [ummiEligibleClasses, ummiStudents, studentLatestUmmiRecords, selectedClassFilter, selectedJilidFilter, searchTerm, teachers]);
+  }, [ummiEligibleClasses, ummiStudents, studentLatestUmmiRecords, selectedClassFilter, selectedJilidFilter, searchTerm, teachers, userRole]);
 
   // Filter records for log view (Hanya rekam santri yang mengikuti Ummi)
   const filteredRecords = ummiRecords.filter(r => {
@@ -381,10 +393,12 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
       </div>
 
       {/* Distribution Badges per Jilid (Sinkron Sempurna Antara Rekap Angka & Data Nama) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-2.5">
         {studentDistribution.map((item) => {
           const isSelected = selectedJilidFilter === item.jilid || (activeTab === 'log' && selectedJilidTab === item.jilid);
           const studentNames = item.students.map(s => s.name).join(', ');
+          const isMunaqosyah = item.jilid === 'Munaqosyah';
+          const isTahfizh = item.jilid === 'Tahfizh';
 
           return (
             <div 
@@ -401,18 +415,44 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
               className={`p-3 rounded-xl border transition cursor-pointer relative group ${
                 isSelected
                   ? 'bg-slate-900 border-slate-900 text-white shadow-xs ring-2 ring-[#D4AF37]'
-                  : 'bg-white border-slate-200 text-slate-800 hover:border-[#D4AF37] hover:shadow-2xs'
+                  : isMunaqosyah
+                    ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950 hover:border-emerald-400 hover:shadow-2xs'
+                    : isTahfizh
+                      ? 'bg-indigo-50/70 border-indigo-200 text-indigo-950 hover:border-indigo-400 hover:shadow-2xs'
+                      : 'bg-white border-slate-200 text-slate-800 hover:border-[#D4AF37] hover:shadow-2xs'
               }`}
             >
               <div className="flex items-center justify-between text-[11px]">
-                <span className="font-bold">{item.jilid}</span>
-                <BookOpen className={`w-3.5 h-3.5 ${isSelected ? 'text-[#D4AF37]' : 'text-slate-400'}`} />
+                <span className="font-bold truncate">{item.jilid}</span>
+                {isMunaqosyah ? (
+                  <Award className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-[#D4AF37]' : 'text-emerald-600'}`} />
+                ) : isTahfizh ? (
+                  <Sparkles className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-[#D4AF37]' : 'text-indigo-600'}`} />
+                ) : (
+                  <BookOpen className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-[#D4AF37]' : 'text-slate-400'}`} />
+                )}
               </div>
-              <p className={`text-xl font-black mt-1 ${isSelected ? 'text-[#D4AF37]' : 'text-slate-900'}`}>
+              <p className={`text-xl font-black mt-1 ${
+                isSelected 
+                  ? 'text-[#D4AF37]' 
+                  : isMunaqosyah 
+                    ? 'text-emerald-800' 
+                    : isTahfizh 
+                      ? 'text-indigo-800' 
+                      : 'text-slate-900'
+              }`}>
                 {item.count} <span className="text-[10px] font-normal text-slate-400">Santri</span>
               </p>
               {item.count > 0 ? (
-                <p className={`text-[10px] mt-1 truncate ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                <p className={`text-[10px] mt-1 truncate ${
+                  isSelected 
+                    ? 'text-slate-300' 
+                    : isMunaqosyah 
+                      ? 'text-emerald-700' 
+                      : isTahfizh 
+                        ? 'text-indigo-700' 
+                        : 'text-slate-500'
+                }`}>
                   {item.students.map(s => s.nickname || s.name.split(' ')[0]).join(', ')}
                 </p>
               ) : (
@@ -567,9 +607,22 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
                             {/* Jilid & Halaman Terakhir */}
                             <td className="py-3 px-3.5 whitespace-nowrap">
                               <div className="flex items-center gap-1.5">
-                                <span className="px-2.5 py-0.5 rounded-md bg-[#1E293B] text-[#D4AF37] font-black text-xs shadow-2xs">
-                                  {latestRecord ? latestRecord.jilid : (student.currentUmmiJilid || 'Jilid 1')}
-                                </span>
+                                {(() => {
+                                  const effJilid = getStudentEffectiveJilid(student);
+                                  const isMun = effJilid === 'Munaqosyah';
+                                  const isTah = effJilid === 'Tahfizh';
+                                  return (
+                                    <span className={`px-2.5 py-0.5 rounded-md font-black text-xs shadow-2xs ${
+                                      isMun 
+                                        ? 'bg-emerald-800 text-emerald-200' 
+                                        : isTah 
+                                          ? 'bg-indigo-800 text-indigo-200' 
+                                          : 'bg-[#1E293B] text-[#D4AF37]'
+                                    }`}>
+                                      {effJilid}
+                                    </span>
+                                  );
+                                })()}
                                 <span className="font-bold text-slate-800 text-xs">
                                   Hal. {latestRecord ? latestRecord.page : (student.currentUmmiPage || 1)}
                                 </span>
@@ -707,7 +760,7 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
                   onChange={(e) => setSelectedJilidTab(e.target.value)}
                   className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
                 >
-                  <option value="Semua Jilid">Semua Jilid (1 - 6, Al-Qur'an, Ghorib, Tajwid)</option>
+                  <option value="Semua Jilid">Semua Jilid & Kategori (Jilid 1-3, Al-Qur'an, Gharib, Tajwid, Munaqosyah, Tahfizh)</option>
                   {UMMI_JILIDS.map(j => (
                     <option key={j} value={j}>{j}</option>
                   ))}

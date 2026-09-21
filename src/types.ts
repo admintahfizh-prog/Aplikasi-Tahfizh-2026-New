@@ -134,7 +134,7 @@ export interface UmmiRecord {
   studentId: string;
   teacherId: string;
   date: string;
-  jilid: string; // 'Jilid 1' | 'Jilid 2' | 'Jilid 3' | 'Jilid 4' | 'Jilid 5' | 'Jilid 6' | 'Al-Qur\'an' | 'Gharib' | 'Tajwid'
+  jilid: string; // 'Jilid 1' | 'Jilid 2' | 'Jilid 3' | 'Jilid 4' | 'Jilid 5' | 'Jilid 6' | 'Al-Qur\'an' | 'Gharib' | 'Tajwid' | 'Munaqosyah' | 'Tahfizh'
   page: number;
   materialId?: string;
   materialName: string;
@@ -147,7 +147,7 @@ export interface LearningMaterial {
   id: string;
   title: string;
   name?: string;
-  category: 'Ummi' | 'Tajwid' | 'Gharib' | 'Tahsin' | 'Metode Ummi';
+  category: 'Ummi' | 'Tajwid' | 'Gharib' | 'Tahsin' | 'Metode Ummi' | 'Munaqosyah' | 'Tahfizh';
   jilid?: string;
   level?: string;
   page?: string;

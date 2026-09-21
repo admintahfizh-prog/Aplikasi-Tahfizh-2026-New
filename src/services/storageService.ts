@@ -457,6 +457,89 @@ export const storageService = {
       mergedUmmi.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setItem(STORAGE_KEYS.UMMI, mergedUmmi);
 
+      // Sinkronisasi otomatis data santri dengan setoran evaluasi Ummi & Hafalan terkini
+      try {
+        let studentsChanged = false;
+        const latestUmmiMap = new Map<string, UmmiRecord>();
+        mergedUmmi.forEach(u => {
+          if (!latestUmmiMap.has(u.studentId)) {
+            latestUmmiMap.set(u.studentId, u);
+          }
+        });
+
+        const latestMemMap = new Map<string, MemorizationRecord>();
+        mergedMem.forEach(m => {
+          if (!latestMemMap.has(m.studentId)) {
+            latestMemMap.set(m.studentId, m);
+          }
+        });
+
+        const synchronizedStudents = mergedStudents.map(s => {
+          let updated = false;
+          let newJilid = s.currentUmmiJilid;
+          let newPage = s.currentUmmiPage;
+          let newLastHafalan = s.lastHafalan;
+          let newLastHafalanDate = s.lastHafalanDate;
+          let newAvgScore = s.avgScore;
+
+          const isGrade89 = isGrade8or9Student(s, mergedClasses);
+          if (isGrade89) {
+            if (s.currentUmmiJilid !== '-' || (s.currentUmmiPage && s.currentUmmiPage > 0)) {
+              newJilid = '-';
+              newPage = 0;
+              updated = true;
+            }
+          } else {
+            const latestUmmi = latestUmmiMap.get(s.id);
+            if (latestUmmi) {
+              let uJilid = latestUmmi.jilid;
+              if (uJilid === 'M.H' || uJilid === 'MAP' || uJilid === 'Tahfidz') uJilid = 'Tahfizh';
+              if (uJilid === 'Munaqasyah') uJilid = 'Munaqosyah';
+              if (s.currentUmmiJilid !== uJilid) {
+                newJilid = uJilid;
+                updated = true;
+              }
+              if (s.currentUmmiPage !== latestUmmi.page) {
+                newPage = latestUmmi.page;
+                updated = true;
+              }
+            }
+          }
+
+          const latestMem = latestMemMap.get(s.id);
+          if (latestMem) {
+            const hafalanStr = `${latestMem.surahName || (latestMem as any).surah || ''}: ${latestMem.startAyah}-${latestMem.endAyah}`;
+            if (s.lastHafalan !== hafalanStr) {
+              newLastHafalan = hafalanStr;
+              updated = true;
+            }
+            if (s.lastHafalanDate !== latestMem.date) {
+              newLastHafalanDate = latestMem.date;
+              updated = true;
+            }
+          }
+
+          if (updated) {
+            studentsChanged = true;
+            return {
+              ...s,
+              currentUmmiJilid: newJilid,
+              currentUmmiPage: newPage,
+              lastHafalan: newLastHafalan,
+              lastHafalanDate: newLastHafalanDate,
+              avgScore: newAvgScore
+            };
+          }
+          return s;
+        });
+
+        if (studentsChanged) {
+          setItem(STORAGE_KEYS.STUDENTS, synchronizedStudents);
+        }
+      } catch (err) {
+        console.warn('[Cloud Sync] Student progress auto-sync error:', err);
+      }
+
       // 6. Fetch & Merge Targets
       const tgtSnap = await getDocs(collection(db, 'targets'));
       const cloudTargets: TargetProgress[] = [];
@@ -1221,6 +1304,11 @@ export const storageService = {
     const sanitized = list.map(s => {
       let updatedJilid = s.currentUmmiJilid;
       let updatedPage = s.currentUmmiPage;
+      let updatedPhoto = s.photo;
+      if (updatedPhoto && updatedPhoto.includes('unsplash')) {
+        updatedPhoto = '';
+        modified = true;
+      }
 
       // Kebijakan Tahun Ajaran Ini:
       // Seluruh Kelas 8 dan 9 TIDAK mengikuti pembelajaran UMMI dan TIDAK masuk jilid Ummi.
@@ -1241,12 +1329,24 @@ export const storageService = {
         } else if (s.currentUmmiJilid === 'Jilid 4') { updatedJilid = 'Jilid 2'; modified = true; }
         else if (s.currentUmmiJilid === 'Jilid 5') { updatedJilid = 'Jilid 2'; modified = true; }
         else if (s.currentUmmiJilid === 'Jilid 6') { updatedJilid = 'Jilid 3'; modified = true; }
-      }
-
-      let updatedPhoto = s.photo;
-      if (updatedPhoto && updatedPhoto.includes('unsplash')) {
-        updatedPhoto = '';
-        modified = true;
+        else if (s.currentUmmiJilid === 'Munaqasyah') { updatedJilid = 'Munaqosyah'; modified = true; }
+        else if (s.currentUmmiJilid === 'Tahfidz') { updatedJilid = 'Tahfizh'; modified = true; }
+        else if (s.currentUmmiJilid && (s.currentUmmiJilid.startsWith('08') || ['M.Si', 'M.H', 'MAP', 'S.Kom.', 'SE', 'ST'].includes(s.currentUmmiJilid))) {
+          let phone = s.parentPhone;
+          if (s.currentUmmiJilid.startsWith('08')) {
+            phone = s.currentUmmiJilid;
+          }
+          updatedJilid = 'Tahfizh';
+          updatedPage = 1;
+          modified = true;
+          return {
+            ...s,
+            currentUmmiJilid: updatedJilid,
+            currentUmmiPage: updatedPage,
+            parentPhone: phone,
+            photo: updatedPhoto || ''
+          };
+        }
       }
 
       if (updatedJilid !== s.currentUmmiJilid || updatedPage !== s.currentUmmiPage || updatedPhoto !== s.photo) {
@@ -1387,7 +1487,14 @@ export const storageService = {
         targetJuz: targetVal,
         photo: '',
         entryYear: '2026',
-        currentUmmiJilid: cols[ummiJilidIdx] || 'Jilid 1',
+        currentUmmiJilid: (() => {
+          const raw = (cols[ummiJilidIdx] || '').trim();
+          if (!raw) return 'Jilid 1';
+          const l = raw.toLowerCase();
+          if (l === 'munaqasyah' || l === 'munaqosyah') return 'Munaqosyah';
+          if (l === 'tahfidz' || l === 'tahfizh') return 'Tahfizh';
+          return raw;
+        })(),
         currentUmmiPage: 1,
         totalJuzHafal: 0,
         totalSurahHafal: 0,

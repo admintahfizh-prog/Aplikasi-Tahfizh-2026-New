@@ -28,7 +28,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
   onRefreshData
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<'all' | 'Ummi' | 'Tajwid' | 'Gharib' | 'Tahsin'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'Ummi' | 'Tajwid' | 'Gharib' | 'Tahsin' | 'Munaqosyah' | 'Tahfizh'>('all');
   const [jilidFilter, setJilidFilter] = useState<string>('all');
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -110,7 +110,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           {/* Main Category */}
           <div className="flex flex-wrap items-center gap-1.5">
-            {['all', 'Ummi', 'Tajwid', 'Gharib', 'Tahsin'].map((cat) => (
+            {['all', 'Ummi', 'Tajwid', 'Gharib', 'Tahsin', 'Munaqosyah', 'Tahfizh'].map((cat) => (
               <button
                 key={cat}
                 onClick={() => {
@@ -265,6 +265,8 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                     <option value="Tajwid">Ilmu Tajwid</option>
                     <option value="Gharib">Gharib Al-Qur'an</option>
                     <option value="Tahsin">Tahsin & Fashahah</option>
+                    <option value="Munaqosyah">Munaqosyah</option>
+                    <option value="Tahfizh">Tahfizh Al-Qur'an</option>
                   </select>
                 </div>
                 <div>
