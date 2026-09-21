@@ -102,10 +102,9 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
     return trimmed;
   };
 
-  // Helper to get student's actual active/effective Ummi Jilid (terkini dari setoran evaluasi atau data santri)
+  // Helper to get student's actual active/effective Ummi Jilid (prioritaskan data master santri terkini)
   const getStudentEffectiveJilid = (student: Student): string => {
-    const rec = studentLatestUmmiRecords.get(student.id);
-    return normalizeUmmiJilid(rec?.jilid || student.currentUmmiJilid);
+    return normalizeUmmiJilid(student.currentUmmiJilid || studentLatestUmmiRecords.get(student.id)?.jilid);
   };
 
   // Kebijakan TP Ini: Hanya Kelas 7 yang mengikuti pembelajaran Ummi
@@ -624,7 +623,7 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
                                   );
                                 })()}
                                 <span className="font-bold text-slate-800 text-xs">
-                                  Hal. {latestRecord ? latestRecord.page : (student.currentUmmiPage || 1)}
+                                  Hal. {student.currentUmmiPage !== undefined && student.currentUmmiPage !== null ? student.currentUmmiPage : (latestRecord ? latestRecord.page : 1)}
                                 </span>
                               </div>
                             </td>

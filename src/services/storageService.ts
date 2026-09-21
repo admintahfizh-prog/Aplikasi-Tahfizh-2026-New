@@ -490,19 +490,13 @@ export const storageService = {
               updated = true;
             }
           } else {
-            const latestUmmi = latestUmmiMap.get(s.id);
-            if (latestUmmi) {
-              let uJilid = latestUmmi.jilid;
-              if (uJilid === 'M.H' || uJilid === 'MAP' || uJilid === 'Tahfidz') uJilid = 'Tahfizh';
-              if (uJilid === 'Munaqasyah') uJilid = 'Munaqosyah';
-              if (s.currentUmmiJilid !== uJilid) {
-                newJilid = uJilid;
-                updated = true;
-              }
-              if (s.currentUmmiPage !== latestUmmi.page) {
-                newPage = latestUmmi.page;
-                updated = true;
-              }
+            // Normalisasi ejaan jilid jika ada variasi penamaan lama tanpa menimpa pilihan manual user
+            if (s.currentUmmiJilid === 'Munaqasyah') {
+              newJilid = 'Munaqosyah';
+              updated = true;
+            } else if (s.currentUmmiJilid === 'Tahfidz') {
+              newJilid = 'Tahfizh';
+              updated = true;
             }
           }
 
