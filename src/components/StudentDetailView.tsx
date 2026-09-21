@@ -19,7 +19,8 @@ import {
   User,
   ShieldCheck,
   ShieldAlert,
-  AlertTriangle
+  AlertTriangle,
+  Target
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -37,6 +38,12 @@ import { storageService } from '../services/storageService';
 import { VIOLATION_PRESETS } from './ViolationsView';
 import { AvatarBadge } from './AvatarBadge';
 import { isGrade8or9Student } from '../utils/gradeHelper';
+import { 
+  TERM_DEFINITIONS, 
+  getStudentStandardTermTarget, 
+  evaluateHafalanTerm, 
+  evaluateUmmiTerm 
+} from '../data/targetTermData';
 
 interface StudentDetailViewProps {
   studentId: string;
@@ -306,6 +313,106 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
           </div>
         </div>
 
+      </div>
+
+      {/* Target UMMI & Hafalan per Term (3 Bulan) */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs no-print space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Target className="w-4 h-4 text-[#D4AF37]" />
+              <span>Target Berkala UMMI & Hafalan per Term (3 Bulan)</span>
+            </h3>
+            <p className="text-xs text-slate-500">
+              Evaluasi ketercapaian target kurikulum berkala per triwulan Tahun Ajaran 2026/2027
+            </p>
+          </div>
+          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
+            Program: {student.program || 'Reguler Tahfizh'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          {TERM_DEFINITIONS.map(td => {
+            const hafalanStd = getStudentStandardTermTarget(student, td.term, 'Hafalan');
+            const evalHafalan = evaluateHafalanTerm(student.totalJuzHafal || 0, hafalanStd.targetNumber);
+            
+            const isGrade7 = !isGrade8or9Student(student, classes);
+            const ummiStd = isGrade7 ? getStudentStandardTermTarget(student, td.term, 'Ummi') : null;
+            const evalUmmi = isGrade7 && ummiStd ? evaluateUmmiTerm(
+              student.currentUmmiJilid || 'Jilid 1',
+              student.currentUmmiPage || 1,
+              ummiStd.targetJilid || 'Jilid 1',
+              ummiStd.targetPage || 40
+            ) : null;
+
+            return (
+              <div key={td.term} className="p-3.5 bg-slate-50/80 rounded-xl border border-slate-200 flex flex-col justify-between space-y-2.5">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-xs text-slate-900">{td.term}</span>
+                    <span className="text-[10px] font-mono text-slate-400">{td.monthsRange}</span>
+                  </div>
+                  <div className="text-[11px] font-medium text-slate-600">{td.months}</div>
+                  <div className="text-[10px] text-slate-400">DL: {td.defaultDeadline}</div>
+                </div>
+
+                {/* Hafalan Goal */}
+                <div className="p-2.5 bg-white rounded-lg border border-slate-200/80 space-y-1">
+                  <div className="flex justify-between items-center text-[10px]">
+                    <span className="font-bold text-slate-500 uppercase">Hafalan:</span>
+                    <span className={`px-1.5 py-0.2 rounded text-[9px] font-black ${
+                      evalHafalan.status === 'on-track' ? 'bg-emerald-100 text-emerald-800' :
+                      evalHafalan.status === 'needs-attention' ? 'bg-amber-100 text-amber-900' :
+                      'bg-rose-100 text-rose-800'
+                    }`}>
+                      {evalHafalan.percentage}%
+                    </span>
+                  </div>
+                  <div className="text-xs font-black text-slate-900">
+                    Target: {hafalanStd.targetNumber} Juz
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full ${
+                        evalHafalan.percentage >= 100 ? 'bg-emerald-500' :
+                        evalHafalan.percentage >= 70 ? 'bg-emerald-400' :
+                        evalHafalan.percentage >= 40 ? 'bg-[#D4AF37]' : 'bg-rose-500'
+                      }`}
+                      style={{ width: `${Math.min(100, evalHafalan.percentage)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Ummi Goal (Khusus Kelas 7) */}
+                {isGrade7 && ummiStd && evalUmmi ? (
+                  <div className="p-2.5 bg-emerald-50/60 rounded-lg border border-emerald-200/70 space-y-1">
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="font-bold text-emerald-700 uppercase">Metode Ummi:</span>
+                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-black ${
+                        evalUmmi.status === 'on-track' ? 'bg-emerald-200 text-emerald-900' :
+                        evalUmmi.status === 'needs-attention' ? 'bg-amber-100 text-amber-900' :
+                        'bg-rose-100 text-rose-800'
+                      }`}>
+                        {evalUmmi.percentage}%
+                      </span>
+                    </div>
+                    <div className="text-xs font-black text-emerald-900 truncate">
+                      {ummiStd.targetJilid} (Hal {ummiStd.targetPage})
+                    </div>
+                    <div className="text-[10px] text-emerald-700 truncate">
+                      Posisi: {student.currentUmmiJilid} (Hal {student.currentUmmiPage})
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2 bg-slate-100/60 rounded-lg text-center text-[10px] text-slate-400 italic">
+                    Hanya target hafalan
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* 30 Juz Visual Matrix */}

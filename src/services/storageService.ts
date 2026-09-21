@@ -31,6 +31,8 @@ import { INITIAL_MATERIALS } from '../data/ummiData';
 import { calculateCategory } from '../data/quranData';
 import { INITIAL_MATRIKULASI_STUDENTS, INITIAL_MATRIKULASI_RECORDS } from '../data/iqroData';
 import { isGrade8or9Student } from '../utils/gradeHelper';
+import { TermName } from '../types';
+import { getStudentStandardTermTarget, evaluateHafalanTerm, evaluateUmmiTerm } from '../data/targetTermData';
 import { 
   db, 
   collection, 
@@ -1819,37 +1821,171 @@ export const storageService = {
     }
   },
 
-  // Targets & Capaian
+  // Targets & Capaian (Hafalan & Ummi per Term / Tahunan)
   getTargets(): TargetProgress[] {
     return getItem(STORAGE_KEYS.TARGETS, INITIAL_TARGETS);
   },
   saveTarget(target: TargetProgress): void {
     const targets = this.getTargets();
-    const idx = targets.findIndex(t => t.id === target.id || t.studentId === target.studentId);
+    const idx = targets.findIndex(t => 
+      t.id === target.id || 
+      (t.studentId === target.studentId && 
+       t.targetType === target.targetType && 
+       (t.term || '') === (target.term || '') && 
+       (t.category || 'Hafalan') === (target.category || 'Hafalan'))
+    );
+    const enrichedTarget: TargetProgress = {
+      ...target,
+      updatedAt: new Date().toISOString()
+    };
     if (idx >= 0) {
-      targets[idx] = target;
+      targets[idx] = enrichedTarget;
     } else {
-      targets.push(target);
+      targets.push(enrichedTarget);
     }
     setItem(STORAGE_KEYS.TARGETS, targets);
-    syncDocToCloud('targets', target.id, target);
+    syncDocToCloud('targets', enrichedTarget.id, enrichedTarget);
+    this.notifyListeners();
+  },
+  saveTargetsBulk(newTargets: TargetProgress[]): void {
+    const targets = this.getTargets();
+    const targetMap = new Map<string, TargetProgress>();
+    
+    for (const t of targets) {
+      targetMap.set(t.id, t);
+      const key = `${t.studentId}_${t.targetType}_${t.term || ''}_${t.category || 'Hafalan'}`;
+      targetMap.set(key, t);
+    }
+
+    const itemsToCloud: TargetProgress[] = [];
+    for (const item of newTargets) {
+      const key = `${item.studentId}_${item.targetType}_${item.term || ''}_${item.category || 'Hafalan'}`;
+      const existing = targetMap.get(item.id) || targetMap.get(key);
+      const enriched: TargetProgress = {
+        ...(existing || {}),
+        ...item,
+        updatedAt: new Date().toISOString()
+      };
+      if (existing) {
+        Object.assign(existing, enriched);
+      } else {
+        targets.push(enriched);
+        targetMap.set(item.id, enriched);
+        targetMap.set(key, enriched);
+      }
+      itemsToCloud.push(enriched);
+    }
+
+    setItem(STORAGE_KEYS.TARGETS, targets);
+    syncCollectionToCloud('targets', itemsToCloud).catch(e =>
+      console.warn('[Cloud Sync] Failed bulk syncing targets to cloud:', e)
+    );
+    this.notifyListeners();
   },
   deleteTarget(id: string): void {
     const list = this.getTargets().filter(t => t.id !== id);
     setItem(STORAGE_KEYS.TARGETS, list);
     deleteDocFromCloud('targets', id);
+    this.notifyListeners();
   },
   updateStudentTargetProgress(studentId: string, currentJuz: number): void {
     const targets = this.getTargets();
-    const idx = targets.findIndex(t => t.studentId === studentId);
-    if (idx >= 0) {
-      const t = targets[idx];
-      t.achievedJuz = currentJuz;
-      t.percentage = Math.min(100, Math.round((currentJuz / t.targetJuz) * 100));
-      t.status = t.percentage >= 100 ? 'ahead' : t.percentage >= 70 ? 'on-track' : 'behind';
+    let hasChanges = false;
+    targets.forEach(t => {
+      if (t.studentId === studentId && (t.category === 'Hafalan' || !t.category)) {
+        t.achievedJuz = currentJuz;
+        t.currentAchievement = currentJuz;
+        t.remainingJuz = Math.max(0, Number(((t.targetJuz || 0) - currentJuz).toFixed(1)));
+        t.percentage = Math.min(100, Math.round((currentJuz / (t.targetJuz || 1)) * 100));
+        t.status = t.percentage >= 70 ? 'on-track' : t.percentage >= 40 ? 'needs-attention' : 'behind';
+        t.updatedAt = new Date().toISOString();
+        hasChanges = true;
+        syncDocToCloud('targets', t.id, t);
+      }
+    });
+    if (hasChanges) {
       setItem(STORAGE_KEYS.TARGETS, targets);
-      syncCollectionToCloud('targets', targets);
+      this.notifyListeners();
     }
+  },
+  generateDefaultTermTargets(): { count: number; message: string } {
+    const students = this.getStudents();
+    const classes = this.getClasses();
+    const classMap = new Map<string, ClassItem>();
+    classes.forEach(c => classMap.set(c.id, c));
+
+    const terms: TermName[] = ['Term 1', 'Term 2', 'Term 3', 'Term 4'];
+    const generated: TargetProgress[] = [];
+
+    for (const std of students) {
+      const cls = classMap.get(std.classId);
+      const isLevel7 = cls ? cls.level === 7 : (std.entryYear === '2026' || (std.nis || '').startsWith('4321-26'));
+
+      // 1. Target Hafalan untuk 4 Term (Semua Jenjang)
+      for (const term of terms) {
+        const stdHafalan = getStudentStandardTermTarget(std, term, 'Hafalan');
+        const evalHafalan = evaluateHafalanTerm(std.totalJuzHafal || 0, stdHafalan.targetNumber);
+        
+        generated.push({
+          id: `tgt-hfl-${std.id}-${term.toLowerCase().replace(' ', '')}`,
+          studentId: std.id,
+          category: 'Hafalan',
+          targetType: 'Term',
+          term,
+          academicYear: '2026/2027',
+          period: `${term} (${term === 'Term 1' ? 'Juli - Sep' : term === 'Term 2' ? 'Okt - Des' : term === 'Term 3' ? 'Jan - Mar' : 'Apr - Jun'} 2026)`,
+          targetJuz: stdHafalan.targetNumber,
+          achievedJuz: std.totalJuzHafal || 0,
+          currentAchievement: std.totalJuzHafal || 0,
+          remainingJuz: evalHafalan.remainingJuz,
+          percentage: evalHafalan.percentage,
+          status: evalHafalan.status,
+          deadline: stdHafalan.deadline,
+          notes: stdHafalan.notes
+        });
+      }
+
+      // 2. Target UMMI untuk 4 Term (Khusus Siswa Level 7 / rombel Ummi)
+      if (isLevel7 || (std.currentUmmiJilid && std.currentUmmiJilid !== '-')) {
+        for (const term of terms) {
+          const stdUmmi = getStudentStandardTermTarget(std, term, 'Ummi');
+          const evalUmmi = evaluateUmmiTerm(
+            std.currentUmmiJilid || 'Jilid 1',
+            std.currentUmmiPage || 1,
+            stdUmmi.targetJilid || 'Jilid 1',
+            stdUmmi.targetPage || 40
+          );
+
+          generated.push({
+            id: `tgt-ummi-${std.id}-${term.toLowerCase().replace(' ', '')}`,
+            studentId: std.id,
+            category: 'Ummi',
+            targetType: 'Term',
+            term,
+            academicYear: '2026/2027',
+            period: `${term} (${term === 'Term 1' ? 'Juli - Sep' : term === 'Term 2' ? 'Okt - Des' : term === 'Term 3' ? 'Jan - Mar' : 'Apr - Jun'} 2026)`,
+            targetJuz: 0,
+            targetUmmiJilid: stdUmmi.targetJilid,
+            targetUmmiPage: stdUmmi.targetPage,
+            achievedUmmiJilid: std.currentUmmiJilid || 'Jilid 1',
+            achievedUmmiPage: std.currentUmmiPage || 1,
+            remainingJuz: 0,
+            percentage: evalUmmi.percentage,
+            status: evalUmmi.status,
+            ummiStatus: evalUmmi.status,
+            ummiPercentage: evalUmmi.percentage,
+            deadline: stdUmmi.deadline,
+            notes: `${stdUmmi.notes} (${evalUmmi.summary})`
+          });
+        }
+      }
+    }
+
+    this.saveTargetsBulk(generated);
+    return {
+      count: generated.length,
+      message: `Berhasil membuat & menyinkronkan ${generated.length} target term (Hafalan & Ummi) untuk ${students.length} santri!`
+    };
   },
 
   // Notifications

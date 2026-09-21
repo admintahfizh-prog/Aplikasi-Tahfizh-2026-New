@@ -15,11 +15,19 @@ import {
   ShieldCheck,
   ChevronRight,
   FileCheck2,
-  LayoutDashboard
+  LayoutDashboard,
+  Target
 } from 'lucide-react';
 import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, AppSettings } from '../types';
 import { StudentRaportCard } from './StudentRaportCard';
 import { AvatarBadge } from './AvatarBadge';
+import { isGrade8or9Student } from '../utils/gradeHelper';
+import { 
+  TERM_DEFINITIONS, 
+  getStudentStandardTermTarget, 
+  evaluateHafalanTerm, 
+  evaluateUmmiTerm 
+} from '../data/targetTermData';
 
 interface ParentPortalViewProps {
   students: Student[];
@@ -270,6 +278,74 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                   <p className="text-[10px] text-slate-500 mt-0.5">{student.lastUpdate}</p>
                 </div>
               </div>
+
+              {/* Target UMMI & Hafalan per Term (3 Bulan) */}
+              <div className="pt-3 border-t border-slate-200/70 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Target className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>Target Ananda per Term (3 Bulan) - TP 2026/2027</span>
+                  </span>
+                  <span className="text-[10px] font-semibold text-slate-500">
+                    Program: {student.program || 'Reguler Tahfizh'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {TERM_DEFINITIONS.map(td => {
+                    const hafalanStd = getStudentStandardTermTarget(student, td.term, 'Hafalan');
+                    const evalHafalan = evaluateHafalanTerm(student.totalJuzHafal || 0, hafalanStd.targetNumber);
+                    
+                    const isGrade7 = !isGrade8or9Student(student, classes);
+                    const ummiStd = isGrade7 ? getStudentStandardTermTarget(student, td.term, 'Ummi') : null;
+                    const evalUmmi = isGrade7 && ummiStd ? evaluateUmmiTerm(
+                      student.currentUmmiJilid || 'Jilid 1',
+                      student.currentUmmiPage || 1,
+                      ummiStd.targetJilid || 'Jilid 1',
+                      ummiStd.targetPage || 40
+                    ) : null;
+
+                    return (
+                      <div key={td.term} className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-900 text-[11px]">{td.term}</span>
+                          <span className="text-[9px] text-slate-400 font-mono">{td.monthsRange}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-medium leading-tight">{td.months}</div>
+                        
+                        {/* Hafalan Mini */}
+                        <div className="bg-white p-1.5 rounded-lg border border-slate-200/80">
+                          <div className="flex justify-between text-[10px]">
+                            <span className="text-slate-500">Hafalan:</span>
+                            <span className={`font-black ${evalHafalan.status === 'on-track' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                              {hafalanStd.targetNumber} Juz
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-100 rounded-full h-1 mt-1 overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full ${evalHafalan.percentage >= 100 ? 'bg-emerald-500' : 'bg-[#D4AF37]'}`}
+                              style={{ width: `${Math.min(100, evalHafalan.percentage)}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Ummi Mini (Kelas 7) */}
+                        {isGrade7 && ummiStd && (
+                          <div className="bg-emerald-50/70 p-1.5 rounded-lg border border-emerald-200/80 text-[10px]">
+                            <span className="text-emerald-800 font-bold block truncate">
+                              Ummi: {ummiStd.targetJilid}
+                            </span>
+                            <span className="text-[9px] text-emerald-600 block truncate">
+                              {evalUmmi ? evalUmmi.summary : ''}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
             </div>
           </div>
 

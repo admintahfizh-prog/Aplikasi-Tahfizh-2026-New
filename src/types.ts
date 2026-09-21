@@ -206,22 +206,39 @@ export interface IqroSyllabusItem {
   arabicExample: string;
 }
 
-export type TargetPeriod = 'Bulanan' | 'Semester' | 'Tahunan';
+export type TargetPeriod = 'Bulanan' | 'Term' | 'Semester' | 'Tahunan';
+export type TargetCategory = 'Hafalan' | 'Ummi';
+export type TermName = 'Term 1' | 'Term 2' | 'Term 3' | 'Term 4';
 export type TargetStatus = 'Sesuai Target' | 'Perlu Ditingkatkan' | 'Tertinggal' | 'on-track' | 'needs-attention' | 'behind';
 
 export interface TargetProgress {
   id: string;
   studentId: string;
-  targetType: TargetPeriod;
+  category?: TargetCategory; // 'Hafalan' | 'Ummi'
+  targetType: TargetPeriod; // 'Term' | 'Bulanan' | 'Semester' | 'Tahunan'
+  term?: TermName; // 'Term 1' | 'Term 2' | 'Term 3' | 'Term 4'
+  academicYear?: string; // e.g. '2026/2027'
+  period?: string; // e.g. 'Term 1 (Juli - September 2026)'
+  
+  // Spesifikasi Hafalan Al-Qur'an
   targetJuz: number;
-  period?: string;
   achievedJuz?: number;
   currentAchievement?: number;
   remainingJuz: number;
+  
+  // Spesifikasi Metode UMMI
+  targetUmmiJilid?: string; // e.g. 'Jilid 1', 'Jilid 2', 'Jilid 3', 'Al-Qur\'an', 'Munaqosyah'
+  targetUmmiPage?: number; // e.g. 40
+  achievedUmmiJilid?: string;
+  achievedUmmiPage?: number;
+  ummiStatus?: TargetStatus;
+  ummiPercentage?: number;
+
   percentage: number;
   deadline?: string;
   status: TargetStatus;
   notes?: string;
+  updatedAt?: string;
 }
 
 export interface NotificationItem {
