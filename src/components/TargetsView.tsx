@@ -33,6 +33,7 @@ import {
   evaluateHafalanTerm,
   evaluateUmmiTerm
 } from '../data/targetTermData';
+import { isGrade7Class, isUmmiEnrolledStudent } from '../utils/gradeHelper';
 
 interface TargetsViewProps {
   targets: TargetProgress[];
@@ -218,16 +219,44 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
     return TERM_DEFINITIONS.find(t => t.term === selectedTerm) || TERM_DEFINITIONS[0];
   }, [selectedTerm]);
 
+  // Smooth Tab Switch Handler to prevent blank view or conflicting filters
+  const handleTabSwitch = (tab: 'hafalan' | 'ummi' | 'kurikulum') => {
+    setActiveTab(tab);
+    setStatusFilter('all');
+    if (tab === 'ummi' && selectedClassFilter !== 'all') {
+      const cls = classes.find(c => c.id === selectedClassFilter);
+      if (cls && !isGrade7Class(cls)) {
+        setSelectedClassFilter('all');
+      }
+    }
+  };
+
+  // Classes applicable for the current tab
+  const availableClassesForTab = useMemo(() => {
+    if (activeTab === 'ummi') {
+      return classes.filter(c => isGrade7Class(c));
+    }
+    return classes;
+  }, [classes, activeTab]);
+
   // Filter and Enrich Student List per Class
   const enrichedClassList = useMemo(() => {
-    const activeClasses = classes.length > 0 ? classes : [];
+    const activeClasses = availableClassesForTab.length > 0 ? availableClassesForTab : classes;
 
     return activeClasses
       .filter(c => selectedClassFilter === 'all' || c.id === selectedClassFilter)
       .map(cls => {
-        // Untuk tab Ummi: prioritaskan Level 7, namun jangan kecualikan jika ada santri Ummi di rombel lain
-        const classStudents = students
+        // Santri yang memenuhi kriteria program / rombel
+        const eligibleStudents = students
           .filter(s => s.classId === cls.id)
+          .filter(s => {
+            if (activeTab === 'ummi') {
+              return isUmmiEnrolledStudent(s, classes);
+            }
+            return true;
+          });
+
+        const mappedStudents = eligibleStudents
           .filter(s => {
             if (!searchTerm) return true;
             const term = searchTerm.toLowerCase();
@@ -246,8 +275,9 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
               const tgtPage = storedTarget?.targetUmmiPage || standard.targetPage || 40;
               const evalRes = evaluateUmmiTerm(curJilid, curPage, tgtJilid, tgtPage);
 
-              const target: TargetProgress = storedTarget || {
-                id: `temp-ummi-${std.id}-${currentTermKey}`,
+              const target: TargetProgress = {
+                ...(storedTarget || {}),
+                id: storedTarget?.id || `temp-ummi-${std.id}-${currentTermKey}`,
                 studentId: std.id,
                 category: 'Ummi',
                 targetType: 'Term',
@@ -261,8 +291,8 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
                 remainingJuz: 0,
                 percentage: evalRes.percentage,
                 status: evalRes.status,
-                deadline: standard.deadline,
-                notes: standard.notes
+                deadline: storedTarget?.deadline || standard.deadline,
+                notes: storedTarget?.notes || `${standard.notes} (${evalRes.summary})`
               };
 
               return {
@@ -275,11 +305,12 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
               const storedTarget = hafalanTargetMap.get(`${std.id}_${currentTermKey}`);
               const standard = getStudentStandardTermTarget(std, currentTermKey, 'Hafalan');
               const achievedJuz = std.totalJuzHafal || 0;
-              const tgtJuz = storedTarget?.targetJuz || standard.targetNumber;
+              const tgtJuz = storedTarget?.targetJuz || standard.targetNumber || 1;
               const evalRes = evaluateHafalanTerm(achievedJuz, tgtJuz);
 
-              const target: TargetProgress = storedTarget || {
-                id: `temp-hfl-${std.id}-${currentTermKey}`,
+              const target: TargetProgress = {
+                ...(storedTarget || {}),
+                id: storedTarget?.id || `temp-hfl-${std.id}-${currentTermKey}`,
                 studentId: std.id,
                 category: 'Hafalan',
                 targetType: 'Term',
@@ -290,8 +321,8 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
                 remainingJuz: evalRes.remainingJuz,
                 percentage: evalRes.percentage,
                 status: evalRes.status,
-                deadline: standard.deadline,
-                notes: standard.notes
+                deadline: storedTarget?.deadline || standard.deadline,
+                notes: storedTarget?.notes || standard.notes
               };
 
               return {
@@ -300,23 +331,25 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
                 evalRes
               };
             }
-          })
-          .filter(item => {
-            if (statusFilter !== 'all' && item.target.status !== statusFilter) return false;
-            return true;
           });
 
-        const totalInClass = classStudents.length;
-        const onTrackInClass = classStudents.filter(item => item.target.status === 'on-track').length;
-        const needsAttentionInClass = classStudents.filter(item => item.target.status === 'needs-attention').length;
-        const behindInClass = classStudents.filter(item => item.target.status === 'behind').length;
+        const totalInClass = mappedStudents.length;
+        const onTrackInClass = mappedStudents.filter(item => item.target.status === 'on-track').length;
+        const needsAttentionInClass = mappedStudents.filter(item => item.target.status === 'needs-attention').length;
+        const behindInClass = mappedStudents.filter(item => item.target.status === 'behind').length;
         const avgPercentage = totalInClass > 0 
-          ? Math.round(classStudents.reduce((sum, item) => sum + item.target.percentage, 0) / totalInClass) 
+          ? Math.round(mappedStudents.reduce((sum, item) => sum + (item.target.percentage || 0), 0) / totalInClass) 
           : 0;
+
+        const filteredStudents = mappedStudents.filter(item => {
+          if (statusFilter !== 'all' && item.target.status !== statusFilter) return false;
+          return true;
+        });
 
         return {
           ...cls,
-          studentsWithTarget: classStudents,
+          allStudentsInClass: mappedStudents,
+          studentsWithTarget: filteredStudents,
           stats: {
             total: totalInClass,
             onTrack: onTrackInClass,
@@ -326,21 +359,25 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
           }
         };
       });
-  }, [classes, students, selectedClassFilter, searchTerm, activeTab, selectedTerm, hafalanTargetMap, ummiTargetMap, statusFilter]);
+  }, [classes, availableClassesForTab, students, selectedClassFilter, searchTerm, activeTab, selectedTerm, hafalanTargetMap, ummiTargetMap, statusFilter]);
 
-  // Global KPI Calculations
+  // Global KPI Calculations (calculated before statusFilter so numbers stay stable when clicking badges)
+  const allTabStudents = useMemo(() => {
+    return enrichedClassList.flatMap(c => c.allStudentsInClass || c.studentsWithTarget);
+  }, [enrichedClassList]);
+
   const allFilteredStudents = useMemo(() => {
     return enrichedClassList.flatMap(c => c.studentsWithTarget);
   }, [enrichedClassList]);
 
   const globalStats = useMemo(() => {
-    const total = allFilteredStudents.length;
-    const onTrack = allFilteredStudents.filter(s => s.target.status === 'on-track').length;
-    const needsAttention = allFilteredStudents.filter(s => s.target.status === 'needs-attention').length;
-    const behind = allFilteredStudents.filter(s => s.target.status === 'behind').length;
-    const avgPct = total > 0 ? Math.round(allFilteredStudents.reduce((sum, s) => sum + s.target.percentage, 0) / total) : 0;
+    const total = allTabStudents.length;
+    const onTrack = allTabStudents.filter(s => s.target.status === 'on-track').length;
+    const needsAttention = allTabStudents.filter(s => s.target.status === 'needs-attention').length;
+    const behind = allTabStudents.filter(s => s.target.status === 'behind').length;
+    const avgPct = total > 0 ? Math.round(allTabStudents.reduce((sum, s) => sum + (s.target.percentage || 0), 0) / total) : 0;
     return { total, onTrack, needsAttention, behind, avgPct };
-  }, [allFilteredStudents]);
+  }, [allTabStudents]);
 
   return (
     <div className="space-y-6 animate-in fade-in pb-10">
@@ -408,7 +445,7 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
       {/* Primary Tab Switcher */}
       <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
         <button
-          onClick={() => setActiveTab('hafalan')}
+          onClick={() => handleTabSwitch('hafalan')}
           className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition cursor-pointer shrink-0 ${
             activeTab === 'hafalan'
               ? 'bg-[#1E293B] text-white shadow-xs'
@@ -425,7 +462,7 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
         </button>
 
         <button
-          onClick={() => setActiveTab('ummi')}
+          onClick={() => handleTabSwitch('ummi')}
           className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition cursor-pointer shrink-0 ${
             activeTab === 'ummi'
               ? 'bg-[#1E293B] text-white shadow-xs'
@@ -442,7 +479,7 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
         </button>
 
         <button
-          onClick={() => setActiveTab('kurikulum')}
+          onClick={() => handleTabSwitch('kurikulum')}
           className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition cursor-pointer shrink-0 ${
             activeTab === 'kurikulum'
               ? 'bg-[#1E293B] text-white shadow-xs'
@@ -736,9 +773,9 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  Semua Kelas ({classes.length})
+                  Semua Kelas ({availableClassesForTab.length})
                 </button>
-                {classes.map(c => (
+                {availableClassesForTab.map(c => (
                   <button
                     key={c.id}
                     onClick={() => setSelectedClassFilter(c.id)}
@@ -785,8 +822,36 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
 
           {/* Render Santri Table by Class */}
           <div className="space-y-6">
-            {enrichedClassList.map((cls) => {
-              if (cls.studentsWithTarget.length === 0 && selectedClassFilter === 'all') return null;
+            {allFilteredStudents.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center space-y-4 shadow-xs">
+                <div className="w-12 h-12 rounded-full bg-amber-50 text-[#D4AF37] flex items-center justify-center mx-auto border border-amber-200">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-bold text-slate-800">
+                    Tidak Ditemukan Data Santri Sesuai Kriteria Filter
+                  </h3>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    {activeTab === 'ummi'
+                      ? 'Metode UMMI dikhususkan untuk jenjang Kelas 7. Coba reset filter status atau pilih kelas 7A / 7B.'
+                      : 'Coba reset status target atau filter kelas untuk melihat seluruh daftar capaian santri.'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedClassFilter('all');
+                    setStatusFilter('all');
+                    setSearchTerm('');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-[#1E293B] hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer inline-flex items-center gap-2"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Reset Semua Filter</span>
+                </button>
+              </div>
+            ) : (
+              enrichedClassList.map((cls) => {
+                if (cls.studentsWithTarget.length === 0 && selectedClassFilter === 'all') return null;
 
               return (
                 <div key={cls.id} className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
@@ -1015,7 +1080,8 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
 
                 </div>
               );
-            })}
+            })
+          )}
           </div>
 
         </div>

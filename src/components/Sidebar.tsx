@@ -71,7 +71,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       { id: 'violations', label: 'Pelanggaran Tahfizh', icon: ShieldAlert },
       { id: 'materials', label: 'Materi & Kurikulum', icon: FileText },
       { id: 'scores', label: 'Penilaian & Nilai', icon: Star },
-      { id: 'targets', label: 'Target Hafalan', icon: Target },
+      { id: 'targets', label: 'Target UMMI & Hafalan', icon: Target },
       { id: 'reports', label: 'Laporan & Raport', icon: BarChart3 }
     ];
 
@@ -121,9 +121,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                 }`}
               >
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
                   <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                  <span className="truncate">{item.label}</span>
+                  <span className="whitespace-nowrap font-medium text-xs">{item.label}</span>
                 </div>
                 {item.badge && (
                   <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded shrink-0 ${

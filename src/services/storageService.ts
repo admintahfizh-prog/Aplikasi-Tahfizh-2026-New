@@ -30,7 +30,7 @@ import {
 import { INITIAL_MATERIALS } from '../data/ummiData';
 import { calculateCategory } from '../data/quranData';
 import { INITIAL_MATRIKULASI_STUDENTS, INITIAL_MATRIKULASI_RECORDS } from '../data/iqroData';
-import { isGrade8or9Student } from '../utils/gradeHelper';
+import { isGrade8or9Student, isUmmiEnrolledStudent } from '../utils/gradeHelper';
 import { TermName } from '../types';
 import { getStudentStandardTermTarget, evaluateHafalanTerm, evaluateUmmiTerm } from '../data/targetTermData';
 import { 
@@ -1945,8 +1945,8 @@ export const storageService = {
         });
       }
 
-      // 2. Target UMMI untuk 4 Term (Khusus Siswa Level 7 / rombel Ummi)
-      if (isLevel7 || (std.currentUmmiJilid && std.currentUmmiJilid !== '-')) {
+      // 2. Target UMMI untuk 4 Term (Khusus Siswa Level 7 / yang mengikuti pembelajaran Ummi)
+      if (isUmmiEnrolledStudent(std, classes)) {
         for (const term of terms) {
           const stdUmmi = getStudentStandardTermTarget(std, term, 'Ummi');
           const evalUmmi = evaluateUmmiTerm(
