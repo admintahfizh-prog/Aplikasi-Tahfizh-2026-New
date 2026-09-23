@@ -51,7 +51,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
         
         {/* Top Header with Brand */}
         <div className="bg-[#1E293B] p-6 text-center text-white relative">
-          {storageService.getSettings()?.customLogoUrl && (
+          {Boolean(storageService.getSettings()?.customLogoUrl?.trim()) && (
             <div className="flex justify-center mb-3">
               <div className="p-1.5 bg-white rounded-xl shadow-md inline-block">
                 <img

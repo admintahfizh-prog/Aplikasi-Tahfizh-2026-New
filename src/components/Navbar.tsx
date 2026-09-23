@@ -103,7 +103,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="flex items-center space-x-3 cursor-pointer group" 
             onClick={() => setActiveView && setActiveView(currentUser.role === 'wali' ? 'parent-portal' : 'dashboard')}
           >
-            {storageService.getSettings()?.customLogoUrl && (
+            {Boolean(storageService.getSettings()?.customLogoUrl?.trim()) && (
               <div className="p-1 bg-white rounded-lg border border-slate-200 shadow-xs group-hover:scale-105 transition flex items-center justify-center shrink-0">
                 <img
                   src={storageService.getSettings()?.customLogoUrl}

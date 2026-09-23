@@ -1155,7 +1155,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
               <div className="flex items-center justify-between p-2 bg-white rounded-xl border border-slate-200">
                 <div className="flex items-center gap-2">
                   <div className="w-9 h-9 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
-                    {yayasanLogoUrl ? (
+                    {yayasanLogoUrl && yayasanLogoUrl.trim() !== '' ? (
                       <img src={yayasanLogoUrl} alt="Logo Yayasan" className="w-full h-full object-contain p-0.5" />
                     ) : (
                       <ImageIcon className="w-4 h-4 text-slate-400 opacity-60" />
@@ -1197,7 +1197,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
               <div className="flex items-center justify-between p-2 bg-white rounded-xl border border-slate-200">
                 <div className="flex items-center gap-2">
                   <div className="w-9 h-9 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
-                    {bismillahImgUrl ? (
+                    {bismillahImgUrl && bismillahImgUrl.trim() !== '' ? (
                       <img src={bismillahImgUrl} alt="Bismillah PNG" className="w-full h-full object-contain p-0.5" />
                     ) : (
                       <ImageIcon className="w-4 h-4 text-slate-400 opacity-60" />
@@ -1239,7 +1239,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
               <div className="flex items-center justify-between p-2 bg-white rounded-xl border border-slate-200">
                 <div className="flex items-center gap-2">
                   <div className="w-9 h-9 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
-                    {raportFrameUrl ? (
+                    {raportFrameUrl && raportFrameUrl.trim() !== '' ? (
                       <img src={raportFrameUrl} alt="Bingkai Raport PNG" className="w-full h-full object-contain p-0.5" />
                     ) : (
                       <Square className="w-4 h-4 text-slate-400 opacity-60" />
@@ -1288,7 +1288,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                 <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
                   <div className="flex items-center gap-2.5">
                     <div className="w-16 h-10 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
-                      {headmasterSignatureUrl ? (
+                      {headmasterSignatureUrl && headmasterSignatureUrl.trim() !== '' ? (
                         <img
                           src={headmasterSignatureUrl}
                           alt="TTD Kepsek"
@@ -1334,7 +1334,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                 <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
                   <div className="flex items-center gap-2.5">
                     <div className="w-16 h-10 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
-                      {tahfizhCoordinatorSignatureUrl ? (
+                      {tahfizhCoordinatorSignatureUrl && tahfizhCoordinatorSignatureUrl.trim() !== '' ? (
                         <img
                           src={tahfizhCoordinatorSignatureUrl}
                           alt="TTD Koordinator"
@@ -1397,7 +1397,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
           }}
         >
           {/* BINGKAI RAPORT (UPLOAD MANUAL FORMAT PNG, MENGGANTIKAN LINE BINGKAI LAMA) */}
-          {raportFrameUrl && (
+          {Boolean(raportFrameUrl && raportFrameUrl.trim() !== '') && (
             <img
               src={raportFrameUrl}
               alt="Bingkai Raport PNG"
@@ -1421,7 +1421,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
 
               {/* Center Bismillah PNG (Ganti Tulisan Arab) */}
               <div className="flex-1 px-2 flex flex-col items-center justify-center min-h-[72px]">
-                {bismillahImgUrl ? (
+                {bismillahImgUrl && bismillahImgUrl.trim() !== '' ? (
                   <img
                     src={bismillahImgUrl}
                     alt="Kaligrafi Bismillah"
@@ -1445,7 +1445,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
 
               {/* Right Logo: Yayasan (Upload Manual Besar Proporsional) */}
               <div className="w-24 sm:w-28 flex justify-end items-center shrink-0">
-                {yayasanLogoUrl ? (
+                {yayasanLogoUrl && yayasanLogoUrl.trim() !== '' ? (
                   <img 
                     src={yayasanLogoUrl} 
                     alt="Logo Yayasan" 
@@ -1665,7 +1665,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                 
                 {/* Online Digital Signature Kepala Sekolah */}
                 <div className="relative w-full flex flex-col items-center justify-center my-0.5">
-                  {headmasterSignatureUrl ? (
+                  {headmasterSignatureUrl && headmasterSignatureUrl.trim() !== '' ? (
                     <div className="relative group flex items-center justify-center">
                       <img
                         src={headmasterSignatureUrl}
@@ -1718,7 +1718,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                 
                 {/* Online Digital Signature Koordinator Tahfizh */}
                 <div className="relative w-full flex flex-col items-center justify-center my-0.5">
-                  {tahfizhCoordinatorSignatureUrl ? (
+                  {tahfizhCoordinatorSignatureUrl && tahfizhCoordinatorSignatureUrl.trim() !== '' ? (
                     <div className="relative group flex items-center justify-center">
                       <img
                         src={tahfizhCoordinatorSignatureUrl}

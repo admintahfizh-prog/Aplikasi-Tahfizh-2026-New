@@ -916,11 +916,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           {/* Name & Avatar */}
                           <td className="p-3.5">
                             <div className="flex items-center gap-2.5">
-                              <img
-                                src={u.avatar}
-                                alt={u.name}
-                                className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
-                              />
+                              {u.avatar && u.avatar.trim() !== '' ? (
+                                <img
+                                  src={u.avatar}
+                                  alt={u.name}
+                                  className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-slate-800 text-[#D4AF37] border border-slate-700 flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                                  {u.name ? u.name.charAt(0) : 'U'}
+                                </div>
+                              )}
                               <div>
                                 <p className="font-bold text-slate-900">{u.name}</p>
                                 <p className="text-[11px] text-slate-400 line-clamp-1">
@@ -1158,7 +1164,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
               <div className="w-40 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
-                {formData.headmasterSignatureUrl ? (
+                {formData.headmasterSignatureUrl && formData.headmasterSignatureUrl.trim() !== '' ? (
                   <img
                     src={formData.headmasterSignatureUrl}
                     alt="TTD Kepala Sekolah"
@@ -1218,7 +1224,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
               <div className="w-40 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
-                {formData.tahfizhCoordinatorSignatureUrl ? (
+                {formData.tahfizhCoordinatorSignatureUrl && formData.tahfizhCoordinatorSignatureUrl.trim() !== '' ? (
                   <img
                     src={formData.tahfizhCoordinatorSignatureUrl}
                     alt="TTD Koordinator Tahfizh"
@@ -1279,7 +1285,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
               {/* Logo Preview */}
               <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
-                {formData.customLogoUrl ? (
+                {formData.customLogoUrl && formData.customLogoUrl.trim() !== '' ? (
                   <img
                     src={formData.customLogoUrl}
                     alt="Logo Sekolah"
@@ -1341,7 +1347,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
               {/* Logo Preview */}
               <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
-                {formData.yayasanLogoUrl ? (
+                {formData.yayasanLogoUrl && formData.yayasanLogoUrl.trim() !== '' ? (
                   <img
                     src={formData.yayasanLogoUrl}
                     alt="Logo Yayasan"
@@ -1403,7 +1409,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
               {/* Bismillah Preview */}
               <div className="w-48 h-20 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
-                {formData.bismillahImgUrl ? (
+                {formData.bismillahImgUrl && formData.bismillahImgUrl.trim() !== '' ? (
                   <img
                     src={formData.bismillahImgUrl}
                     alt="Kaligrafi Bismillah PNG"
@@ -1465,7 +1471,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
               {/* Frame Preview */}
               <div className="w-24 h-32 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs relative">
-                {formData.raportFrameUrl ? (
+                {formData.raportFrameUrl && formData.raportFrameUrl.trim() !== '' ? (
                   <img
                     src={formData.raportFrameUrl}
                     alt="Bingkai Raport PNG"

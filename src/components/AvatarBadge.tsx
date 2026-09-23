@@ -66,7 +66,7 @@ export const AvatarBadge: React.FC<AvatarBadgeProps> = ({
     }
   };
 
-  const hasPhoto = Boolean(effectivePhotoUrl && !imageError);
+  const hasPhoto = Boolean(effectivePhotoUrl && effectivePhotoUrl.trim() !== '' && !imageError);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

@@ -19,7 +19,7 @@ export const LogoAlAzhar: React.FC<LogoProps> = ({
     ? customLogoUrl 
     : (storageService.getSettings()?.customLogoUrl || '');
 
-  if (!logoSrc) {
+  if (!logoSrc || logoSrc.trim() === '') {
     if (showText) {
       return (
         <div className={`inline-flex flex-col ${className}`}>
