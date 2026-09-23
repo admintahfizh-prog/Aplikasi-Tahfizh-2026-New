@@ -1392,7 +1392,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             width: '215mm', 
             minHeight: '330mm',
             maxHeight: '330mm',
-            padding: '16mm 18mm 14mm 18mm',
+            padding: '16mm 18mm 11mm 18mm',
             fontFamily: "'Times New Roman', Times, serif" 
           }}
         >
@@ -1406,10 +1406,14 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
           )}
 
           {/* INNER REPORT CONTENT - SAFELY BUFFERED FROM BINGKAI */}
-          <div className="relative z-10 space-y-3.5 text-[12.5px] leading-snug">
+          <div className="relative z-10 space-y-3 text-[12.5px] leading-snug">
             
             {/* HEADER: LOGO SEKOLAH (KIRI BESAR) - BISMILLAH PNG (TENGAH) - LOGO YAYASAN (KANAN BESAR) */}
-            <div className="flex items-center justify-between gap-3 border-b border-transparent pb-1">
+            {/* Diberikan jarak 0,5 cm dari border agar proporsional dan tidak mepet */}
+            <div 
+              className="flex items-center justify-between gap-3 border-b border-transparent pb-1"
+              style={{ paddingTop: '0.5cm', paddingLeft: '0.5cm', paddingRight: '0.5cm' }}
+            >
               {/* Left Logo: Sekolah (Al Azhar 21) */}
               <div className="w-24 sm:w-28 flex justify-start items-center shrink-0">
                 <LogoAlAzhar size={88} customLogoUrl={settings.customLogoUrl} className="w-22 h-22 object-contain" />
@@ -1464,8 +1468,11 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
               </div>
             </div>
 
-            {/* DOCUMENT TITLE (PERBAIKAN FORMAT SESUAI PERMINTAAN) */}
-            <div className="text-center space-y-0.5 pt-0.5">
+            {/* DOCUMENT TITLE (TULISAN JUDUL RAPORT - DIBERIKAN JARAK 0,5 CM SECARA PROPORSIONAL) */}
+            <div 
+              className="text-center space-y-0.5"
+              style={{ paddingTop: '0.5cm', paddingLeft: '0.5cm', paddingRight: '0.5cm' }}
+            >
               <h1 className="text-[15px] sm:text-[16px] font-black uppercase tracking-tight text-slate-950">
                 LAPORAN PROGRAM TAHFIZHUL QUR'AN
               </h1>
@@ -1489,7 +1496,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                   <tr>
                     <td className="w-36 py-1 font-bold text-slate-900">Nama</td>
                     <td className="w-4 text-center font-bold">:</td>
-                    <td className="py-1 font-bold text-slate-900 uppercase">{student.name}</td>
+                    <td className="py-1 font-bold text-slate-900">{student.name}</td>
                   </tr>
                   <tr>
                     <td className="py-1 font-bold text-slate-900">No. Induk / NISN</td>
@@ -1646,13 +1653,13 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             {/* ========================================================================= */}
             {/* TANDA TANGAN (SIGNATURES) - SAMPAI SEBELUM BINGKAI BAWAH                   */}
             {/* ========================================================================= */}
-            <div className="pt-5 grid grid-cols-2 text-center text-[12.5px]">
-              {/* Left Signature: Kepala Sekolah (Sinkron Admin) */}
+            <div className="pt-4 grid grid-cols-2 text-center text-[12.5px]">
+              {/* Left Signature: Kepala Sekolah */}
               <div className="flex flex-col items-center justify-between min-h-[112px]">
                 <div>
                   <p className="text-slate-800">Mengetahui,</p>
-                  <p className="font-bold text-slate-950 uppercase">
-                    Kepala {settings.schoolName || 'SMP ISLAM AL AZHAR 21 SUKOHARJO'}
+                  <p className="font-bold text-slate-950">
+                    Kepala SMP Islam Al Azhar 21
                   </p>
                 </div>
                 

@@ -407,6 +407,9 @@ export default function App() {
               targets={viewTargets}
               students={viewStudents}
               classes={classes}
+              teachers={teachers}
+              halaqahGroups={halaqahGroups}
+              currentUser={currentUser}
               userRole={currentUser.role}
               onRefreshData={loadAllData}
               onOpenStudentDetail={handleOpenStudentDetail}

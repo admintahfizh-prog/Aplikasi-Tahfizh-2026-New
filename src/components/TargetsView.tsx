@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { 
   Target, 
   Plus, 
@@ -20,9 +20,10 @@ import {
   Info,
   ChevronRight,
   ShieldCheck,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Users
 } from 'lucide-react';
-import { TargetProgress, Student, ClassItem, Role, TermName, TargetCategory } from '../types';
+import { TargetProgress, Student, ClassItem, Role, TermName, TargetCategory, Teacher, User, HalaqahGroup } from '../types';
 import { storageService } from '../services/storageService';
 import { AvatarBadge } from './AvatarBadge';
 import { 
@@ -34,11 +35,16 @@ import {
   evaluateUmmiTerm
 } from '../data/targetTermData';
 import { isGrade7Class, isUmmiEnrolledStudent } from '../utils/gradeHelper';
+import { HalaqahFilterBar } from './HalaqahFilterBar';
+import { resolveCurrentTeacher, filterStudentsByHalaqah, groupStudentsByHalaqah, getStudentHalaqahInfo } from '../utils/halaqahHelper';
 
 interface TargetsViewProps {
   targets: TargetProgress[];
   students: Student[];
   classes: ClassItem[];
+  teachers?: Teacher[];
+  currentUser?: User | null;
+  halaqahGroups?: HalaqahGroup[];
   userRole: Role;
   onRefreshData: () => void;
   onOpenStudentDetail: (studentId: string) => void;
@@ -48,12 +54,33 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
   targets,
   students,
   classes = [],
+  teachers,
+  currentUser,
+  halaqahGroups,
   userRole,
   onRefreshData,
   onOpenStudentDetail
 }) => {
   // Primary Tabs: Hafalan per Term, Ummi per Term, Standar Kurikulum Term
   const [activeTab, setActiveTab] = useState<'hafalan' | 'ummi' | 'kurikulum'>('hafalan');
+  
+  // Halaqah filter and grouping state
+  const [selectedHalaqahFilter, setSelectedHalaqahFilter] = useState<string>('all');
+  const [viewGroupingMode, setViewGroupingMode] = useState<'halaqah' | 'class'>('halaqah');
+
+  const activeTeachers = useMemo(() => {
+    if (teachers && teachers.length > 0) return teachers;
+    return storageService.getTeachers();
+  }, [teachers]);
+
+  const activeHalaqahGroups = useMemo(() => {
+    if (halaqahGroups && halaqahGroups.length > 0) return halaqahGroups;
+    return storageService.getHalaqahGroups();
+  }, [halaqahGroups]);
+
+  const currentTeacher = useMemo(() => {
+    return resolveCurrentTeacher(currentUser, activeTeachers);
+  }, [currentUser, activeTeachers]);
   
   // Term filter (Term 1, Term 2, Term 3, Term 4, atau all)
   const [selectedTerm, setSelectedTerm] = useState<TermName | 'all'>('Term 1');
@@ -239,6 +266,76 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
     return classes;
   }, [classes, activeTab]);
 
+  // Helper to map student to target evaluation
+  const mapStudentToTarget = useCallback((std: Student, currentTermKey: TermName) => {
+    if (activeTab === 'ummi') {
+      // Target Ummi
+      const storedTarget = ummiTargetMap.get(`${std.id}_${currentTermKey}`);
+      const standard = getStudentStandardTermTarget(std, currentTermKey, 'Ummi');
+      const curJilid = std.currentUmmiJilid || 'Jilid 1';
+      const curPage = std.currentUmmiPage || 1;
+      const tgtJilid = storedTarget?.targetUmmiJilid || standard.targetJilid || 'Jilid 1';
+      const tgtPage = storedTarget?.targetUmmiPage || standard.targetPage || 40;
+      const evalRes = evaluateUmmiTerm(curJilid, curPage, tgtJilid, tgtPage);
+
+      const target: TargetProgress = {
+        ...(storedTarget || {}),
+        id: storedTarget?.id || `temp-ummi-${std.id}-${currentTermKey}`,
+        studentId: std.id,
+        category: 'Ummi',
+        targetType: 'Term',
+        term: currentTermKey,
+        academicYear: '2026/2027',
+        targetJuz: 0,
+        targetUmmiJilid: tgtJilid,
+        targetUmmiPage: tgtPage,
+        achievedUmmiJilid: curJilid,
+        achievedUmmiPage: curPage,
+        remainingJuz: 0,
+        percentage: evalRes.percentage,
+        status: evalRes.status,
+        deadline: storedTarget?.deadline || standard.deadline,
+        notes: storedTarget?.notes || `${standard.notes} (${evalRes.summary})`
+      };
+
+      return {
+        student: std,
+        target,
+        evalRes
+      };
+    } else {
+      // Target Hafalan
+      const storedTarget = hafalanTargetMap.get(`${std.id}_${currentTermKey}`);
+      const standard = getStudentStandardTermTarget(std, currentTermKey, 'Hafalan');
+      const achievedJuz = std.totalJuzHafal || 0;
+      const tgtJuz = storedTarget?.targetJuz || standard.targetNumber || 1;
+      const evalRes = evaluateHafalanTerm(achievedJuz, tgtJuz);
+
+      const target: TargetProgress = {
+        ...(storedTarget || {}),
+        id: storedTarget?.id || `temp-hfl-${std.id}-${currentTermKey}`,
+        studentId: std.id,
+        category: 'Hafalan',
+        targetType: 'Term',
+        term: currentTermKey,
+        academicYear: '2026/2027',
+        targetJuz: tgtJuz,
+        achievedJuz,
+        remainingJuz: evalRes.remainingJuz,
+        percentage: evalRes.percentage,
+        status: evalRes.status,
+        deadline: storedTarget?.deadline || standard.deadline,
+        notes: storedTarget?.notes || standard.notes
+      };
+
+      return {
+        student: std,
+        target,
+        evalRes
+      };
+    }
+  }, [activeTab, ummiTargetMap, hafalanTargetMap]);
+
   // Filter and Enrich Student List per Class
   const enrichedClassList = useMemo(() => {
     const activeClasses = availableClassesForTab.length > 0 ? availableClassesForTab : classes;
@@ -247,7 +344,7 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
       .filter(c => selectedClassFilter === 'all' || c.id === selectedClassFilter)
       .map(cls => {
         // Santri yang memenuhi kriteria program / rombel
-        const eligibleStudents = students
+        let eligibleStudents = students
           .filter(s => s.classId === cls.id)
           .filter(s => {
             if (activeTab === 'ummi') {
@@ -255,6 +352,10 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
             }
             return true;
           });
+
+        if (selectedHalaqahFilter !== 'all') {
+          eligibleStudents = filterStudentsByHalaqah(eligibleStudents, selectedHalaqahFilter, currentTeacher?.id, activeHalaqahGroups, activeTeachers);
+        }
 
         const mappedStudents = eligibleStudents
           .filter(s => {
@@ -264,73 +365,7 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
           })
           .map(std => {
             const currentTermKey = selectedTerm === 'all' ? 'Term 1' : selectedTerm;
-
-            if (activeTab === 'ummi') {
-              // Target Ummi
-              const storedTarget = ummiTargetMap.get(`${std.id}_${currentTermKey}`);
-              const standard = getStudentStandardTermTarget(std, currentTermKey, 'Ummi');
-              const curJilid = std.currentUmmiJilid || 'Jilid 1';
-              const curPage = std.currentUmmiPage || 1;
-              const tgtJilid = storedTarget?.targetUmmiJilid || standard.targetJilid || 'Jilid 1';
-              const tgtPage = storedTarget?.targetUmmiPage || standard.targetPage || 40;
-              const evalRes = evaluateUmmiTerm(curJilid, curPage, tgtJilid, tgtPage);
-
-              const target: TargetProgress = {
-                ...(storedTarget || {}),
-                id: storedTarget?.id || `temp-ummi-${std.id}-${currentTermKey}`,
-                studentId: std.id,
-                category: 'Ummi',
-                targetType: 'Term',
-                term: currentTermKey,
-                academicYear: '2026/2027',
-                targetJuz: 0,
-                targetUmmiJilid: tgtJilid,
-                targetUmmiPage: tgtPage,
-                achievedUmmiJilid: curJilid,
-                achievedUmmiPage: curPage,
-                remainingJuz: 0,
-                percentage: evalRes.percentage,
-                status: evalRes.status,
-                deadline: storedTarget?.deadline || standard.deadline,
-                notes: storedTarget?.notes || `${standard.notes} (${evalRes.summary})`
-              };
-
-              return {
-                student: std,
-                target,
-                evalRes
-              };
-            } else {
-              // Target Hafalan
-              const storedTarget = hafalanTargetMap.get(`${std.id}_${currentTermKey}`);
-              const standard = getStudentStandardTermTarget(std, currentTermKey, 'Hafalan');
-              const achievedJuz = std.totalJuzHafal || 0;
-              const tgtJuz = storedTarget?.targetJuz || standard.targetNumber || 1;
-              const evalRes = evaluateHafalanTerm(achievedJuz, tgtJuz);
-
-              const target: TargetProgress = {
-                ...(storedTarget || {}),
-                id: storedTarget?.id || `temp-hfl-${std.id}-${currentTermKey}`,
-                studentId: std.id,
-                category: 'Hafalan',
-                targetType: 'Term',
-                term: currentTermKey,
-                academicYear: '2026/2027',
-                targetJuz: tgtJuz,
-                achievedJuz,
-                remainingJuz: evalRes.remainingJuz,
-                percentage: evalRes.percentage,
-                status: evalRes.status,
-                deadline: storedTarget?.deadline || standard.deadline,
-                notes: storedTarget?.notes || standard.notes
-              };
-
-              return {
-                student: std,
-                target,
-                evalRes
-              };
-            }
+            return mapStudentToTarget(std, currentTermKey);
           });
 
         const totalInClass = mappedStudents.length;
@@ -359,16 +394,86 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
           }
         };
       });
-  }, [classes, availableClassesForTab, students, selectedClassFilter, searchTerm, activeTab, selectedTerm, hafalanTargetMap, ummiTargetMap, statusFilter]);
+  }, [classes, availableClassesForTab, students, selectedClassFilter, selectedHalaqahFilter, currentTeacher, activeHalaqahGroups, activeTeachers, searchTerm, activeTab, selectedTerm, mapStudentToTarget, statusFilter]);
+
+  // Filter and Enrich Student List per Halaqah
+  const enrichedHalaqahList = useMemo(() => {
+    let eligibleStudents = students.filter(s => {
+      if (activeTab === 'ummi') {
+        return isUmmiEnrolledStudent(s, classes);
+      }
+      return true;
+    });
+
+    if (selectedClassFilter !== 'all') {
+      eligibleStudents = eligibleStudents.filter(s => s.classId === selectedClassFilter);
+    }
+
+    if (selectedHalaqahFilter !== 'all') {
+      eligibleStudents = filterStudentsByHalaqah(eligibleStudents, selectedHalaqahFilter, currentTeacher?.id, activeHalaqahGroups, activeTeachers);
+    }
+
+    const grouped = groupStudentsByHalaqah(
+      eligibleStudents, 
+      activeHalaqahGroups, 
+      activeTeachers, 
+      selectedHalaqahFilter, 
+      currentTeacher?.id
+    );
+
+    const currentTermKey = selectedTerm === 'all' ? 'Term 1' : selectedTerm;
+
+    return grouped.map(group => {
+      const mappedStudents = group.students
+        .filter(s => {
+          if (!searchTerm) return true;
+          const term = searchTerm.toLowerCase();
+          return s.name.toLowerCase().includes(term) || (s.nis || '').toLowerCase().includes(term);
+        })
+        .map(std => mapStudentToTarget(std, currentTermKey));
+
+      const totalInGroup = mappedStudents.length;
+      const onTrackInGroup = mappedStudents.filter(item => item.target.status === 'on-track').length;
+      const needsAttentionInGroup = mappedStudents.filter(item => item.target.status === 'needs-attention').length;
+      const behindInGroup = mappedStudents.filter(item => item.target.status === 'behind').length;
+      const avgPercentage = totalInGroup > 0 
+        ? Math.round(mappedStudents.reduce((sum, item) => sum + (item.target.percentage || 0), 0) / totalInGroup) 
+        : 0;
+
+      const filteredStudents = mappedStudents.filter(item => {
+        if (statusFilter !== 'all' && item.target.status !== statusFilter) return false;
+        return true;
+      });
+
+      return {
+        ...group,
+        allStudentsInGroup: mappedStudents,
+        studentsWithTarget: filteredStudents,
+        stats: {
+          total: totalInGroup,
+          onTrack: onTrackInGroup,
+          needsAttention: needsAttentionInGroup,
+          behind: behindInGroup,
+          avgPercentage
+        }
+      };
+    });
+  }, [students, classes, activeTab, selectedClassFilter, selectedHalaqahFilter, currentTeacher, activeHalaqahGroups, activeTeachers, searchTerm, selectedTerm, mapStudentToTarget, statusFilter]);
 
   // Global KPI Calculations (calculated before statusFilter so numbers stay stable when clicking badges)
   const allTabStudents = useMemo(() => {
+    if (viewGroupingMode === 'halaqah') {
+      return enrichedHalaqahList.flatMap(g => g.allStudentsInGroup || g.studentsWithTarget);
+    }
     return enrichedClassList.flatMap(c => c.allStudentsInClass || c.studentsWithTarget);
-  }, [enrichedClassList]);
+  }, [viewGroupingMode, enrichedHalaqahList, enrichedClassList]);
 
   const allFilteredStudents = useMemo(() => {
+    if (viewGroupingMode === 'halaqah') {
+      return enrichedHalaqahList.flatMap(g => g.studentsWithTarget);
+    }
     return enrichedClassList.flatMap(c => c.studentsWithTarget);
-  }, [enrichedClassList]);
+  }, [viewGroupingMode, enrichedHalaqahList, enrichedClassList]);
 
   const globalStats = useMemo(() => {
     const total = allTabStudents.length;
@@ -378,6 +483,189 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
     const avgPct = total > 0 ? Math.round(allTabStudents.reduce((sum, s) => sum + (s.target.percentage || 0), 0) / total) : 0;
     return { total, onTrack, needsAttention, behind, avgPct };
   }, [allTabStudents]);
+
+  const renderStudentTable = (studentsWithTarget: any[]) => (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-xs border-collapse">
+        <thead>
+          <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold">
+            <th className="py-3 px-3.5 w-10 text-center">No</th>
+            <th className="py-3 px-3.5">Santri</th>
+            <th className="py-3 px-3.5">Program / Jenjang</th>
+            <th className="py-3 px-3.5">
+              {activeTab === 'ummi' ? 'Target Ummi Term' : 'Target Hafalan Term'}
+            </th>
+            <th className="py-3 px-3.5">Capaian Riil Saat Ini</th>
+            <th className="py-3 px-3.5 w-52">Progress Ketercapaian</th>
+            <th className="py-3 px-3.5 text-center">Status</th>
+            {userRole !== 'wali' && <th className="py-3 px-3.5 text-center">Aksi</th>}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {studentsWithTarget.length === 0 ? (
+            <tr>
+              <td colSpan={8} className="py-8 text-center text-slate-400">
+                Tidak ada data santri yang cocok dengan filter di kelompok ini.
+              </td>
+            </tr>
+          ) : (
+            studentsWithTarget.map((item, idx) => {
+              const { student, target } = item;
+              const isUmmi = activeTab === 'ummi';
+
+              return (
+                <tr key={student.id} className="hover:bg-slate-50/90 transition">
+                  {/* No */}
+                  <td className="py-3 px-3.5 text-center text-slate-400 font-mono font-medium">
+                    {idx + 1}
+                  </td>
+
+                  {/* Santri */}
+                  <td className="py-3 px-3.5">
+                    <div 
+                      onClick={() => onOpenStudentDetail(student.id)}
+                      className="flex items-center gap-2.5 cursor-pointer hover:text-[#D4AF37] transition group"
+                    >
+                      <AvatarBadge
+                        name={student.name}
+                        photoUrl={student.photo}
+                        gender={student.gender}
+                        role="santri"
+                        size="sm"
+                        className="shrink-0"
+                      />
+                      <div>
+                        <span className="font-bold text-slate-900 group-hover:text-[#D4AF37] block">
+                          {student.name}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          NIS: {student.nis || '-'}
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Program */}
+                  <td className="py-3 px-3.5">
+                    <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold">
+                      {student.program || 'Reguler Tahfizh'}
+                    </span>
+                  </td>
+
+                  {/* Target Term */}
+                  <td className="py-3 px-3.5 font-bold">
+                    {isUmmi ? (
+                      <div className="space-y-0.5">
+                        <span className="text-emerald-800 font-black">
+                          {target.targetUmmiJilid || 'Jilid 1'} {target.targetUmmiPage ? `(Hal ${target.targetUmmiPage})` : ''}
+                        </span>
+                        <div className="text-[10px] text-slate-500 font-normal">
+                          {target.term || selectedTerm} • DL: {target.deadline || '30 Sep 2026'}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-0.5">
+                        <span className="text-slate-900 font-black">
+                          {target.targetJuz} Juz
+                        </span>
+                        <div className="text-[10px] text-slate-500 font-normal">
+                          {target.term || selectedTerm} • DL: {target.deadline || '30 Sep 2026'}
+                        </div>
+                      </div>
+                    )}
+                  </td>
+
+                  {/* Capaian Riil */}
+                  <td className="py-3 px-3.5">
+                    {isUmmi ? (
+                      <div>
+                        <span className="font-extrabold text-slate-800">
+                          {student.currentUmmiJilid || 'Jilid 1'}
+                        </span>
+                        <span className="text-slate-500 text-[11px] ml-1">
+                          Hal {student.currentUmmiPage || 1}
+                        </span>
+                      </div>
+                    ) : (
+                      <div>
+                        <span className="font-extrabold text-slate-800">
+                          {student.totalJuzHafal || 0} Juz
+                        </span>
+                        <span className="text-[10px] text-slate-400 block font-normal">
+                          Sisa: {target.remainingJuz} Juz
+                        </span>
+                      </div>
+                    )}
+                  </td>
+
+                  {/* Progress Ketercapaian */}
+                  <td className="py-3 px-3.5">
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[11px] font-bold">
+                        <span className="text-slate-600">
+                          {target.percentage}%
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-normal">
+                          {isUmmi ? (target.percentage >= 100 ? 'Tuntas Target' : `${target.percentage}% tuntas`) : `${student.totalJuzHafal || 0}/${target.targetJuz} Juz`}
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            target.percentage >= 100 ? 'bg-emerald-500' :
+                            target.percentage >= 70 ? 'bg-emerald-400' :
+                            target.percentage >= 40 ? 'bg-[#D4AF37]' : 'bg-rose-500'
+                          }`}
+                          style={{ width: `${Math.min(100, target.percentage)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Status */}
+                  <td className="py-3 px-3.5 text-center">
+                    {target.status === 'on-track' ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        Sesuai Target
+                      </span>
+                    ) : target.status === 'needs-attention' ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-900">
+                        <TrendingUp className="w-3 h-3 text-[#D4AF37]" />
+                        Perlu Dorongan
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-100 text-rose-800">
+                        <AlertTriangle className="w-3 h-3 text-rose-600" />
+                        Tertinggal
+                      </span>
+                    )}
+                  </td>
+
+                  {/* Aksi */}
+                  {userRole !== 'wali' && (
+                    <td className="py-3 px-3.5 text-center">
+                      <button
+                        onClick={() => handleOpenEditTarget(
+                          student.id, 
+                          isUmmi ? 'Ummi' : 'Hafalan', 
+                          (selectedTerm === 'all' ? 'Term 1' : selectedTerm)
+                        )}
+                        className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition cursor-pointer"
+                        title="Atur target individual santri ini"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
 
   return (
     <div className="space-y-6 animate-in fade-in pb-10">
@@ -755,6 +1043,19 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
             </div>
           </div>
 
+          {/* Halaqah Filter Bar */}
+          <HalaqahFilterBar
+            selectedHalaqahFilter={selectedHalaqahFilter}
+            onSelectHalaqahFilter={setSelectedHalaqahFilter}
+            viewGroupingMode={viewGroupingMode}
+            onChangeGroupingMode={setViewGroupingMode}
+            halaqahGroups={activeHalaqahGroups}
+            teachers={activeTeachers}
+            currentUser={currentUser}
+            allStudentsCount={students.length}
+            filteredStudentsCount={allFilteredStudents.length}
+          />
+
           {/* Filters Bar */}
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
             
@@ -820,7 +1121,7 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
 
           </div>
 
-          {/* Render Santri Table by Class */}
+          {/* Render Santri Tables */}
           <div className="space-y-6">
             {allFilteredStudents.length === 0 ? (
               <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center space-y-4 shadow-xs">
@@ -834,12 +1135,13 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
                   <p className="text-xs text-slate-500 max-w-md mx-auto">
                     {activeTab === 'ummi'
                       ? 'Metode UMMI dikhususkan untuk jenjang Kelas 7. Coba reset filter status atau pilih kelas 7A / 7B.'
-                      : 'Coba reset status target atau filter kelas untuk melihat seluruh daftar capaian santri.'}
+                      : 'Coba reset status target, filter halaqah, atau filter kelas untuk melihat seluruh daftar capaian santri.'}
                   </p>
                 </div>
                 <button
                   onClick={() => {
                     setSelectedClassFilter('all');
+                    setSelectedHalaqahFilter('all');
                     setStatusFilter('all');
                     setSearchTerm('');
                   }}
@@ -849,239 +1151,112 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
                   <span>Reset Semua Filter</span>
                 </button>
               </div>
+            ) : viewGroupingMode === 'halaqah' ? (
+              enrichedHalaqahList.map((group) => {
+                if (group.studentsWithTarget.length === 0 && selectedHalaqahFilter === 'all') return null;
+
+                return (
+                  <div key={group.id} className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                    {/* Header Halaqah */}
+                    <div className="px-5 py-4 bg-gradient-to-r from-slate-900 to-[#1E293B] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-[#D4AF37] text-slate-950 flex items-center justify-center font-black text-sm shadow-xs shrink-0">
+                          <Users className="w-5 h-5 text-slate-950" />
+                        </div>
+                        <div>
+                          <h2 className="text-base font-bold text-white flex items-center gap-2">
+                            <span>
+                              {activeTab === 'ummi' ? 'Target UMMI' : 'Target Hafalan'} - {group.name}
+                            </span>
+                            {selectedHalaqahFilter === 'my-halaqah' && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-400 text-slate-950 font-black">
+                                ⭐ Halaqah Saya
+                              </span>
+                            )}
+                            <span className="text-xs font-normal text-slate-300">
+                              ({selectedTerm === 'all' ? 'Semua Term' : selectedTerm})
+                            </span>
+                          </h2>
+                          <p className="text-xs text-[#D4AF37] flex items-center gap-2 flex-wrap">
+                            <span>Pembimbing: {group.teacherName}</span>
+                            {group.room && <span>• Ruang: {group.room}</span>}
+                            {group.schedule && <span>• Jadwal: {group.schedule}</span>}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Stats Bar per Halaqah */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2.5 py-1 rounded-md bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold">
+                          {group.stats.total} Santri
+                        </span>
+                        <span className="px-2.5 py-1 rounded-md bg-emerald-950/70 text-emerald-300 border border-emerald-800 text-xs font-bold">
+                          ✓ {group.stats.onTrack} Tuntas
+                        </span>
+                        <span className="px-2.5 py-1 rounded-md bg-amber-950/70 text-amber-300 border border-amber-800 text-xs font-bold">
+                          ⚡ {group.stats.needsAttention} Perlu Dorongan
+                        </span>
+                        <span className="px-2.5 py-1 rounded-md bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/40 text-xs font-extrabold">
+                          Avg: {group.stats.avgPercentage}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Table Santri Halaqah */}
+                    {renderStudentTable(group.studentsWithTarget)}
+                  </div>
+                );
+              })
             ) : (
               enrichedClassList.map((cls) => {
                 if (cls.studentsWithTarget.length === 0 && selectedClassFilter === 'all') return null;
 
-              return (
-                <div key={cls.id} className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-                  
-                  {/* Header Kelas */}
-                  <div className="px-5 py-4 bg-gradient-to-r from-slate-900 to-[#1E293B] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-[#D4AF37] text-slate-950 flex items-center justify-center font-black text-sm shadow-xs">
-                        {cls.name}
+                return (
+                  <div key={cls.id} className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                    {/* Header Kelas */}
+                    <div className="px-5 py-4 bg-gradient-to-r from-slate-900 to-[#1E293B] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-[#D4AF37] text-slate-950 flex items-center justify-center font-black text-sm shadow-xs">
+                          {cls.name}
+                        </div>
+                        <div>
+                          <h2 className="text-base font-bold text-white flex items-center gap-2">
+                            <span>
+                              {activeTab === 'ummi' ? 'Target UMMI' : 'Target Hafalan'} Kelas {cls.name}
+                            </span>
+                            <span className="text-xs font-normal text-slate-300">
+                              ({selectedTerm === 'all' ? 'Semua Term' : selectedTerm})
+                            </span>
+                          </h2>
+                          <p className="text-xs text-[#D4AF37]">
+                            Tingkat {cls.level} SMP Islam Al Azhar 21 • TP 2026/2027
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h2 className="text-base font-bold text-white flex items-center gap-2">
-                          <span>
-                            {activeTab === 'ummi' ? 'Target UMMI' : 'Target Hafalan'} Kelas {cls.name}
-                          </span>
-                          <span className="text-xs font-normal text-slate-300">
-                            ({selectedTerm === 'all' ? 'Semua Term' : selectedTerm})
-                          </span>
-                        </h2>
-                        <p className="text-xs text-[#D4AF37]">
-                          Tingkat {cls.level} SMP Islam Al Azhar 21 • TP 2026/2027
-                        </p>
+
+                      {/* Stats Bar per Kelas */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2.5 py-1 rounded-md bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold">
+                          {cls.stats.total} Santri
+                        </span>
+                        <span className="px-2.5 py-1 rounded-md bg-emerald-950/70 text-emerald-300 border border-emerald-800 text-xs font-bold">
+                          ✓ {cls.stats.onTrack} Tuntas
+                        </span>
+                        <span className="px-2.5 py-1 rounded-md bg-amber-950/70 text-amber-300 border border-amber-800 text-xs font-bold">
+                          ⚡ {cls.stats.needsAttention} Perlu Dorongan
+                        </span>
+                        <span className="px-2.5 py-1 rounded-md bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/40 text-xs font-extrabold">
+                          Avg: {cls.stats.avgPercentage}%
+                        </span>
                       </div>
                     </div>
 
-                    {/* Stats Bar per Kelas */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2.5 py-1 rounded-md bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold">
-                        {cls.stats.total} Santri
-                      </span>
-                      <span className="px-2.5 py-1 rounded-md bg-emerald-950/70 text-emerald-300 border border-emerald-800 text-xs font-bold">
-                        ✓ {cls.stats.onTrack} Tuntas
-                      </span>
-                      <span className="px-2.5 py-1 rounded-md bg-amber-950/70 text-amber-300 border border-amber-800 text-xs font-bold">
-                        ⚡ {cls.stats.needsAttention} Perlu Dorongan
-                      </span>
-                      <span className="px-2.5 py-1 rounded-md bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/40 text-xs font-extrabold">
-                        Avg: {cls.stats.avgPercentage}%
-                      </span>
-                    </div>
+                    {/* Table Santri Kelas */}
+                    {renderStudentTable(cls.studentsWithTarget)}
                   </div>
-
-                  {/* Table Santri Kelas */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold">
-                          <th className="py-3 px-3.5 w-10 text-center">No</th>
-                          <th className="py-3 px-3.5">Santri</th>
-                          <th className="py-3 px-3.5">Program / Jenjang</th>
-                          <th className="py-3 px-3.5">
-                            {activeTab === 'ummi' ? 'Target Ummi Term' : 'Target Hafalan Term'}
-                          </th>
-                          <th className="py-3 px-3.5">Capaian Riil Saat Ini</th>
-                          <th className="py-3 px-3.5 w-52">Progress Ketercapaian</th>
-                          <th className="py-3 px-3.5 text-center">Status</th>
-                          {userRole !== 'wali' && <th className="py-3 px-3.5 text-center">Aksi</th>}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {cls.studentsWithTarget.length === 0 ? (
-                          <tr>
-                            <td colSpan={8} className="py-8 text-center text-slate-400">
-                              Tidak ada data santri yang cocok dengan filter di kelas ini.
-                            </td>
-                          </tr>
-                        ) : (
-                          cls.studentsWithTarget.map((item, idx) => {
-                            const { student, target } = item;
-                            const isUmmi = activeTab === 'ummi';
-
-                            return (
-                              <tr key={student.id} className="hover:bg-slate-50/90 transition">
-                                
-                                {/* No */}
-                                <td className="py-3 px-3.5 text-center text-slate-400 font-mono font-medium">
-                                  {idx + 1}
-                                </td>
-
-                                {/* Santri */}
-                                <td className="py-3 px-3.5">
-                                  <div 
-                                    onClick={() => onOpenStudentDetail(student.id)}
-                                    className="flex items-center gap-2.5 cursor-pointer hover:text-[#D4AF37] transition group"
-                                  >
-                                    <AvatarBadge
-                                      name={student.name}
-                                      photoUrl={student.photo}
-                                      gender={student.gender}
-                                      role="santri"
-                                      size="sm"
-                                      className="shrink-0"
-                                    />
-                                    <div>
-                                      <span className="font-bold text-slate-900 group-hover:text-[#D4AF37] block">
-                                        {student.name}
-                                      </span>
-                                      <span className="text-[10px] text-slate-400 font-mono">
-                                        NIS: {student.nis || '-'}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </td>
-
-                                {/* Program */}
-                                <td className="py-3 px-3.5">
-                                  <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold">
-                                    {student.program || 'Reguler Tahfizh'}
-                                  </span>
-                                </td>
-
-                                {/* Target Term */}
-                                <td className="py-3 px-3.5 font-bold">
-                                  {isUmmi ? (
-                                    <div className="space-y-0.5">
-                                      <span className="text-emerald-800 font-black">
-                                        {target.targetUmmiJilid || 'Jilid 1'} {target.targetUmmiPage ? `(Hal ${target.targetUmmiPage})` : ''}
-                                      </span>
-                                      <div className="text-[10px] text-slate-500 font-normal">
-                                        {target.term || selectedTerm} • DL: {target.deadline || '30 Sep 2026'}
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="space-y-0.5">
-                                      <span className="text-slate-900 font-black">
-                                        {target.targetJuz} Juz
-                                      </span>
-                                      <div className="text-[10px] text-slate-500 font-normal">
-                                        {target.term || selectedTerm} • DL: {target.deadline || '30 Sep 2026'}
-                                      </div>
-                                    </div>
-                                  )}
-                                </td>
-
-                                {/* Capaian Riil */}
-                                <td className="py-3 px-3.5">
-                                  {isUmmi ? (
-                                    <div>
-                                      <span className="font-extrabold text-slate-800">
-                                        {student.currentUmmiJilid || 'Jilid 1'}
-                                      </span>
-                                      <span className="text-slate-500 text-[11px] ml-1">
-                                        Hal {student.currentUmmiPage || 1}
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <div>
-                                      <span className="font-extrabold text-slate-800">
-                                        {student.totalJuzHafal || 0} Juz
-                                      </span>
-                                      <span className="text-[10px] text-slate-400 block font-normal">
-                                        Sisa: {target.remainingJuz} Juz
-                                      </span>
-                                    </div>
-                                  )}
-                                </td>
-
-                                {/* Progress Ketercapaian */}
-                                <td className="py-3 px-3.5">
-                                  <div className="space-y-1">
-                                    <div className="flex justify-between text-[11px] font-bold">
-                                      <span className="text-slate-600">
-                                        {target.percentage}%
-                                      </span>
-                                      <span className="text-[10px] text-slate-400 font-normal">
-                                        {isUmmi ? (target.percentage >= 100 ? 'Tuntas Target' : `${target.percentage}% tuntas`) : `${student.totalJuzHafal || 0}/${target.targetJuz} Juz`}
-                                      </span>
-                                    </div>
-                                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                                      <div 
-                                        className={`h-full rounded-full transition-all duration-500 ${
-                                          target.percentage >= 100 ? 'bg-emerald-500' :
-                                          target.percentage >= 70 ? 'bg-emerald-400' :
-                                          target.percentage >= 40 ? 'bg-[#D4AF37]' : 'bg-rose-500'
-                                        }`}
-                                        style={{ width: `${Math.min(100, target.percentage)}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                </td>
-
-                                {/* Status */}
-                                <td className="py-3 px-3.5 text-center">
-                                  {target.status === 'on-track' ? (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800">
-                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                      Sesuai Target
-                                    </span>
-                                  ) : target.status === 'needs-attention' ? (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-900">
-                                      <TrendingUp className="w-3 h-3 text-[#D4AF37]" />
-                                      Perlu Dorongan
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-100 text-rose-800">
-                                      <AlertTriangle className="w-3 h-3 text-rose-600" />
-                                      Tertinggal
-                                    </span>
-                                  )}
-                                </td>
-
-                                {/* Aksi */}
-                                {userRole !== 'wali' && (
-                                  <td className="py-3 px-3.5 text-center">
-                                    <button
-                                      onClick={() => handleOpenEditTarget(
-                                        student.id, 
-                                        isUmmi ? 'Ummi' : 'Hafalan', 
-                                        (selectedTerm === 'all' ? 'Term 1' : selectedTerm)
-                                      )}
-                                      className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition cursor-pointer"
-                                      title="Atur target individual santri ini"
-                                    >
-                                      <Edit3 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </td>
-                                )}
-
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-
-                </div>
-              );
-            })
-          )}
+                );
+              })
+            )}
           </div>
 
         </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Search, 
   Filter, 
@@ -24,17 +24,26 @@ import {
   Save,
   EyeOff
 } from 'lucide-react';
-import { Student, Teacher, ClassItem, Role, User } from '../types';
+import { Student, Teacher, ClassItem, Role, User, HalaqahGroup } from '../types';
 import { storageService } from '../services/storageService';
 import { UMMI_JILIDS } from '../data/ummiData';
 import { AvatarBadge } from './AvatarBadge';
 import { isGrade8or9Student, isGrade8or9Class } from '../utils/gradeHelper';
+import { HalaqahFilterBar } from './HalaqahFilterBar';
+import { 
+  filterStudentsByHalaqah, 
+  groupStudentsByHalaqah, 
+  resolveCurrentTeacher, 
+  getStudentHalaqahInfo 
+} from '../utils/halaqahHelper';
 
 interface StudentsViewProps {
   students: Student[];
   teachers: Teacher[];
   classes: ClassItem[];
   userRole: Role;
+  currentUser?: User | null;
+  halaqahGroups?: HalaqahGroup[];
   onOpenStudentDetail: (studentId: string) => void;
   onRefreshData: () => void;
   onOpenDailyInputWithStudent: (studentId: string) => void;
@@ -45,6 +54,8 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
   teachers,
   classes,
   userRole,
+  currentUser,
+  halaqahGroups = [],
   onOpenStudentDetail,
   onRefreshData,
   onOpenDailyInputWithStudent
@@ -53,6 +64,12 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
   const [selectedClassFilter, setSelectedClassFilter] = useState('');
   const [selectedTeacherFilter, setSelectedTeacherFilter] = useState('');
   const [selectedProgramFilter, setSelectedProgramFilter] = useState('');
+  const [selectedHalaqahFilter, setSelectedHalaqahFilter] = useState('all');
+  const [viewGroupingMode, setViewGroupingMode] = useState<'halaqah' | 'class'>('halaqah');
+
+  // Resolved teacher
+  const currentTeacher = resolveCurrentTeacher(currentUser, teachers) || (userRole === 'admin' ? teachers[0] : undefined);
+  const activeHalaqahGroups = halaqahGroups.length > 0 ? halaqahGroups : storageService.getHalaqahGroups();
 
   // Modal States
   const [showAddEditModal, setShowAddEditModal] = useState(false);
@@ -144,19 +161,37 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
   const [importResult, setImportResult] = useState<{ successCount: number; errors: string[] } | null>(null);
 
   // Filter students
-  const filteredStudents = students.filter(s => {
-    const matchSearch = 
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.nickname.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.nis.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.nisn.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchClass = !selectedClassFilter || s.classId === selectedClassFilter;
-    const matchTeacher = !selectedTeacherFilter || s.teacherId === selectedTeacherFilter;
-    const matchProgram = !selectedProgramFilter || normalizeHalaqah(s.program) === selectedProgramFilter;
+  const filteredStudents = useMemo(() => {
+    let list = students.filter(s => {
+      const matchSearch = 
+        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.nickname.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.nis.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.nisn.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchClass = !selectedClassFilter || s.classId === selectedClassFilter;
+      const matchTeacher = !selectedTeacherFilter || s.teacherId === selectedTeacherFilter;
+      const matchProgram = !selectedProgramFilter || normalizeHalaqah(s.program) === selectedProgramFilter;
 
-    return matchSearch && matchClass && matchTeacher && matchProgram;
-  });
+      return matchSearch && matchClass && matchTeacher && matchProgram;
+    });
+
+    if (selectedHalaqahFilter !== 'all') {
+      list = filterStudentsByHalaqah(list, selectedHalaqahFilter, currentTeacher?.id, activeHalaqahGroups, teachers);
+    }
+    return list;
+  }, [students, searchTerm, selectedClassFilter, selectedTeacherFilter, selectedProgramFilter, selectedHalaqahFilter, currentTeacher, activeHalaqahGroups, teachers]);
+
+  // Grouping per Halaqah
+  const groupedHalaqahList = useMemo(() => {
+    return groupStudentsByHalaqah(
+      filteredStudents, 
+      activeHalaqahGroups, 
+      teachers, 
+      selectedHalaqahFilter, 
+      currentTeacher?.id
+    );
+  }, [filteredStudents, activeHalaqahGroups, teachers, selectedHalaqahFilter, currentTeacher]);
 
   const handleOpenAdd = () => {
     setEditingStudent(null);
@@ -328,6 +363,24 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
         </div>
       </div>
 
+      {/* Halaqah Filter Bar with Halaqah Saya and Grouping Mode */}
+      <HalaqahFilterBar
+        halaqahGroups={activeHalaqahGroups}
+        teachers={teachers}
+        currentUser={currentUser}
+        selectedHalaqahFilter={selectedHalaqahFilter}
+        onHalaqahFilterChange={(val) => {
+          setSelectedHalaqahFilter(val);
+          if (val === 'my-halaqah' || val !== 'all') {
+            setViewGroupingMode('halaqah');
+          }
+        }}
+        viewGroupingMode={viewGroupingMode}
+        onViewGroupingModeChange={setViewGroupingMode}
+        totalFilteredCount={filteredStudents.length}
+        showGroupingToggle={true}
+      />
+
       {/* Filters & Search Toolbar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -390,180 +443,385 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
 
         <div className="flex items-center justify-between text-xs text-slate-500 pt-1 border-t border-slate-100">
           <span>Menampilkan <strong>{filteredStudents.length}</strong> dari <strong>{students.length}</strong> siswa</span>
-          {(searchTerm || selectedClassFilter || selectedTeacherFilter || selectedProgramFilter) && (
+          {(searchTerm || selectedClassFilter || selectedTeacherFilter || selectedProgramFilter || selectedHalaqahFilter !== 'all') && (
             <button
               onClick={() => {
                 setSearchTerm('');
                 setSelectedClassFilter('');
                 setSelectedTeacherFilter('');
                 setSelectedProgramFilter('');
+                setSelectedHalaqahFilter('all');
               }}
               className="text-[#8C7015] font-semibold hover:underline cursor-pointer"
             >
-              Reset Filter
+              Reset Semua Filter
             </button>
           )}
         </div>
       </div>
 
-      {/* Student Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {filteredStudents.map((std) => {
-          const cls = classes.find(c => c.id === std.classId);
-          const teacher = teachers.find(t => t.id === std.teacherId);
-          const progressPercent = Math.min(100, Math.round((std.totalJuzHafal / std.targetJuz) * 100));
+      {/* Render Student Content by Halaqah or Class */}
+      {viewGroupingMode === 'halaqah' ? (
+        <div className="space-y-6">
+          {groupedHalaqahList.map((group) => {
+            if (group.students.length === 0 && selectedHalaqahFilter === 'all') return null;
 
-          return (
-            <div
-              key={std.id}
-              className="bg-white rounded-xl border border-slate-200 shadow-xs hover:shadow-md transition p-4 flex flex-col justify-between space-y-3 relative group"
-            >
-              {/* Top Row: Avatar & Basic Info */}
-              <div className="flex items-start gap-3">
-                <AvatarBadge
-                  name={std.name}
-                  photoUrl={std.photo}
-                  gender={std.gender}
-                  role="santri"
-                  size="md"
-                  className="shrink-0"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] font-mono text-slate-400 font-bold">NIS: {std.nis}</span>
-                    <div className="flex items-center gap-1">
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                        normalizeHalaqah(std.program) === 'Akselerasi'
-                          ? 'bg-amber-50 text-amber-900 border-amber-300'
-                          : normalizeHalaqah(std.program) === 'Khusus'
-                          ? 'bg-purple-50 text-purple-900 border-purple-300'
-                          : 'bg-blue-50 text-blue-800 border-blue-200'
-                      }`}>
-                        {normalizeHalaqah(std.program)}
-                      </span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
-                        {cls?.name || '7A'}
-                      </span>
+            return (
+              <div key={group.id} className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                {/* Halaqah Header */}
+                <div className="px-5 py-4 bg-gradient-to-r from-slate-900 to-[#1E293B] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-[#D4AF37] text-slate-950 flex items-center justify-center font-black text-sm shadow-xs shrink-0">
+                      <Users className="w-5 h-5 text-slate-950" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-white flex items-center gap-2">
+                        <span>{group.name}</span>
+                        {selectedHalaqahFilter === 'my-halaqah' && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-400 text-slate-950 font-black">
+                            ⭐ Halaqah Saya
+                          </span>
+                        )}
+                      </h2>
+                      <p className="text-xs text-[#D4AF37] flex items-center gap-2 flex-wrap">
+                        <span>Pembimbing: {group.teacherName}</span>
+                        {group.room && <span>• Ruang: {group.room}</span>}
+                        {group.schedule && <span>• Jadwal: {group.schedule}</span>}
+                      </p>
                     </div>
                   </div>
-                  <h3 
-                    onClick={() => onOpenStudentDetail(std.id)}
-                    className="text-sm font-bold text-slate-800 truncate hover:text-[#D4AF37] transition cursor-pointer mt-0.5"
-                  >
-                    {std.name}
-                  </h3>
-                  <p className="text-[11px] text-slate-500 truncate">
-                    Guru: {teacher?.name || 'Ustadz Ahmad Fauzan, Lc.'}
-                  </p>
-                </div>
-              </div>
 
-              {/* Progress & Stats Box */}
-              <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 space-y-2 text-xs">
-                
-                {/* Visual Progress Bar */}
-                <div>
-                  <div className="flex justify-between items-center text-[11px] font-semibold text-slate-700 mb-1">
-                    <span>Target: {std.targetJuz} Juz</span>
-                    <span className="text-[#8C7015] font-bold">{std.totalJuzHafal} Juz ({progressPercent}%)</span>
-                  </div>
-                  <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        progressPercent >= 75 ? 'bg-[#D4AF37]' :
-                        progressPercent >= 40 ? 'bg-blue-600' : 'bg-slate-500'
-                      }`}
-                      style={{ width: `${progressPercent}%` }}
-                    ></div>
-                  </div>
-                </div>
-
-                {/* Sub Stats */}
-                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 text-[11px]">
-                  <div>
-                    <span className="text-slate-400 block">Jilid Ummi:</span>
-                    {isGrade8or9Student(std, classes) ? (
-                      <span className="text-slate-400 italic font-medium flex items-center gap-1 mt-0.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-                        Tidak Ikut Ummi
-                      </span>
-                    ) : (
-                      <span className="font-bold text-slate-800 flex items-center gap-1">
-                        <BookMarked className="w-3 h-3 text-[#1E293B]" />
-                        {std.currentUmmiJilid} (Hal. {std.currentUmmiPage})
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block">Rata-rata Nilai:</span>
-                    <span className="font-bold text-[#8C7015] flex items-center gap-1">
-                      <Award className="w-3 h-3 text-[#D4AF37]" />
-                      {std.avgScore || 85} / 100
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold">
+                      {group.students.length} Santri Anggota
                     </span>
                   </div>
                 </div>
 
-                <div className="text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
-                  <span className="text-slate-400">Hafalan Terakhir: </span>
-                  <strong className="text-slate-800">{std.lastHafalan}</strong>
+                {/* Member Student Cards Grid */}
+                <div className="p-4">
+                  {group.students.length === 0 ? (
+                    <div className="py-8 text-center text-slate-400 text-xs">
+                      Tidak ada santri yang cocok dengan filter pencarian pada halaqah ini.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                      {group.students.map((std) => {
+                        const cls = classes.find(c => c.id === std.classId);
+                        const teacher = teachers.find(t => t.id === std.teacherId);
+                        const progressPercent = Math.min(100, Math.round((std.totalJuzHafal / std.targetJuz) * 100));
+                        const halInfo = getStudentHalaqahInfo(std, activeHalaqahGroups, teachers);
+
+                        return (
+                          <div
+                            key={std.id}
+                            className="bg-white rounded-xl border border-slate-200 shadow-xs hover:shadow-md transition p-4 flex flex-col justify-between space-y-3 relative group"
+                          >
+                            {/* Top Row: Avatar & Basic Info */}
+                            <div className="flex items-start gap-3">
+                              <AvatarBadge
+                                name={std.name}
+                                photoUrl={std.photo}
+                                gender={std.gender}
+                                role="santri"
+                                size="md"
+                                className="shrink-0"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="text-[10px] font-mono text-slate-400 font-bold">NIS: {std.nis}</span>
+                                  <div className="flex items-center gap-1">
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                                      normalizeHalaqah(std.program) === 'Akselerasi'
+                                        ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                        : normalizeHalaqah(std.program) === 'Khusus'
+                                        ? 'bg-purple-50 text-purple-900 border-purple-300'
+                                        : 'bg-blue-50 text-blue-800 border-blue-200'
+                                    }`}>
+                                      {normalizeHalaqah(std.program)}
+                                    </span>
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                                      {cls?.name || '7A'}
+                                    </span>
+                                  </div>
+                                </div>
+                                <h3 
+                                  onClick={() => onOpenStudentDetail(std.id)}
+                                  className="text-sm font-bold text-slate-800 truncate hover:text-[#D4AF37] transition cursor-pointer mt-0.5"
+                                >
+                                  {std.name}
+                                </h3>
+                                <p className="text-[11px] text-[#8C7015] font-semibold truncate flex items-center gap-1 mt-0.5">
+                                  <span>{halInfo.groupName}</span>
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Progress & Stats Box */}
+                            <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 space-y-2 text-xs">
+                              {/* Visual Progress Bar */}
+                              <div>
+                                <div className="flex justify-between items-center text-[11px] font-semibold text-slate-700 mb-1">
+                                  <span>Target: {std.targetJuz} Juz</span>
+                                  <span className="text-[#8C7015] font-bold">{std.totalJuzHafal} Juz ({progressPercent}%)</span>
+                                </div>
+                                <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-all duration-500 ${
+                                      progressPercent >= 75 ? 'bg-[#D4AF37]' :
+                                      progressPercent >= 40 ? 'bg-blue-600' : 'bg-slate-500'
+                                    }`}
+                                    style={{ width: `${progressPercent}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+
+                              {/* Sub Stats */}
+                              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 text-[11px]">
+                                <div>
+                                  <span className="text-slate-400 block">Jilid Ummi:</span>
+                                  {isGrade8or9Student(std, classes) ? (
+                                    <span className="text-slate-400 italic font-medium flex items-center gap-1 mt-0.5">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                                      Tidak Ikut Ummi
+                                    </span>
+                                  ) : (
+                                    <span className="font-bold text-slate-800 flex items-center gap-1">
+                                      <BookMarked className="w-3 h-3 text-[#1E293B]" />
+                                      {std.currentUmmiJilid} (Hal. {std.currentUmmiPage})
+                                    </span>
+                                  )}
+                                </div>
+                                <div>
+                                  <span className="text-slate-400 block">Rata-rata Nilai:</span>
+                                  <span className="font-bold text-[#8C7015] flex items-center gap-1">
+                                    <Award className="w-3 h-3 text-[#D4AF37]" />
+                                    {std.avgScore || 85} / 100
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
+                                <span className="text-slate-400">Hafalan Terakhir: </span>
+                                <strong className="text-slate-800">{std.lastHafalan}</strong>
+                              </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center justify-between pt-1 gap-2">
+                              <button
+                                onClick={() => onOpenDailyInputWithStudent(std.id)}
+                                className="flex-1 py-1.5 px-3 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                              >
+                                <span className="text-[#D4AF37] font-bold">+</span>
+                                <span>Setoran</span>
+                              </button>
+
+                              <button
+                                onClick={() => onOpenStudentDetail(std.id)}
+                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
+                                title="Lihat Detail Profil"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+
+                              {userRole !== 'wali' && (
+                                <>
+                                  <button
+                                    onClick={() => handleOpenEdit(std)}
+                                    className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
+                                    title="Edit Data Siswa"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+
+                                  {userRole === 'admin' && (
+                                    <>
+                                      <button
+                                        onClick={() => handleOpenStudentPasswordModal(std)}
+                                        className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition cursor-pointer"
+                                        title="Kelola Username & Password Santri"
+                                      >
+                                        <KeyRound className="w-4 h-4 text-amber-700" />
+                                      </button>
+                                      <button
+                                        onClick={() => setShowDeleteConfirm(std)}
+                                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-red-50 text-red-600 transition cursor-pointer"
+                                        title="Hapus Siswa"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* Class Mode Grid */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filteredStudents.map((std) => {
+            const cls = classes.find(c => c.id === std.classId);
+            const teacher = teachers.find(t => t.id === std.teacherId);
+            const progressPercent = Math.min(100, Math.round((std.totalJuzHafal / std.targetJuz) * 100));
+            const halInfo = getStudentHalaqahInfo(std, activeHalaqahGroups, teachers);
+
+            return (
+              <div
+                key={std.id}
+                className="bg-white rounded-xl border border-slate-200 shadow-xs hover:shadow-md transition p-4 flex flex-col justify-between space-y-3 relative group"
+              >
+                {/* Top Row: Avatar & Basic Info */}
+                <div className="flex items-start gap-3">
+                  <AvatarBadge
+                    name={std.name}
+                    photoUrl={std.photo}
+                    gender={std.gender}
+                    role="santri"
+                    size="md"
+                    className="shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[10px] font-mono text-slate-400 font-bold">NIS: {std.nis}</span>
+                      <div className="flex items-center gap-1">
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                          normalizeHalaqah(std.program) === 'Akselerasi'
+                            ? 'bg-amber-50 text-amber-900 border-amber-300'
+                            : normalizeHalaqah(std.program) === 'Khusus'
+                            ? 'bg-purple-50 text-purple-900 border-purple-300'
+                            : 'bg-blue-50 text-blue-800 border-blue-200'
+                        }`}>
+                          {normalizeHalaqah(std.program)}
+                        </span>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                          {cls?.name || '7A'}
+                        </span>
+                      </div>
+                    </div>
+                    <h3 
+                      onClick={() => onOpenStudentDetail(std.id)}
+                      className="text-sm font-bold text-slate-800 truncate hover:text-[#D4AF37] transition cursor-pointer mt-0.5"
+                    >
+                      {std.name}
+                    </h3>
+                    <p className="text-[11px] text-[#8C7015] font-semibold truncate flex items-center gap-1 mt-0.5">
+                      <span>{halInfo.groupName}</span>
+                    </p>
+                  </div>
                 </div>
 
+                {/* Progress & Stats Box */}
+                <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 space-y-2 text-xs">
+                  <div>
+                    <div className="flex justify-between items-center text-[11px] font-semibold text-slate-700 mb-1">
+                      <span>Target: {std.targetJuz} Juz</span>
+                      <span className="text-[#8C7015] font-bold">{std.totalJuzHafal} Juz ({progressPercent}%)</span>
+                    </div>
+                    <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          progressPercent >= 75 ? 'bg-[#D4AF37]' :
+                          progressPercent >= 40 ? 'bg-blue-600' : 'bg-slate-500'
+                        }`}
+                        style={{ width: `${progressPercent}%` }}
+                      ></div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 text-[11px]">
+                    <div>
+                      <span className="text-slate-400 block">Jilid Ummi:</span>
+                      {isGrade8or9Student(std, classes) ? (
+                        <span className="text-slate-400 italic font-medium flex items-center gap-1 mt-0.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                          Tidak Ikut Ummi
+                        </span>
+                      ) : (
+                        <span className="font-bold text-slate-800 flex items-center gap-1">
+                          <BookMarked className="w-3 h-3 text-[#1E293B]" />
+                          {std.currentUmmiJilid} (Hal. {std.currentUmmiPage})
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block">Rata-rata Nilai:</span>
+                      <span className="font-bold text-[#8C7015] flex items-center gap-1">
+                        <Award className="w-3 h-3 text-[#D4AF37]" />
+                        {std.avgScore || 85} / 100
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
+                    <span className="text-slate-400">Hafalan Terakhir: </span>
+                    <strong className="text-slate-800">{std.lastHafalan}</strong>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-between pt-1 gap-2">
+                  <button
+                    onClick={() => onOpenDailyInputWithStudent(std.id)}
+                    className="flex-1 py-1.5 px-3 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <span className="text-[#D4AF37] font-bold">+</span>
+                    <span>Setoran</span>
+                  </button>
+
+                  <button
+                    onClick={() => onOpenStudentDetail(std.id)}
+                    className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
+                    title="Lihat Detail Profil"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+
+                  {userRole !== 'wali' && (
+                    <>
+                      <button
+                        onClick={() => handleOpenEdit(std)}
+                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
+                        title="Edit Data Siswa"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+
+                      {userRole === 'admin' && (
+                        <>
+                          <button
+                            onClick={() => handleOpenStudentPasswordModal(std)}
+                            className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition cursor-pointer"
+                            title="Kelola Username & Password Santri"
+                          >
+                            <KeyRound className="w-4 h-4 text-amber-700" />
+                          </button>
+                          <button
+                            onClick={() => setShowDeleteConfirm(std)}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-red-50 text-red-600 transition cursor-pointer"
+                            title="Hapus Siswa"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-between pt-1 gap-2">
-                <button
-                  onClick={() => onOpenDailyInputWithStudent(std.id)}
-                  className="flex-1 py-1.5 px-3 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs transition flex items-center justify-center gap-1 cursor-pointer"
-                >
-                  <span className="text-[#D4AF37] font-bold">+</span>
-                  <span>Setoran</span>
-                </button>
-
-                <button
-                  onClick={() => onOpenStudentDetail(std.id)}
-                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
-                  title="Lihat Detail Profil"
-                >
-                  <Eye className="w-4 h-4" />
-                </button>
-
-                {userRole !== 'wali' && (
-                  <>
-                    <button
-                      onClick={() => handleOpenEdit(std)}
-                      className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
-                      title="Edit Data Siswa"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-
-                    {userRole === 'admin' && (
-                      <>
-                        <button
-                          onClick={() => handleOpenStudentPasswordModal(std)}
-                          className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition cursor-pointer"
-                          title="Kelola Username & Password Santri"
-                        >
-                          <KeyRound className="w-4 h-4 text-amber-700" />
-                        </button>
-                        <button
-                          onClick={() => setShowDeleteConfirm(std)}
-                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-red-50 text-red-600 transition cursor-pointer"
-                          title="Hapus Siswa"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
-
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {filteredStudents.length === 0 && (
         <div className="p-12 text-center bg-white rounded-xl border border-slate-200 text-slate-400">
