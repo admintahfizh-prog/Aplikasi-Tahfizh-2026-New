@@ -61,7 +61,7 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
   // Tabs: 'all-classes' (Primary) | 'log' | 'syllabus'
   const [activeTab, setActiveTab] = useState<'all-classes' | 'log' | 'syllabus'>('all-classes');
 
-  const [selectedJilidTab, setSelectedJilidTab] = useState<string>('Jilid 1');
+  const [selectedJilidTab, setSelectedJilidTab] = useState<string>('Semua Jilid');
   const [selectedJilidFilter, setSelectedJilidFilter] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClassFilter, setSelectedClassFilter] = useState('');
@@ -74,20 +74,58 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
     module: UmmiTopicDetail;
   } | null>(null);
 
+  // State for direct inline Jilid & Page editing in the table
+  const [inlineEditStudentId, setInlineEditStudentId] = useState<string | null>(null);
+  const [inlineJilid, setInlineJilid] = useState<string>('Jilid 1');
+  const [inlinePage, setInlinePage] = useState<number>(1);
+
+  const handleStartInlineEdit = (student: Student, currentJilid: string, currentPage: number) => {
+    if (userRole === 'wali') return;
+    setInlineEditStudentId(student.id);
+    setInlineJilid(currentJilid);
+    setInlinePage(currentPage || 1);
+  };
+
+  const handleSaveInlineEdit = (student: Student) => {
+    const updatedStudent: Student = {
+      ...student,
+      currentUmmiJilid: inlineJilid,
+      currentUmmiPage: Number(inlinePage) || 1,
+      raportUmmiCapaian: `${inlineJilid} halaman ${Number(inlinePage) || 1}`
+    };
+    storageService.saveStudent(updatedStudent);
+    setInlineEditStudentId(null);
+    onRefreshData();
+  };
+
   // Helper to find teacher
   const getTeacher = (teacherId?: string) => teachers.find(t => t.id === teacherId);
 
   // Group latest records per student for the "All Classes" view
   const studentLatestUmmiRecords = useMemo(() => {
     const map = new Map<string, UmmiRecord>();
-    const sorted = [...ummiRecords].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const sorted = [...ummiRecords].sort((a, b) => {
+      const timeB = a?.date ? new Date(b.date).getTime() : 0;
+      const timeA = b?.date ? new Date(a.date).getTime() : 0;
+      if (!isNaN(timeB) && !isNaN(timeA) && timeB !== timeA) {
+        return timeB - timeA;
+      }
+      const updB = (b as any)._updatedAt || 0;
+      const updA = (a as any)._updatedAt || 0;
+      if (updB !== updA) return updB - updA;
+      return String(b.id || '').localeCompare(String(a.id || ''));
+    });
     for (const r of sorted) {
       if (!map.has(r.studentId)) {
         map.set(r.studentId, r);
       }
+      const matchedStd = students.find(s => s.id === r.studentId || s.nis === r.studentId || (s.name && (r as any).studentName && s.name.toLowerCase().trim() === (r as any).studentName.toLowerCase().trim()));
+      if (matchedStd && !map.has(matchedStd.id)) {
+        map.set(matchedStd.id, { ...r, studentId: matchedStd.id });
+      }
     }
     return map;
-  }, [ummiRecords]);
+  }, [ummiRecords, students]);
 
   // Helper to normalize/clean Jilid string
   const normalizeUmmiJilid = (rawJilid?: string): string => {
@@ -183,7 +221,7 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
 
   // Filter records for log view (Hanya rekam santri yang mengikuti Ummi)
   const filteredRecords = ummiRecords.filter(r => {
-    const std = students.find(s => s.id === r.studentId);
+    const std = students.find(s => s.id === r.studentId || s.nis === r.studentId || (s.name && (r as any).studentName && s.name.toLowerCase().trim() === (r as any).studentName.toLowerCase().trim()));
     if (!isUmmiEnrolledStudent(std, classes)) return false;
 
     const matchSearch = 
@@ -605,27 +643,88 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
 
                             {/* Jilid & Halaman Terakhir */}
                             <td className="py-3 px-3.5 whitespace-nowrap">
-                              <div className="flex items-center gap-1.5">
-                                {(() => {
-                                  const effJilid = getStudentEffectiveJilid(student);
-                                  const isMun = effJilid === 'Munaqosyah';
-                                  const isTah = effJilid === 'Tahfizh';
-                                  return (
-                                    <span className={`px-2.5 py-0.5 rounded-md font-black text-xs shadow-2xs ${
-                                      isMun 
-                                        ? 'bg-emerald-800 text-emerald-200' 
-                                        : isTah 
-                                          ? 'bg-indigo-800 text-indigo-200' 
-                                          : 'bg-[#1E293B] text-[#D4AF37]'
-                                    }`}>
-                                      {effJilid}
-                                    </span>
-                                  );
-                                })()}
-                                <span className="font-bold text-slate-800 text-xs">
-                                  Hal. {student.currentUmmiPage !== undefined && student.currentUmmiPage !== null ? student.currentUmmiPage : (latestRecord ? latestRecord.page : 1)}
-                                </span>
-                              </div>
+                              {inlineEditStudentId === student.id ? (
+                                <div className="flex items-center gap-1.5 bg-amber-50/90 p-1.5 rounded-lg border border-amber-300 shadow-2xs">
+                                  <select
+                                    value={inlineJilid}
+                                    onChange={(e) => setInlineJilid(e.target.value)}
+                                    className="py-1 px-2 bg-white border border-slate-300 rounded text-xs font-bold text-slate-900 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                                  >
+                                    {UMMI_JILIDS.map(j => (
+                                      <option key={j} value={j}>{j}</option>
+                                    ))}
+                                  </select>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] font-bold text-slate-600">Hal:</span>
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      max={605}
+                                      value={inlinePage}
+                                      onChange={(e) => setInlinePage(Number(e.target.value))}
+                                      className="w-14 py-1 px-1.5 bg-white border border-slate-300 rounded text-xs font-bold text-center text-slate-900 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveInlineEdit(student)}
+                                    className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] cursor-pointer shadow-2xs"
+                                    title="Simpan Jilid & Halaman"
+                                  >
+                                    Simpan
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setInlineEditStudentId(null)}
+                                    className="p-1 text-slate-400 hover:text-slate-700 rounded cursor-pointer"
+                                    title="Batal"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 group/jilid">
+                                  {(() => {
+                                    const effJilid = getStudentEffectiveJilid(student);
+                                    const effPage = student.currentUmmiPage !== undefined && student.currentUmmiPage !== null ? student.currentUmmiPage : (latestRecord ? latestRecord.page : 1);
+                                    const isMun = effJilid === 'Munaqosyah';
+                                    const isTah = effJilid === 'Tahfizh';
+                                    return (
+                                      <>
+                                        <span 
+                                          onClick={() => handleStartInlineEdit(student, effJilid, effPage)}
+                                          title={userRole !== 'wali' ? 'Klik untuk mengubah Jilid & Halaman santri ini' : undefined}
+                                          className={`px-2.5 py-0.5 rounded-md font-black text-xs shadow-2xs ${userRole !== 'wali' ? 'cursor-pointer hover:ring-2 hover:ring-[#D4AF37]' : ''} ${
+                                            isMun 
+                                              ? 'bg-emerald-800 text-emerald-200' 
+                                              : isTah 
+                                                ? 'bg-indigo-800 text-indigo-200' 
+                                                : 'bg-[#1E293B] text-[#D4AF37]'
+                                          }`}
+                                        >
+                                          {effJilid}
+                                        </span>
+                                        <span 
+                                          onClick={() => handleStartInlineEdit(student, effJilid, effPage)}
+                                          className={`font-bold text-slate-800 text-xs ${userRole !== 'wali' ? 'cursor-pointer hover:text-[#8C7015]' : ''}`}
+                                        >
+                                          Hal. {effPage}
+                                        </span>
+                                        {userRole !== 'wali' && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleStartInlineEdit(student, effJilid, effPage)}
+                                            className="p-1 text-slate-400 hover:text-amber-700 hover:bg-amber-50 rounded transition cursor-pointer"
+                                            title="Ubah Jilid & Halaman"
+                                          >
+                                            <Edit3 className="w-3 h-3" />
+                                          </button>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
+                                </div>
+                              )}
                             </td>
 
                             {/* Tanggal Setoran Terakhir */}
@@ -699,22 +798,30 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
                                   </button>
                                 )}
 
-                                {latestRecord && userRole !== 'wali' && (
+                                {userRole !== 'wali' && (
                                   <>
                                     <button
-                                      onClick={() => onEditRecord?.(latestRecord)}
+                                      onClick={() => {
+                                        if (latestRecord) {
+                                          onEditRecord?.({ ...latestRecord, studentId: student.id });
+                                        } else {
+                                          handleStartInlineEdit(student, getStudentEffectiveJilid(student), student.currentUmmiPage || 1);
+                                        }
+                                      }}
                                       className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition cursor-pointer"
-                                      title="Edit Evaluasi Terakhir"
+                                      title={latestRecord ? "Edit Evaluasi Terakhir" : "Ubah Jilid & Halaman"}
                                     >
                                       <Edit3 className="w-3.5 h-3.5" />
                                     </button>
-                                    <button
-                                      onClick={() => handleDelete(latestRecord.id)}
-                                      className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
-                                      title="Hapus Evaluasi Terakhir"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                                    {latestRecord && (
+                                      <button
+                                        onClick={() => handleDelete(latestRecord.id)}
+                                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                                        title="Hapus Evaluasi Terakhir"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
                                   </>
                                 )}
 

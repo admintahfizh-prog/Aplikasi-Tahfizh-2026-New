@@ -148,6 +148,20 @@ let isCloudListenerAttached = false;
 type SyncCallback = () => void;
 const syncListeners: SyncCallback[] = [];
 
+// Deterministic comparator for Memorization & Ummi records: newest date first, then newest _updatedAt, then newest ID
+function compareRecordsDesc(
+  a: { id?: string; date?: string; _updatedAt?: number },
+  b: { id?: string; date?: string; _updatedAt?: number }
+): number {
+  const timeA = a?.date ? new Date(a.date).getTime() : 0;
+  const timeB = b?.date ? new Date(b.date).getTime() : 0;
+  if (timeB !== timeA) return timeB - timeA;
+  const updA = (a as any)?._updatedAt || 0;
+  const updB = (b as any)?._updatedAt || 0;
+  if (updB !== updA) return updB - updA;
+  return String(b?.id || '').localeCompare(String(a?.id || ''), undefined, { numeric: true });
+}
+
 // Safe merge helper: ensures incoming cloud snapshots NEVER wipe out local items that haven't synced yet
 function mergeCloudSnapshotWithLocal<T extends { id: string }>(
   key: string,
@@ -160,7 +174,11 @@ function mergeCloudSnapshotWithLocal<T extends { id: string }>(
   
   cloudList.forEach(item => {
     if (item && item.id) {
-      cloudMap.set(String(item.id), item);
+      const idStr = String(item.id);
+      const existing = cloudMap.get(idStr);
+      if (!existing || ((item as any)._updatedAt || 0) >= ((existing as any)._updatedAt || 0)) {
+        cloudMap.set(idStr, item);
+      }
     }
   });
 
@@ -168,10 +186,18 @@ function mergeCloudSnapshotWithLocal<T extends { id: string }>(
   localList.forEach(localItem => {
     if (localItem && localItem.id) {
       const idStr = String(localItem.id);
-      if (!cloudMap.has(idStr)) {
+      const cloudItem = cloudMap.get(idStr);
+      if (!cloudItem) {
         // Keep local item that hasn't arrived in cloud yet
         cloudMap.set(idStr, localItem);
         missingInCloud.push(localItem);
+      } else {
+        const localUpdated = (localItem as any)._updatedAt || 0;
+        const cloudUpdated = (cloudItem as any)._updatedAt || 0;
+        if (localUpdated > cloudUpdated) {
+          cloudMap.set(idStr, localItem);
+          missingInCloud.push(localItem);
+        }
       }
     }
   });
@@ -227,7 +253,7 @@ export const storageService = {
           STORAGE_KEYS.MEMORIZATION,
           list,
           'memorization_records',
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          compareRecordsDesc
         );
         this.notifyListeners();
       }, (err) => console.warn('[Cloud Sync] Memorization listener warning:', err));
@@ -243,7 +269,7 @@ export const storageService = {
           STORAGE_KEYS.UMMI,
           list,
           'ummi_records',
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          compareRecordsDesc
         );
         this.notifyListeners();
       }, (err) => console.warn('[Cloud Sync] Ummi listener warning:', err));
@@ -448,9 +474,17 @@ export const storageService = {
         cloud.forEach(c => map.set(c.id, c));
         const missingInCloud: T[] = [];
         local.forEach(l => {
-          if (!map.has(l.id)) {
+          const existingCloud = map.get(l.id);
+          if (!existingCloud) {
             map.set(l.id, l);
             missingInCloud.push(l);
+          } else {
+            const localUpdated = (l as any)._updatedAt || 0;
+            const cloudUpdated = (existingCloud as any)._updatedAt || 0;
+            if (localUpdated > cloudUpdated) {
+              map.set(l.id, l);
+              missingInCloud.push(l);
+            }
           }
         });
         if (missingInCloud.length > 0) {
@@ -462,21 +496,30 @@ export const storageService = {
       // 1. Fetch & Merge Students
       const stdSnap = await getDocs(collection(db, 'students'));
       const cloudStudents: Student[] = [];
-      stdSnap.forEach(d => cloudStudents.push(d.data() as Student));
+      stdSnap.forEach(d => {
+        const item = d.data() as Student;
+        if (item) cloudStudents.push({ ...item, id: item.id || d.id });
+      });
       const mergedStudents = await mergeTwoWay('students', this.getStudents(), cloudStudents);
       setItem(STORAGE_KEYS.STUDENTS, mergedStudents);
 
       // 2. Fetch & Merge Teachers
       const tchSnap = await getDocs(collection(db, 'teachers'));
       const cloudTeachers: Teacher[] = [];
-      tchSnap.forEach(d => cloudTeachers.push(d.data() as Teacher));
+      tchSnap.forEach(d => {
+        const item = d.data() as Teacher;
+        if (item) cloudTeachers.push({ ...item, id: item.id || d.id });
+      });
       const mergedTeachers = await mergeTwoWay('teachers', this.getTeachers(), cloudTeachers);
       setItem(STORAGE_KEYS.TEACHERS, mergedTeachers);
 
       // 3. Fetch & Merge Classes
       const clsSnap = await getDocs(collection(db, 'classes'));
       const cloudClasses: ClassItem[] = [];
-      clsSnap.forEach(d => cloudClasses.push(d.data() as ClassItem));
+      clsSnap.forEach(d => {
+        const item = d.data() as ClassItem;
+        if (item) cloudClasses.push({ ...item, id: item.id || d.id });
+      });
       const mergedClasses = await mergeTwoWay('classes', this.getClasses(), cloudClasses);
       setItem(STORAGE_KEYS.CLASSES, mergedClasses);
 
@@ -495,22 +538,32 @@ export const storageService = {
       // 4. Fetch & Merge Memorization Records
       const memSnap = await getDocs(collection(db, 'memorization_records'));
       const cloudMem: MemorizationRecord[] = [];
-      memSnap.forEach(d => cloudMem.push(d.data() as MemorizationRecord));
+      memSnap.forEach(d => {
+        const item = d.data() as MemorizationRecord;
+        if (item) cloudMem.push({ ...item, id: item.id || d.id });
+      });
       const mergedMem = await mergeTwoWay('memorization_records', this.getMemorizationRecords(), cloudMem);
-      mergedMem.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      mergedMem.sort(compareRecordsDesc);
       setItem(STORAGE_KEYS.MEMORIZATION, mergedMem);
 
       // 5. Fetch & Merge Ummi Records
       const ummiSnap = await getDocs(collection(db, 'ummi_records'));
       const cloudUmmi: UmmiRecord[] = [];
-      ummiSnap.forEach(d => cloudUmmi.push(d.data() as UmmiRecord));
+      ummiSnap.forEach(d => {
+        const item = d.data() as UmmiRecord;
+        if (item) cloudUmmi.push({ ...item, id: item.id || d.id });
+      });
       const mergedUmmi = await mergeTwoWay('ummi_records', this.getUmmiRecords(), cloudUmmi);
-      mergedUmmi.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      mergedUmmi.sort(compareRecordsDesc);
       setItem(STORAGE_KEYS.UMMI, mergedUmmi);
 
       // Sinkronisasi otomatis data santri dengan setoran evaluasi Ummi & Hafalan terkini
       try {
         let studentsChanged = false;
+        let ummiChanged = false;
+        const studentsToSync: Student[] = [];
+        const ummiToSync: UmmiRecord[] = [];
+
         const latestUmmiMap = new Map<string, UmmiRecord>();
         mergedUmmi.forEach(u => {
           if (!latestUmmiMap.has(u.studentId)) {
@@ -529,6 +582,7 @@ export const storageService = {
           let updated = false;
           let newJilid = s.currentUmmiJilid;
           let newPage = s.currentUmmiPage;
+          let newRaportCapaian = s.raportUmmiCapaian;
           let newLastHafalan = s.lastHafalan;
           let newLastHafalanDate = s.lastHafalanDate;
           let newAvgScore = s.avgScore;
@@ -550,16 +604,47 @@ export const storageService = {
               updated = true;
             }
 
-            // Sinkronkan jilid & halaman dari catatan setoran Ummi terkini
-            const latestUmmi = latestUmmiMap.get(s.id) || Array.from(latestUmmiMap.values()).find(u => (u as any).studentId === s.nis || (u as any).studentName?.toLowerCase() === s.name.toLowerCase());
+            // Cari rekor Ummi terbaru milik santri (berdasarkan id, nis, atau nama)
+            const latestUmmi = latestUmmiMap.get(s.id) || mergedUmmi.find(u => 
+              u.studentId === s.id ||
+              (s.nis && u.studentId === s.nis) || 
+              (s.name && (u as any).studentName && (u as any).studentName.toLowerCase().trim() === s.name.toLowerCase().trim())
+            );
             if (latestUmmi) {
-              if (s.currentUmmiJilid !== latestUmmi.jilid) {
-                newJilid = latestUmmi.jilid;
-                updated = true;
-              }
-              if (s.currentUmmiPage !== latestUmmi.page) {
-                newPage = latestUmmi.page;
-                updated = true;
+              const studentUpdatedAt = (s as any)._updatedAt || 0;
+              const ummiUpdatedAt = (latestUmmi as any)._updatedAt || 0;
+              const shouldSyncFromUmmi = (!newJilid || newJilid === '-') || (ummiUpdatedAt > studentUpdatedAt) || (studentUpdatedAt === 0 && latestUmmi.jilid && latestUmmi.jilid !== '-');
+              if (shouldSyncFromUmmi) {
+                if (newJilid !== latestUmmi.jilid) {
+                  newJilid = latestUmmi.jilid;
+                  updated = true;
+                }
+                if (newPage !== latestUmmi.page) {
+                  newPage = latestUmmi.page;
+                  updated = true;
+                }
+                const expectedCapaian = `${latestUmmi.jilid} halaman ${latestUmmi.page || 1}`;
+                if (newRaportCapaian !== expectedCapaian) {
+                  newRaportCapaian = expectedCapaian;
+                  updated = true;
+                }
+              } else if (studentUpdatedAt > ummiUpdatedAt && newJilid && newJilid !== '-') {
+                // Jika data santri lebih baru daripada rekor Ummi, sinkronkan ke rekor Ummi
+                if (latestUmmi.jilid !== newJilid || latestUmmi.page !== (newPage || 1) || latestUmmi.studentId !== s.id) {
+                  const uIdx = mergedUmmi.findIndex(u => u.id === latestUmmi.id);
+                  if (uIdx >= 0) {
+                    const updatedUmmi = {
+                      ...mergedUmmi[uIdx],
+                      studentId: s.id,
+                      jilid: newJilid,
+                      page: newPage || 1,
+                      _updatedAt: studentUpdatedAt
+                    };
+                    mergedUmmi[uIdx] = updatedUmmi;
+                    ummiChanged = true;
+                    ummiToSync.push(updatedUmmi);
+                  }
+                }
               }
             }
           }
@@ -579,20 +664,29 @@ export const storageService = {
 
           if (updated) {
             studentsChanged = true;
-            return {
+            const updatedStd: Student = {
               ...s,
               currentUmmiJilid: newJilid,
               currentUmmiPage: newPage,
+              raportUmmiCapaian: newRaportCapaian,
               lastHafalan: newLastHafalan,
               lastHafalanDate: newLastHafalanDate,
               avgScore: newAvgScore
             };
+            studentsToSync.push(updatedStd);
+            return updatedStd;
           }
           return s;
         });
 
+        if (ummiChanged) {
+          setItem(STORAGE_KEYS.UMMI, mergedUmmi);
+          ummiToSync.forEach(u => syncDocToCloud('ummi_records', u.id, u));
+        }
+
         if (studentsChanged) {
           setItem(STORAGE_KEYS.STUDENTS, synchronizedStudents);
+          studentsToSync.forEach(std => syncDocToCloud('students', std.id, std));
         }
       } catch (err) {
         console.warn('[Cloud Sync] Student progress auto-sync error:', err);
@@ -1403,15 +1497,8 @@ export const storageService = {
           modified = true;
         }
       } else {
-        // Kelas 7 atau lainnya yang mengikuti Ummi
-        if (s.id === 'std-5' && (s.currentUmmiJilid !== 'Jilid 3' || s.currentUmmiPage !== 18)) {
-          updatedJilid = 'Jilid 3';
-          updatedPage = 18;
-          modified = true;
-        } else if (s.currentUmmiJilid === 'Jilid 4') { updatedJilid = 'Jilid 2'; modified = true; }
-        else if (s.currentUmmiJilid === 'Jilid 5') { updatedJilid = 'Jilid 2'; modified = true; }
-        else if (s.currentUmmiJilid === 'Jilid 6') { updatedJilid = 'Jilid 3'; modified = true; }
-        else if (s.currentUmmiJilid === 'Munaqasyah') { updatedJilid = 'Munaqosyah'; modified = true; }
+        // Kelas 7 atau lainnya yang mengikuti Ummi: normalisasi ejaan tanpa menimpa pilihan jilid manual
+        if (s.currentUmmiJilid === 'Munaqasyah') { updatedJilid = 'Munaqosyah'; modified = true; }
         else if (s.currentUmmiJilid === 'Tahfidz') { updatedJilid = 'Tahfizh'; modified = true; }
         else if (s.currentUmmiJilid && (s.currentUmmiJilid.startsWith('08') || ['M.Si', 'M.H', 'MAP', 'S.Kom.', 'SE', 'ST'].includes(s.currentUmmiJilid))) {
           let phone = s.parentPhone;
@@ -1456,12 +1543,143 @@ export const storageService = {
   saveStudent(student: Student): void {
     const list = this.getStudents();
     const classes = this.getClasses();
+    const now = Date.now();
+    const prevStudent = list.find(s => s.id === student.id);
+
+    const parseCapaian = (raw?: string): { jilid?: string; page?: number } => {
+      if (!raw || !raw.trim()) return {};
+      const text = raw.trim();
+      const jilidPatterns: Array<{ regex: RegExp; canonical: string }> = [
+        { regex: /\bpra[\s-]*tk\b/i, canonical: 'Pra-TK' },
+        { regex: /\bjilid\s*1\b/i, canonical: 'Jilid 1' },
+        { regex: /\bjilid\s*2\b/i, canonical: 'Jilid 2' },
+        { regex: /\bjilid\s*3\b/i, canonical: 'Jilid 3' },
+        { regex: /\bjilid\s*4\b/i, canonical: 'Jilid 4' },
+        { regex: /\bjilid\s*5\b/i, canonical: 'Jilid 5' },
+        { regex: /\bjilid\s*6\b/i, canonical: 'Jilid 6' },
+        { regex: /\bal[\s-]*qur['’`]?an\b/i, canonical: "Al-Qur'an" },
+        { regex: /\bgharib\b/i, canonical: 'Gharib' },
+        { regex: /\btajwid\b/i, canonical: 'Tajwid' },
+        { regex: /\bturjuman\b/i, canonical: 'Turjuman' },
+        { regex: /\btahfi[dz]h?\b/i, canonical: 'Tahfizh' },
+        { regex: /\bmunaq[ao]syah\b/i, canonical: 'Munaqosyah' }
+      ];
+      let matchedJilid: string | undefined;
+      for (const p of jilidPatterns) {
+        if (p.regex.test(text)) {
+          matchedJilid = p.canonical;
+          break;
+        }
+      }
+      const pageMatch = text.match(/(?:halaman|hal\.?)\s*(\d+)/i) || text.match(/\b(?:jilid\s*\d+|al[\s-]*qur['’`]?an|gharib|tajwid|turjuman|tahfi[dz]h?|munaq[ao]syah)\s+(\d+)\b/i);
+      const matchedPage = pageMatch ? parseInt(pageMatch[1], 10) : undefined;
+      return { jilid: matchedJilid, page: matchedPage && matchedPage > 0 ? matchedPage : undefined };
+    };
     
     // Pastikan jika santri kelas 8 atau 9 tidak masuk jilid Ummi
-    let sanitizedStudent = { ...student };
+    let sanitizedStudent: Student & { _updatedAt?: number } = { 
+      ...student,
+      _updatedAt: now
+    };
     if (isGrade8or9Student(student, classes)) {
       sanitizedStudent.currentUmmiJilid = '-';
       sanitizedStudent.currentUmmiPage = 0;
+    } else {
+      const jilidOrPageChanged = !prevStudent || 
+        prevStudent.currentUmmiJilid !== sanitizedStudent.currentUmmiJilid || 
+        prevStudent.currentUmmiPage !== sanitizedStudent.currentUmmiPage;
+      const raportCapaianChanged = Boolean(prevStudent && prevStudent.raportUmmiCapaian !== sanitizedStudent.raportUmmiCapaian);
+
+      if (raportCapaianChanged && !jilidOrPageChanged) {
+        const parsed = parseCapaian(sanitizedStudent.raportUmmiCapaian);
+        if (parsed.jilid) {
+          sanitizedStudent.currentUmmiJilid = parsed.jilid;
+        }
+        if (parsed.page) {
+          sanitizedStudent.currentUmmiPage = parsed.page;
+        }
+      } else if (sanitizedStudent.currentUmmiJilid && sanitizedStudent.currentUmmiJilid !== '-') {
+        const parsedFromCapaian = parseCapaian(sanitizedStudent.raportUmmiCapaian);
+        if (jilidOrPageChanged || !sanitizedStudent.raportUmmiCapaian || (parsedFromCapaian.jilid && parsedFromCapaian.jilid !== sanitizedStudent.currentUmmiJilid)) {
+          sanitizedStudent.raportUmmiCapaian = `${sanitizedStudent.currentUmmiJilid} halaman ${sanitizedStudent.currentUmmiPage || 1}`;
+        }
+      }
+
+      if (sanitizedStudent.currentUmmiJilid && sanitizedStudent.currentUmmiJilid !== '-') {
+        // Sinkronkan juga ke record Ummi santri ini agar di semua menu (Data Santri, Metode Ummi, Raport) 100% sinkron
+        const ummiList = getItem<UmmiRecord[]>(STORAGE_KEYS.UMMI, INITIAL_UMMI_RECORDS);
+        const matchingIndices: number[] = [];
+        ummiList.forEach((r, i) => {
+          if (!r) return;
+          const matchId = r.studentId === sanitizedStudent.id || (sanitizedStudent.nis && r.studentId === sanitizedStudent.nis);
+          const matchName = sanitizedStudent.name && (r as any).studentName && 
+            (r as any).studentName.toLowerCase().trim() === sanitizedStudent.name.toLowerCase().trim();
+          if (matchId || matchName) {
+            matchingIndices.push(i);
+          }
+        });
+
+        if (matchingIndices.length > 0) {
+          matchingIndices.sort((iA, iB) => compareRecordsDesc(ummiList[iA], ummiList[iB]));
+          const latestIdx = matchingIndices[0];
+          const latestDate = ummiList[latestIdx].date;
+          let ummiModified = false;
+
+          matchingIndices.forEach((idxToCheck, pos) => {
+            const rec = ummiList[idxToCheck];
+            const isTopOrSameLatestDate = pos === 0 || rec.date === latestDate;
+            if (isTopOrSameLatestDate) {
+              if (
+                rec.jilid !== sanitizedStudent.currentUmmiJilid ||
+                rec.page !== (sanitizedStudent.currentUmmiPage || 1) ||
+                rec.studentId !== sanitizedStudent.id
+              ) {
+                const updatedRec: UmmiRecord & { _updatedAt?: number } = {
+                  ...rec,
+                  studentId: sanitizedStudent.id,
+                  jilid: sanitizedStudent.currentUmmiJilid,
+                  page: sanitizedStudent.currentUmmiPage || 1,
+                  _updatedAt: now
+                };
+                ummiList[idxToCheck] = updatedRec;
+                ummiModified = true;
+                syncDocToCloud('ummi_records', updatedRec.id, updatedRec);
+              }
+            } else if (rec.studentId !== sanitizedStudent.id) {
+              const normalizedRec: UmmiRecord = {
+                ...rec,
+                studentId: sanitizedStudent.id
+              };
+              ummiList[idxToCheck] = normalizedRec;
+              ummiModified = true;
+              syncDocToCloud('ummi_records', normalizedRec.id, normalizedRec);
+            }
+          });
+
+          if (ummiModified) {
+            ummiList.sort(compareRecordsDesc);
+            setItem(STORAGE_KEYS.UMMI, ummiList);
+          }
+        } else if (jilidOrPageChanged || raportCapaianChanged) {
+          // Jika santri belum punya record di ummi_records sama sekali, buat record sinkronisasi agar tampil konsisten di Metode Ummi
+          const newSyncRec: UmmiRecord & { _updatedAt?: number } = {
+            id: `ummi-sync-${sanitizedStudent.id}`,
+            studentId: sanitizedStudent.id,
+            teacherId: sanitizedStudent.teacherId || 't-1',
+            date: new Date().toISOString().split('T')[0],
+            jilid: sanitizedStudent.currentUmmiJilid as any,
+            page: sanitizedStudent.currentUmmiPage || 1,
+            materialName: `${sanitizedStudent.currentUmmiJilid} Hal. ${sanitizedStudent.currentUmmiPage || 1}`,
+            score: 86,
+            status: 'Lulus',
+            notes: 'Alhamdulillah lancar dan sesuai kaidah.',
+            _updatedAt: now
+          };
+          ummiList.unshift(newSyncRec);
+          setItem(STORAGE_KEYS.UMMI, ummiList);
+          syncDocToCloud('ummi_records', newSyncRec.id, newSyncRec);
+        }
+      }
     }
 
     const idx = list.findIndex(s => s.id === sanitizedStudent.id);
@@ -1812,19 +2030,8 @@ export const storageService = {
     let modified = false;
     const sanitized = list.map(r => {
       let updatedJilid = r.jilid;
-      if (r.id === 'ummi-3' && r.studentId === 'std-5' && r.jilid === 'Jilid 1') {
-        modified = true;
-        return {
-          ...r,
-          jilid: 'Jilid 3',
-          page: 18,
-          materialName: 'Ummi Dewasa Jilid 3: Hukum Mad Thabi\'i & Nun Sukun',
-          notes: 'Panjang 2 harakat belum stabil pada materi Jilid 3 hal. 18, perlu pengulangan talaqqi.'
-        };
-      }
-      if (r.jilid === 'Jilid 4') updatedJilid = 'Jilid 2';
-      else if (r.jilid === 'Jilid 5') updatedJilid = 'Jilid 2';
-      else if (r.jilid === 'Jilid 6') updatedJilid = 'Jilid 3';
+      if (r.jilid === 'Munaqasyah') updatedJilid = 'Munaqosyah';
+      else if (r.jilid === 'Tahfidz') updatedJilid = 'Tahfizh';
       if (updatedJilid !== r.jilid) {
         modified = true;
         return { ...r, jilid: updatedJilid };
@@ -1837,28 +2044,35 @@ export const storageService = {
     return sanitized;
   },
   addUmmiRecord(record: UmmiRecord): void {
-    const list = this.getUmmiRecords();
-    list.unshift(record);
-    setItem(STORAGE_KEYS.UMMI, list);
-    syncDocToCloud('ummi_records', record.id, record);
-
+    const now = Date.now();
     const allStudents = this.getStudents();
     const student = allStudents.find(s => 
       s.id === record.studentId || 
-      s.nis === record.studentId ||
-      (s.name && (record as any).studentName && s.name.toLowerCase() === (record as any).studentName.toLowerCase()) ||
+      (s.nis && s.nis === record.studentId) ||
+      (s.name && (record as any).studentName && s.name.toLowerCase().trim() === (record as any).studentName.toLowerCase().trim()) ||
       (s.name.toLowerCase().includes('afiya') && (record.studentId?.includes('1788551716146') || ((record as any).studentName || '').toLowerCase().includes('afiya')))
     ) || this.getStudentById(record.studentId);
+
+    const stampedRecord: UmmiRecord & { _updatedAt?: number } = {
+      ...record,
+      studentId: student ? student.id : record.studentId,
+      _updatedAt: now
+    };
+    const list = this.getUmmiRecords();
+    list.unshift(stampedRecord);
+    list.sort(compareRecordsDesc);
+    setItem(STORAGE_KEYS.UMMI, list);
+    syncDocToCloud('ummi_records', stampedRecord.id, stampedRecord);
 
     if (student) {
       const classes = this.getClasses();
       if (!isGrade8or9Student(student, classes)) {
-        const gradeLetter = getGradeFromScore(record.score).letter;
+        const gradeLetter = getGradeFromScore(stampedRecord.score).letter;
         const updatedStudent: Student = {
           ...student,
-          currentUmmiJilid: record.jilid,
-          currentUmmiPage: record.page,
-          raportUmmiCapaian: `${record.jilid} halaman ${record.page}`,
+          currentUmmiJilid: stampedRecord.jilid,
+          currentUmmiPage: stampedRecord.page,
+          raportUmmiCapaian: `${stampedRecord.jilid} halaman ${stampedRecord.page}`,
           raportUmmiNilai: gradeLetter
         };
         this.saveStudent(updatedStudent);
@@ -1867,42 +2081,40 @@ export const storageService = {
     this.notifyListeners();
   },
   updateUmmiRecord(record: UmmiRecord): void {
-    const list = this.getUmmiRecords();
-    const idx = list.findIndex(r => r.id === record.id);
-    if (idx >= 0) {
-      list[idx] = record;
-    } else {
-      list.unshift(record);
-    }
-    setItem(STORAGE_KEYS.UMMI, list);
-    syncDocToCloud('ummi_records', record.id, record);
-
+    const now = Date.now();
     const allStudents = this.getStudents();
     const student = allStudents.find(s => 
       s.id === record.studentId || 
-      s.nis === record.studentId ||
-      (s.name && (record as any).studentName && s.name.toLowerCase() === (record as any).studentName.toLowerCase()) ||
+      (s.nis && s.nis === record.studentId) ||
+      (s.name && (record as any).studentName && s.name.toLowerCase().trim() === (record as any).studentName.toLowerCase().trim()) ||
       (s.name.toLowerCase().includes('afiya') && (record.studentId?.includes('1788551716146') || ((record as any).studentName || '').toLowerCase().includes('afiya')))
     ) || this.getStudentById(record.studentId);
 
+    const stampedRecord: UmmiRecord & { _updatedAt?: number } = {
+      ...record,
+      studentId: student ? student.id : record.studentId,
+      _updatedAt: now
+    };
+    const list = this.getUmmiRecords();
+    const idx = list.findIndex(r => r.id === stampedRecord.id);
+    if (idx >= 0) {
+      list[idx] = stampedRecord;
+    } else {
+      list.unshift(stampedRecord);
+    }
+    list.sort(compareRecordsDesc);
+    setItem(STORAGE_KEYS.UMMI, list);
+    syncDocToCloud('ummi_records', stampedRecord.id, stampedRecord);
+
     if (student) {
-      const studentRecords = list
-        .filter(r => 
-          r.studentId === student.id || 
-          r.studentId === student.nis ||
-          (student.name && (r as any).studentName && (r as any).studentName.toLowerCase() === student.name.toLowerCase())
-        )
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      
-      const top = studentRecords[0] || record;
       const classes = this.getClasses();
       if (!isGrade8or9Student(student, classes)) {
-        const gradeLetter = getGradeFromScore(top.score).letter;
+        const gradeLetter = getGradeFromScore(stampedRecord.score).letter;
         this.saveStudent({
           ...student,
-          currentUmmiJilid: top.jilid,
-          currentUmmiPage: top.page,
-          raportUmmiCapaian: `${top.jilid} halaman ${top.page}`,
+          currentUmmiJilid: stampedRecord.jilid,
+          currentUmmiPage: stampedRecord.page,
+          raportUmmiCapaian: `${stampedRecord.jilid} halaman ${stampedRecord.page}`,
           raportUmmiNilai: gradeLetter
         });
       }
@@ -1921,7 +2133,7 @@ export const storageService = {
     if (studentId) {
       const remaining = filtered
         .filter(r => r.studentId === studentId)
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        .sort(compareRecordsDesc);
       const student = this.getStudentById(studentId);
       if (student && remaining.length > 0) {
         this.saveStudent({

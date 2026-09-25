@@ -165,25 +165,62 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
       return false;
     });
     
-    return [...rawList].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [ummiRecords, student.id, student.nis, student.name]);
+    return [...rawList].sort((a, b) => {
+      const timeB = a?.date ? new Date(b.date).getTime() : 0;
+      const timeA = b?.date ? new Date(a.date).getTime() : 0;
+      if (!isNaN(timeB) && !isNaN(timeA) && timeB !== timeA) {
+        return timeB - timeA;
+      }
+      const updB = (b as any)._updatedAt || 0;
+      const updA = (a as any)._updatedAt || 0;
+      if (updB !== updA) return updB - updA;
+      return String(b.id || '').localeCompare(String(a.id || ''));
+    });
+  }, [ummiRecords, student.id, student.nis, student.name, student.currentUmmiJilid, student.currentUmmiPage]);
 
   const latestUmmiRecord = studentUmmiRecords[0];
 
-  // Derive initial values based on latest Ummi input or student record
+  const parseUmmiCapaian = (desc: string, fallbackJilid?: string, fallbackPage?: number) => {
+    const trimmed = (desc || '').trim();
+    const pageMatch = trimmed.match(/(?:halaman|hal\.?)\s*(\d+)/i) || trimmed.match(/(\d+)\s*$/);
+    const page = pageMatch ? parseInt(pageMatch[1], 10) : (fallbackPage || 1);
+    const lower = trimmed.toLowerCase();
+    let jilid = fallbackJilid || 'Jilid 1';
+    if (lower.includes('pra-tk') || lower.includes('pra tk') || lower.includes('pratk')) jilid = 'Pra-TK';
+    else if (lower.includes('munaqosyah') || lower.includes('munaqasyah')) jilid = 'Munaqosyah';
+    else if (lower.includes('tahfizh') || lower.includes('tahfidz')) jilid = 'Tahfizh';
+    else if (lower.includes('turjuman')) jilid = 'Turjuman';
+    else if (lower.includes('gharib') || lower.includes('ghorib')) jilid = 'Gharib';
+    else if (lower.includes('tajwid')) jilid = 'Tajwid';
+    else if (lower.includes("al-qur'an") || lower.includes('al-quran') || lower.includes('alquran') || lower.includes('tilawah')) jilid = "Al-Qur'an";
+    else {
+      const jilidMatch = trimmed.match(/jilid\s*(\d+)/i);
+      if (jilidMatch) {
+        jilid = `Jilid ${jilidMatch[1]}`;
+      }
+    }
+    return { jilid, page: page > 0 ? page : 1 };
+  };
+
+  // Derive initial values based on student record and latest Ummi input
   const computeUmmiCapaian = (std: Student, rec?: UmmiRecord) => {
     if (isGrade8or9Student(std, classes)) {
       return '- (Tidak Mengikuti Ummi)';
     }
-    // Prioritaskan input evaluasi Ummi terbaru agar selalu tersinkronisasi
-    if (rec && rec.jilid && rec.page) {
-      return `${rec.jilid} halaman ${rec.page}`;
-    }
     if (std.currentUmmiJilid && std.currentUmmiJilid !== '-') {
+      if (std.raportUmmiCapaian && std.raportUmmiCapaian.trim() !== '') {
+        const parsedCapaian = parseUmmiCapaian(std.raportUmmiCapaian, std.currentUmmiJilid, std.currentUmmiPage);
+        if (parsedCapaian.jilid.toLowerCase() === std.currentUmmiJilid.toLowerCase()) {
+          return std.raportUmmiCapaian;
+        }
+      }
       return `${std.currentUmmiJilid} halaman ${std.currentUmmiPage || 1}`;
     }
     if (std.raportUmmiCapaian && std.raportUmmiCapaian.trim() !== '') {
       return std.raportUmmiCapaian;
+    }
+    if (rec && rec.jilid && rec.page) {
+      return `${rec.jilid} halaman ${rec.page}`;
     }
     return 'Jilid 1 halaman 1';
   };
@@ -192,19 +229,19 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
     if (isGrade8or9Student(std, classes)) {
       return '-';
     }
-    if (rec && rec.score !== undefined && rec.score !== null) {
-      const num = Number(rec.score);
-      if (!isNaN(num)) {
-        return getGradeFromScore(num).letter;
-      }
-      return String(rec.score);
-    }
     if (std.raportUmmiNilai && std.raportUmmiNilai.trim() !== '') {
       const num = Number(std.raportUmmiNilai);
       if (!isNaN(num) && num > 0) {
         return getGradeFromScore(num).letter;
       }
       return std.raportUmmiNilai;
+    }
+    if (rec && rec.score !== undefined && rec.score !== null) {
+      const num = Number(rec.score);
+      if (!isNaN(num)) {
+        return getGradeFromScore(num).letter;
+      }
+      return String(rec.score);
     }
     if (std.avgScore) {
       const num = Number(std.avgScore);
@@ -298,11 +335,13 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
     setSakitCount(student.raportSakit !== undefined ? student.raportSakit : attCounts.sakit);
     setIzinCount(student.raportIzin !== undefined ? student.raportIzin : attCounts.izin);
     setAlphaCount(student.raportAlpha !== undefined ? student.raportAlpha : attCounts.alfa);
-  }, [student.id, student.name, student.currentUmmiJilid, student.currentUmmiPage, latestUmmiRecord]);
+  }, [student.id, student.name, student.currentUmmiJilid, student.currentUmmiPage, student.raportUmmiCapaian, student.raportUmmiNilai, latestUmmiRecord?.id, latestUmmiRecord?.jilid, latestUmmiRecord?.page, latestUmmiRecord?.score]);
 
-  // Method to persist student raport changes (Target hafalan, jenis halaqoh, catatan, nilai Ummi, dll)
-  const handleSaveStudentRaport = () => {
+  // Quick-save helper for immediate Ummi Jilid / Page / Nilai persistence
+  const persistUmmiQuickChange = (newDesc: string, newNilai: string) => {
     const finalName = studentNameInput.trim() || student.name;
+    const is89 = isGrade8or9Student(student, classes);
+    const parsedUmmi = parseUmmiCapaian(newDesc, student.currentUmmiJilid, student.currentUmmiPage);
     const updatedStudent: Student = {
       ...student,
       name: finalName,
@@ -312,6 +351,36 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
       raportHalaqahType: halaqahType,
       lastHafalan: suratAyatCapaian.trim(),
       raportNotes: teacherNotes.trim(),
+      currentUmmiJilid: is89 ? '-' : parsedUmmi.jilid,
+      currentUmmiPage: is89 ? 0 : parsedUmmi.page,
+      raportUmmiCapaian: newDesc.trim(),
+      raportUmmiNilai: newNilai.trim(),
+      raportAlpha: alphaCount,
+      raportIzin: izinCount,
+      raportSakit: sakitCount
+    };
+    storageService.saveStudent(updatedStudent);
+    onUpdateStudent?.(updatedStudent);
+    setSaveSuccessMessage(`Tersimpan otomatis: ${updatedStudent.currentUmmiJilid} halaman ${updatedStudent.currentUmmiPage} (Grade ${updatedStudent.raportUmmiNilai})`);
+    setTimeout(() => setSaveSuccessMessage(''), 4000);
+  };
+
+  // Method to persist student raport changes (Target hafalan, jenis halaqoh, catatan, nilai Ummi, dll)
+  const handleSaveStudentRaport = () => {
+    const finalName = studentNameInput.trim() || student.name;
+    const is89 = isGrade8or9Student(student, classes);
+    const parsedUmmi = parseUmmiCapaian(ummiCapaianDescription, student.currentUmmiJilid, student.currentUmmiPage);
+    const updatedStudent: Student = {
+      ...student,
+      name: finalName,
+      program: halaqahType,
+      targetSuratAyat: targetSuratAyat.trim(),
+      raportTargetHafalan: targetSuratAyat.trim(),
+      raportHalaqahType: halaqahType,
+      lastHafalan: suratAyatCapaian.trim(),
+      raportNotes: teacherNotes.trim(),
+      currentUmmiJilid: is89 ? '-' : parsedUmmi.jilid,
+      currentUmmiPage: is89 ? 0 : parsedUmmi.page,
       raportUmmiCapaian: ummiCapaianDescription.trim(),
       raportUmmiNilai: ummiNilaiScore.trim(),
       raportAlpha: alphaCount,
@@ -321,7 +390,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
 
     storageService.saveStudent(updatedStudent);
     onUpdateStudent?.(updatedStudent);
-    setSaveSuccessMessage(`Data target hafalan (${targetSuratAyat.trim()}), halaqah (${halaqahType}), nama santri (${finalName}), dan raport berhasil disimpan ke database!`);
+    setSaveSuccessMessage(`Data raport & capaian Ummi (${updatedStudent.currentUmmiJilid} hal. ${updatedStudent.currentUmmiPage}) untuk ${finalName} berhasil disimpan & disinkronkan!`);
     setTimeout(() => setSaveSuccessMessage(''), 5000);
   };
 
@@ -1231,22 +1300,73 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                 <span className="text-[10px] bg-slate-100 text-slate-700 border border-slate-300 px-2 py-0.5 rounded font-medium">
                   Kebijakan TP Ini: Kelas 8 & 9 Tidak Mengikuti Pembelajaran Ummi
                 </span>
-              ) : latestUmmiRecord ? (
+              ) : (student.currentUmmiJilid && student.currentUmmiJilid !== '-') || latestUmmiRecord ? (
                 <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded font-bold">
-                  ✓ Tersinkronisasi Otomatis: {latestUmmiRecord.jilid} hal. {latestUmmiRecord.page} (Grade {getGradeFromScore(latestUmmiRecord.score).letter})
+                  ✓ Tersinkronisasi Otomatis: {parseUmmiCapaian(ummiCapaianDescription, student.currentUmmiJilid, student.currentUmmiPage).jilid} hal. {parseUmmiCapaian(ummiCapaianDescription, student.currentUmmiJilid, student.currentUmmiPage).page} (Grade {ummiNilaiScore})
                 </span>
               ) : null}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-2">
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+              <div className="sm:col-span-2 space-y-1.5">
+                <label className="block text-[11px] font-bold text-slate-700">
                   Capaian UMMI (Jilid/Tilawah/Gharib/Tajwid):
                 </label>
+                {!isGrade8or9Student(student, classes) && (
+                  <div className="flex flex-wrap items-center gap-1">
+                    {['Pra-TK', 'Jilid 1', 'Jilid 2', 'Jilid 3', 'Jilid 4', 'Jilid 5', 'Jilid 6', "Al-Qur'an", 'Gharib', 'Tajwid', 'Turjuman', 'Munaqosyah', 'Tahfizh'].map((j) => {
+                      const currentParsed = parseUmmiCapaian(ummiCapaianDescription, student.currentUmmiJilid, student.currentUmmiPage);
+                      const isActive = currentParsed.jilid.toLowerCase() === j.toLowerCase();
+                      return (
+                        <button
+                          key={j}
+                          type="button"
+                          onClick={() => {
+                            const page = currentParsed.page || student.currentUmmiPage || 1;
+                            const nextDesc = `${j} halaman ${page}`;
+                            setUmmiCapaianDescription(nextDesc);
+                            persistUmmiQuickChange(nextDesc, ummiNilaiScore);
+                          }}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold border transition cursor-pointer ${
+                            isActive
+                              ? 'bg-[#1E293B] text-[#D4AF37] border-slate-900 shadow-2xs'
+                              : 'bg-slate-50 hover:bg-amber-50 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          {j}
+                        </button>
+                      );
+                    })}
+                    <div className="flex items-center gap-1 ml-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                      <span className="text-[10px] font-bold text-slate-600">Hal:</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={604}
+                        value={parseUmmiCapaian(ummiCapaianDescription, student.currentUmmiJilid, student.currentUmmiPage).page}
+                        onChange={(e) => {
+                          const newPage = Math.max(1, parseInt(e.target.value, 10) || 1);
+                          const currentParsed = parseUmmiCapaian(ummiCapaianDescription, student.currentUmmiJilid, student.currentUmmiPage);
+                          const nextDesc = `${currentParsed.jilid} halaman ${newPage}`;
+                          setUmmiCapaianDescription(nextDesc);
+                          persistUmmiQuickChange(nextDesc, ummiNilaiScore);
+                        }}
+                        className="w-12 text-center text-[11px] font-bold bg-white border border-slate-300 rounded px-1 py-0.5"
+                      />
+                    </div>
+                  </div>
+                )}
                 <input
                   type="text"
                   value={ummiCapaianDescription}
                   onChange={(e) => setUmmiCapaianDescription(e.target.value)}
+                  onBlur={(e) => persistUmmiQuickChange(e.target.value, ummiNilaiScore)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      persistUmmiQuickChange(ummiCapaianDescription, ummiNilaiScore);
+                    }
+                  }}
                   placeholder="Contoh: Jilid 1 halaman 13"
                   className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-semibold text-xs"
                 />
@@ -1261,7 +1381,10 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                     <button
                       key={ltr}
                       type="button"
-                      onClick={() => setUmmiNilaiScore(ltr)}
+                      onClick={() => {
+                        setUmmiNilaiScore(ltr);
+                        persistUmmiQuickChange(ummiCapaianDescription, ltr);
+                      }}
                       className={`px-1.5 py-0.5 rounded text-[11px] font-black border transition cursor-pointer ${
                         ummiNilaiScore === ltr 
                           ? 'bg-[#1E293B] text-[#D4AF37] border-slate-900 ring-2 ring-[#D4AF37]/50 shadow-xs' 
@@ -1276,6 +1399,13 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                   type="text"
                   value={ummiNilaiScore}
                   onChange={(e) => setUmmiNilaiScore(e.target.value)}
+                  onBlur={(e) => persistUmmiQuickChange(ummiCapaianDescription, e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      persistUmmiQuickChange(ummiCapaianDescription, ummiNilaiScore);
+                    }
+                  }}
                   placeholder="Contoh: A atau B+"
                   className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-black text-xs text-center text-slate-900"
                 />
@@ -1296,8 +1426,10 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                         key={r.id}
                         type="button"
                         onClick={() => {
-                          setUmmiCapaianDescription(`${r.jilid} halaman ${r.page}`);
+                          const nextDesc = `${r.jilid} halaman ${r.page}`;
+                          setUmmiCapaianDescription(nextDesc);
                           setUmmiNilaiScore(letter);
+                          persistUmmiQuickChange(nextDesc, letter);
                         }}
                         className={`px-2 py-1 rounded text-[11px] font-semibold border transition cursor-pointer flex items-center gap-1 ${
                           ummiCapaianDescription === `${r.jilid} halaman ${r.page}`
