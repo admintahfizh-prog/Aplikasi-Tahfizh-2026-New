@@ -22,7 +22,8 @@ import {
   Sparkles,
   Share2,
   Save,
-  EyeOff
+  EyeOff,
+  Users
 } from 'lucide-react';
 import { Student, Teacher, ClassItem, Role, User, HalaqahGroup } from '../types';
 import { storageService } from '../services/storageService';

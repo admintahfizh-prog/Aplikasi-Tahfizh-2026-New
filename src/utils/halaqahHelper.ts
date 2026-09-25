@@ -1,4 +1,7 @@
 import { Student, Teacher, HalaqahGroup, User, UserProfile } from '../types';
+import { INITIAL_HALAQAH_GROUPS } from '../data/initialData';
+
+export const DEFAULT_HALAQAH_GROUPS: HalaqahGroup[] = INITIAL_HALAQAH_GROUPS;
 
 /**
  * Mencari data Guru dari user yang sedang login
@@ -123,21 +126,22 @@ export function getStudentHalaqahInfo(
  */
 export function isStudentInTeacherHalaqah(
   student: Student,
-  teacherId: string | undefined,
+  teacherId: string | Teacher | null | undefined,
   halaqahGroups: HalaqahGroup[],
   teachers: Teacher[]
 ): boolean {
-  if (!teacherId) return false;
+  const resolvedTeacherId = typeof teacherId === 'object' && teacherId !== null ? teacherId.id : teacherId;
+  if (!resolvedTeacherId) return false;
 
   // 1. Direct teacherId match
-  if (student.teacherId === teacherId) return true;
+  if (student.teacherId === resolvedTeacherId) return true;
 
   // 2. Group teacherId match
   const halaqah = getStudentHalaqahInfo(student, halaqahGroups, teachers);
-  if (halaqah.teacherId === teacherId) return true;
+  if (halaqah.teacherId === resolvedTeacherId) return true;
 
   // 3. Cek halaqah groups milik guru ini
-  const teacherGroups = halaqahGroups.filter(g => g.teacherId === teacherId);
+  const teacherGroups = halaqahGroups.filter(g => g.teacherId === resolvedTeacherId);
   return teacherGroups.some(g => 
     (g.studentIds && g.studentIds.includes(student.id)) ||
     student.halaqahGroupId === g.id
@@ -153,7 +157,7 @@ export function isStudentInTeacherHalaqah(
 export function filterStudentsByHalaqah(
   students: Student[],
   filterValue: string, // 'all' | 'my-halaqah' | group.id
-  currentTeacherId: string | undefined,
+  currentTeacherId: string | Teacher | null | undefined,
   halaqahGroups: HalaqahGroup[],
   teachers: Teacher[]
 ): Student[] {
@@ -161,9 +165,11 @@ export function filterStudentsByHalaqah(
     return students;
   }
 
+  const resolvedTeacherId = typeof currentTeacherId === 'object' && currentTeacherId !== null ? currentTeacherId.id : currentTeacherId;
+
   if (filterValue === 'my-halaqah') {
-    if (!currentTeacherId) return students;
-    return students.filter(s => isStudentInTeacherHalaqah(s, currentTeacherId, halaqahGroups, teachers));
+    if (!resolvedTeacherId) return students;
+    return students.filter(s => isStudentInTeacherHalaqah(s, resolvedTeacherId, halaqahGroups, teachers));
   }
 
   // Filter ke halaqah spesifik (id halaqah)
@@ -192,12 +198,14 @@ export function groupStudentsByHalaqah(
   halaqahGroups: HalaqahGroup[],
   teachers: Teacher[],
   filterValue: string = 'all', // 'all' | 'my-halaqah' | halaqahGroupId
-  currentTeacherId?: string
+  currentTeacherId?: string | Teacher | null
 ): GroupedHalaqahData[] {
+  const resolvedTeacherId = typeof currentTeacherId === 'object' && currentTeacherId !== null ? currentTeacherId.id : currentTeacherId;
+
   // 1. Filter halaqah groups yang akan ditampilkan
   let relevantGroups = halaqahGroups;
-  if (filterValue === 'my-halaqah' && currentTeacherId) {
-    relevantGroups = halaqahGroups.filter(g => g.teacherId === currentTeacherId);
+  if (filterValue === 'my-halaqah' && resolvedTeacherId) {
+    relevantGroups = halaqahGroups.filter(g => g.teacherId === resolvedTeacherId);
   } else if (filterValue !== 'all' && filterValue !== 'my-halaqah') {
     relevantGroups = halaqahGroups.filter(g => g.id === filterValue);
   }

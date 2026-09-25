@@ -782,15 +782,15 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
       `*LAPORAN PERKEMBANGAN TAHFIZH & METODE UMMI*\n` +
       `*SMP ISLAM AL AZHAR 21 SUKOHARJO*\n` +
       `Periode: ${periodTitle} (${academicYear})\n\n` +
-      `*Nama Santri:* ${student.name}\n` +
+      `*Nama Santri:* ${formatStudentDisplayName(studentNameInput || student.name)}\n` +
       `*NIS/NISN:* ${student.nis} / ${student.nisn}\n` +
       `*Kelas:* ${studentClass?.name || '8 E'}\n` +
       `*Halaqah:* ${halaqahType}\n\n` +
       `*I. Ketercapaian Tahfizh:* ${suratAyatCapaian} (Target: ${targetSuratAyat})\n` +
-      `*II. Kedisiplinan:* A: ${alphaCount}, I: ${izinCount}, S: ${sakitCount}\n` +
       (isGrade8or9 
-        ? `*III. Status Pembelajaran UMMI:* Tidak Mengikuti (Khusus Kelas 7)\n\n`
-        : `*III. Capaian UMMI:* ${ummiCapaianDescription} (Nilai: ${ummiNilaiScore || '-'})\n\n`) +
+        ? `*II. Status Pembelajaran UMMI:* Tidak Mengikuti (Khusus Kelas 7)\n`
+        : `*II. Capaian UMMI:* ${ummiCapaianDescription} (Nilai: ${ummiNilaiScore || '-'})\n`) +
+      `*III. Kedisiplinan:* A: ${alphaCount}, I: ${izinCount}, S: ${sakitCount}\n\n` +
       `*Catatan Guru Pembimbing:* "${teacherNotes}"\n\n` +
       `_Laporan lengkap dapat diunduh di Portal Wali Santri SMPI Al Azhar 21._`
     );
@@ -1674,37 +1674,33 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             />
           )}
 
-          {/* INNER REPORT CONTENT - SAFELY BUFFERED FROM BINGKAI */}
-          <div className="relative z-10 space-y-3.5 text-[12.5px] leading-snug">
+          {/* INNER REPORT CONTENT - JARAK TULISAN & LOGO DENGAN BORDER 0,5 CM */}
+          <div 
+            className="relative z-10 space-y-3 text-[12.5px] leading-snug"
+            style={{ padding: '0.5cm' }}
+          >
             
-            {/* HEADER: LOGO SEKOLAH (KIRI) - BISMILLAH PNG (TENGAH) - LOGO YAYASAN (KANAN) */}
-            {/* Berikan jarak 0,5 cm dari border bingkai agar proporsional dan tidak mepet */}
-            <div 
-              className="flex items-center justify-between gap-3 border-b border-transparent pb-1"
-              style={{ paddingTop: '0.5cm', paddingLeft: '0.5cm', paddingRight: '0.5cm' }}
-            >
-              {/* Left Logo: Sekolah (Al Azhar 21) - Jarak 0.5 cm dari border & proporsional */}
-              <div 
-                className="w-20 flex justify-start items-center shrink-0"
-                style={{ paddingLeft: '0.5cm', paddingTop: '0.5cm' }}
-              >
+            {/* HEADER: LOGO SEKOLAH (KIRI) - BISMILLAH PNG (TENGAH) - LOGO YAYASAN MAKARIMA (KANAN) */}
+            <div className="flex items-center justify-between gap-4 border-b border-transparent pb-1">
+              {/* Left Logo: Sekolah (Al Azhar 21) - Proporsional */}
+              <div className="w-24 flex justify-start items-center shrink-0">
                 <LogoAlAzhar 
-                  size={65} 
+                  size={80} 
                   customLogoUrl={settings.customLogoUrl} 
-                  className="w-[65px] h-[65px] object-contain drop-shadow-xs" 
+                  className="w-[80px] h-[80px] object-contain drop-shadow-xs" 
                 />
               </div>
 
-              {/* Center Bismillah PNG (Ganti Tulisan Arab) */}
-              <div className="flex-1 px-2 flex flex-col items-center justify-center min-h-[64px]">
+              {/* Center Bismillah PNG (Ukuran Proporsional Tidak Terlalu Besar) */}
+              <div className="flex-1 px-2 flex flex-col items-center justify-center min-h-[56px]">
                 {bismillahImgUrl ? (
                   <img
                     src={bismillahImgUrl}
                     alt="Kaligrafi Bismillah"
-                    className="h-12 sm:h-14 max-w-[280px] object-contain mx-auto select-none"
+                    className="h-9 sm:h-10 max-w-[180px] object-contain mx-auto select-none"
                   />
                 ) : (
-                  <div className="no-print flex flex-col items-center justify-center p-2 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 text-slate-400 text-center w-full max-w-[240px]">
+                  <div className="no-print flex flex-col items-center justify-center p-2 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 text-slate-400 text-center w-full max-w-[200px]">
                     <span className="text-[10px] font-bold text-slate-600">Kaligrafi Bismillah (PNG)</span>
                     <label className="text-[9px] text-[#D4AF37] font-bold underline cursor-pointer mt-0.5">
                       + Upload Bismillah PNG
@@ -1719,19 +1715,16 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                 )}
               </div>
 
-              {/* Right Logo: Yayasan - Jarak 0.5 cm dari border & proporsional */}
-              <div 
-                className="w-20 flex justify-end items-center shrink-0"
-                style={{ paddingRight: '0.5cm', paddingTop: '0.5cm' }}
-              >
+              {/* Right Logo: Yayasan Makarima - Proporsional */}
+              <div className="w-24 flex justify-end items-center shrink-0">
                 {yayasanLogoUrl ? (
                   <img 
                     src={yayasanLogoUrl} 
                     alt="Logo Yayasan" 
-                    className="w-[65px] h-[65px] object-contain" 
+                    className="w-[80px] h-[80px] object-contain" 
                   />
                 ) : (
-                  <div className="no-print w-16 h-16 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-[9px] text-slate-400 text-center p-1 bg-slate-50/70">
+                  <div className="no-print w-20 h-20 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-[9px] text-slate-400 text-center p-1 bg-slate-50/70">
                     <span className="font-semibold text-slate-500">Logo Yayasan</span>
                     <label className="text-[#D4AF37] font-bold underline cursor-pointer text-[8px] mt-0.5">
                       + Upload
@@ -1829,11 +1822,55 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             </div>
 
             {/* ========================================================================= */}
-            {/* II. KEDISIPLINAN (PROPORSI PENUH & RAPI)                                   */}
+            {/* II. PERKEMBANGAN INDIVIDU METODE UMMI (ROMAWI II)                         */}
             {/* ========================================================================= */}
             <div className="space-y-1 pt-0.5">
               <h3 className="font-bold text-[13px] text-slate-950">
-                II. &nbsp; Kedisiplinan
+                II. &nbsp; Perkembangan Individu Metode Ummi
+              </h3>
+
+              <table className="w-full text-[12.5px] border border-slate-900 border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-900 text-slate-900">
+                    <th colSpan={2} className="py-2 px-3 text-center font-bold text-[12.5px]">
+                      Capaian UMMI
+                    </th>
+                  </tr>
+                  <tr className="bg-white border-b border-slate-900 text-slate-900 font-bold">
+                    <th className="py-2 px-3 border-r border-slate-900 text-left w-8/12 font-bold">
+                      Jilid/Tilawah/Gharib/Tajwid
+                    </th>
+                    <th className="py-2 px-3 text-center w-4/12 font-bold">
+                      Nilai
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="py-2.5 px-3 border-r border-slate-900 font-normal text-slate-900">
+                      {ummiCapaianDescription}
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold font-mono text-slate-900 text-[13px]">
+                      {(() => {
+                        if (!ummiNilaiScore || ummiNilaiScore === '-') return '-';
+                        const num = Number(ummiNilaiScore);
+                        if (!isNaN(num) && num > 0) {
+                          return getGradeFromScore(num).letter;
+                        }
+                        return ummiNilaiScore;
+                      })()}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* ========================================================================= */}
+            {/* III. KEDISIPLINAN (ROMAWI III)                                             */}
+            {/* ========================================================================= */}
+            <div className="space-y-1 pt-0.5">
+              <h3 className="font-bold text-[13px] text-slate-950">
+                III. &nbsp; Kedisiplinan
               </h3>
 
               <table className="w-full text-[12.5px] border border-slate-900 border-collapse">
@@ -1879,50 +1916,6 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             </div>
 
             {/* ========================================================================= */}
-            {/* III. PERKEMBANGAN INDIVIDU METODE UMMI (PROPORSI PENUH & RAPI)            */}
-            {/* ========================================================================= */}
-            <div className="space-y-1 pt-0.5">
-              <h3 className="font-bold text-[13px] text-slate-950">
-                III. &nbsp; Perkembangan Individu Metode Ummi
-              </h3>
-
-              <table className="w-full text-[12.5px] border border-slate-900 border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-900 text-slate-900">
-                    <th colSpan={2} className="py-2 px-3 text-center font-bold text-[12.5px]">
-                      Capaian UMMI
-                    </th>
-                  </tr>
-                  <tr className="bg-white border-b border-slate-900 text-slate-900 font-bold">
-                    <th className="py-2 px-3 border-r border-slate-900 text-left w-8/12 font-bold">
-                      Jilid/Tilawah/Gharib/Tajwid
-                    </th>
-                    <th className="py-2 px-3 text-center w-4/12 font-bold">
-                      Nilai
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="py-2.5 px-3 border-r border-slate-900 font-normal text-slate-900">
-                      {ummiCapaianDescription}
-                    </td>
-                    <td className="py-2.5 px-3 text-center font-bold font-mono text-slate-900 text-[13px]">
-                      {(() => {
-                        if (!ummiNilaiScore || ummiNilaiScore === '-') return '-';
-                        const num = Number(ummiNilaiScore);
-                        if (!isNaN(num) && num > 0) {
-                          return getGradeFromScore(num).letter;
-                        }
-                        return ummiNilaiScore;
-                      })()}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* ========================================================================= */}
             {/* IV. CATATAN                                                               */}
             {/* ========================================================================= */}
             <div className="space-y-1 pt-0.5">
@@ -1938,13 +1931,13 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             {/* ========================================================================= */}
             {/* TANDA TANGAN (SIGNATURES) - SAMPAI SEBELUM BINGKAI BAWAH                   */}
             {/* ========================================================================= */}
-            <div className="pt-5 grid grid-cols-2 text-center text-[12.5px]">
-              {/* Left Signature: Kepala Sekolah (Sinkron Admin) */}
+            <div className="pt-4 grid grid-cols-2 text-center text-[12.5px]">
+              {/* Left Signature: Kepala Sekolah (Sinkron Admin, Tidak Kapital Semua) */}
               <div className="flex flex-col items-center justify-between min-h-[112px]">
                 <div>
                   <p className="text-slate-800">Mengetahui,</p>
-                  <p className="font-bold text-slate-950 uppercase">
-                    Kepala {settings.schoolName || 'SMP ISLAM AL AZHAR 21 SUKOHARJO'}
+                  <p className="font-bold text-slate-950">
+                    Kepala SMP Islam Al Azhar 21
                   </p>
                 </div>
                 

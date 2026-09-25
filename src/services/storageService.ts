@@ -66,7 +66,8 @@ const STORAGE_KEYS = {
   MATRIKULASI_STUDENTS: 'tahfizh_smpia21_matrikulasi_students',
   MATRIKULASI_RECORDS: 'tahfizh_smpia21_matrikulasi_records',
   ATTENDANCE: 'tahfizh_smpia21_attendance',
-  CLOUD_SYNCED: 'tahfizh_smpia21_cloud_synced'
+  CLOUD_SYNCED: 'tahfizh_smpia21_cloud_synced',
+  QUOTA_EXCEEDED: 'tahfizh_smpia21_quota_exceeded'
 };
 
 // Local storage helpers
@@ -399,10 +400,38 @@ export const storageService = {
     }
   },
 
+  // Quota Management for Firebase Spark Tier
+  isQuotaExceeded(): boolean {
+    return localStorage.getItem(STORAGE_KEYS.QUOTA_EXCEEDED) === 'true';
+  },
+
+  setQuotaExceeded(exceeded: boolean): void {
+    if (exceeded) {
+      localStorage.setItem(STORAGE_KEYS.QUOTA_EXCEEDED, 'true');
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.QUOTA_EXCEEDED);
+    }
+  },
+
+  clearQuotaStatus(): void {
+    localStorage.removeItem(STORAGE_KEYS.QUOTA_EXCEEDED);
+  },
+
+  getQuotaInfo(): { exceeded: boolean; message: string; upgradeUrl: string } {
+    const exceeded = this.isQuotaExceeded();
+    return {
+      exceeded,
+      message: exceeded
+        ? 'Batas kuota harian Firebase Firestore (Spark Free Tier) tercapai. Data tersimpan aman secara offline/lokal.'
+        : 'Kuota Firebase Firestore dalam batas normal.',
+      upgradeUrl: 'https://console.firebase.google.com'
+    };
+  },
+
   // Initialize Realtime Cloud Sync & Download / Seed to Firebase
-  async initCloudSync(): Promise<{ success: boolean; message: string }> {
+  async initCloudSync(force: boolean = false): Promise<{ success: boolean; message: string; isQuotaExceeded?: boolean }> {
     try {
-      console.log('[Cloud Sync] Initializing Firestore Sync across devices...');
+      console.log('[Cloud Sync] Initializing Firestore Sync across devices...', { force });
 
       // Start Real-time snapshot listeners immediately
       this.startRealtimeSync();
@@ -630,11 +659,25 @@ export const storageService = {
       setItem(STORAGE_KEYS.USERS, mergedUsers);
 
       localStorage.setItem(STORAGE_KEYS.CLOUD_SYNCED, 'true');
+      this.setQuotaExceeded(false);
       this.notifyListeners();
-      return { success: true, message: 'Database Firebase Firestore aktif & tersinkronisasi realtime!' };
+      return { success: true, message: 'Database Firebase Firestore aktif & tersinkronisasi realtime!', isQuotaExceeded: false };
     } catch (e: any) {
       console.error('[Cloud Sync] Failed to initialize cloud storage:', e);
-      return { success: false, message: e?.message || 'Gagal menyambung ke database Firestore.' };
+      const isQuota = e?.code === 'resource-exhausted' ||
+        String(e?.message || '').toLowerCase().includes('quota') ||
+        String(e?.message || '').toLowerCase().includes('resource-exhausted');
+
+      if (isQuota) {
+        this.setQuotaExceeded(true);
+        this.notifyListeners();
+        return {
+          success: false,
+          isQuotaExceeded: true,
+          message: 'Batas kuota baca Firebase Firestore harian telah tercapai. Aplikasi beroperasi normal dalam Mode Penyimpanan Lokal (Offline).'
+        };
+      }
+      return { success: false, message: e?.message || 'Gagal menyambung ke database Firestore.', isQuotaExceeded: false };
     }
   },
 
