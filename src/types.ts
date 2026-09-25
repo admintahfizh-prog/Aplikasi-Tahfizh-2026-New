@@ -71,6 +71,15 @@ export interface Student {
   parentEmail?: string;
   program: HalaqahType | 'Reguler Tahfizh' | 'Tahfizh Unggulan' | 'Takhassus 30 Juz' | string;
   targetJuz: number; // e.g. 4.0
+  raportNotes?: string;
+  raportTargetHafalan?: string;
+  raportHalaqahType?: string;
+  raportUmmiCapaian?: string;
+  raportUmmiNilai?: string;
+  raportSakit?: number;
+  raportIzin?: number;
+  raportAlpha?: number;
+  targetSuratAyat?: string;
   photo: string;
   entryYear: string;
   currentUmmiJilid: string; // e.g. 'Jilid 4'
@@ -294,4 +303,15 @@ export interface AppSettings {
   bismillahImgUrl?: string;
   headmasterSignatureUrl?: string;
   tahfizhCoordinatorSignatureUrl?: string;
+}
+
+export type AttendanceStatus = 'Hadir' | 'Sakit' | 'Izin' | 'Alfa';
+
+export interface AttendanceRecord {
+  id: string;
+  studentId: string;
+  teacherId: string;
+  date: string; // YYYY-MM-DD
+  status: AttendanceStatus;
+  notes?: string;
 }

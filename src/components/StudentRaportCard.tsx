@@ -30,6 +30,7 @@ import { storageService } from '../services/storageService';
 import { LogoAlAzhar } from './LogoAlAzhar';
 import html2pdf from 'html2pdf.js';
 import { isGrade8or9Student } from '../utils/gradeHelper';
+import { getGradeFromScore, GRADE_CONVERSION_TABLE, GradeLetter } from '../utils/gradeConversion';
 
 interface StudentRaportCardProps {
   student: Student;
@@ -42,6 +43,7 @@ interface StudentRaportCardProps {
   classes?: ClassItem[];
   userRole?: string;
   onSelectStudent?: (studentId: string) => void;
+  onUpdateStudent?: (student: Student) => void;
   onClose?: () => void;
 }
 
@@ -56,6 +58,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
   classes = [],
   userRole,
   onSelectStudent,
+  onUpdateStudent,
   onClose
 }) => {
   const isWali = userRole === 'wali';
@@ -100,20 +103,29 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
   };
 
   const [halaqahType, setHalaqahType] = useState<string>(
-    normalizeHalaqah(student.program)
+    student.raportHalaqahType || normalizeHalaqah(student.program)
   );
 
   // Tahfizh Progress
   const [suratAyatCapaian, setSuratAyatCapaian] = useState<string>(
-    student.lastHafalan || 'Al-Muzzammil : 9'
+    student.lastHafalan && student.lastHafalan !== '-' ? student.lastHafalan : 'Al-Muzzammil : 9'
   );
-  const [targetSuratAyat, setTargetSuratAyat] = useState<string>('Al-A\'raf : 2');
+  const [targetSuratAyat, setTargetSuratAyat] = useState<string>(
+    student.raportTargetHafalan || student.targetSuratAyat || (student.targetJuz ? `Target ${student.targetJuz} Juz` : 'Al-A\'raf : 2')
+  );
   const [keteranganTahfizh, setKeteranganTahfizh] = useState<string>('Tercapai / Sesuai Target');
 
   // Attendance / Disiplin
-  const [alphaCount, setAlphaCount] = useState<number>(0);
-  const [izinCount, setIzinCount] = useState<number>(0);
-  const [sakitCount, setSakitCount] = useState<number>(0);
+  const initialAttCounts = storageService.getAttendanceCounts(student.id);
+  const [alphaCount, setAlphaCount] = useState<number>(
+    student.raportAlpha !== undefined ? student.raportAlpha : initialAttCounts.alfa
+  );
+  const [izinCount, setIzinCount] = useState<number>(
+    student.raportIzin !== undefined ? student.raportIzin : initialAttCounts.izin
+  );
+  const [sakitCount, setSakitCount] = useState<number>(
+    student.raportSakit !== undefined ? student.raportSakit : initialAttCounts.sakit
+  );
   
   const studentViolations = storageService.getViolationsByStudent(student.id);
   const violationSummaryText = () => {
@@ -133,12 +145,28 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
 
   // Query all Ummi records for this student (sorted by date descending)
   const studentUmmiRecords = useMemo(() => {
-    const rawList = ummiRecords && ummiRecords.length > 0
-      ? ummiRecords.filter(r => r.studentId === student.id)
-      : storageService.getUmmiRecords().filter(r => r.studentId === student.id);
+    const allRecords = [
+      ...(ummiRecords || []),
+      ...storageService.getUmmiRecords()
+    ];
+    const uniqueMap = new Map<string, UmmiRecord>();
+    allRecords.forEach(r => {
+      if (r && r.id) uniqueMap.set(r.id, r);
+    });
+    const combined = Array.from(uniqueMap.values());
+
+    const isAfiya = (student.name || '').toLowerCase().includes('afiya') || student.id.includes('1788551716146');
+
+    const rawList = combined.filter(r => {
+      if (!r) return false;
+      if (r.studentId === student.id || r.studentId === student.nis) return true;
+      if (student.name && (r as any).studentName && (r as any).studentName.toLowerCase().trim() === student.name.toLowerCase().trim()) return true;
+      if (isAfiya && (r.studentId === 'std-1788551716146' || ((r as any).studentName || '').toLowerCase().includes('afiya'))) return true;
+      return false;
+    });
     
     return [...rawList].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [ummiRecords, student.id]);
+  }, [ummiRecords, student.id, student.nis, student.name]);
 
   const latestUmmiRecord = studentUmmiRecords[0];
 
@@ -147,29 +175,47 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
     if (isGrade8or9Student(std, classes)) {
       return '- (Tidak Mengikuti Ummi)';
     }
+    // Prioritaskan input evaluasi Ummi terbaru agar selalu tersinkronisasi
     if (rec && rec.jilid && rec.page) {
       return `${rec.jilid} halaman ${rec.page}`;
     }
     if (std.currentUmmiJilid && std.currentUmmiJilid !== '-') {
       return `${std.currentUmmiJilid} halaman ${std.currentUmmiPage || 1}`;
     }
+    if (std.raportUmmiCapaian && std.raportUmmiCapaian.trim() !== '') {
+      return std.raportUmmiCapaian;
+    }
     return 'Jilid 1 halaman 1';
   };
 
-  const computeUmmiNilai = (std: Student, rec?: UmmiRecord) => {
+  const computeUmmiNilai = (std: Student, rec?: UmmiRecord): string => {
     if (isGrade8or9Student(std, classes)) {
       return '-';
     }
     if (rec && rec.score !== undefined && rec.score !== null) {
+      const num = Number(rec.score);
+      if (!isNaN(num)) {
+        return getGradeFromScore(num).letter;
+      }
       return String(rec.score);
     }
-    if (std.avgScore) {
-      return String(Math.round(std.avgScore));
+    if (std.raportUmmiNilai && std.raportUmmiNilai.trim() !== '') {
+      const num = Number(std.raportUmmiNilai);
+      if (!isNaN(num) && num > 0) {
+        return getGradeFromScore(num).letter;
+      }
+      return std.raportUmmiNilai;
     }
-    return '88';
+    if (std.avgScore) {
+      const num = Number(std.avgScore);
+      if (!isNaN(num) && num > 0) {
+        return getGradeFromScore(num).letter;
+      }
+    }
+    return 'B+';
   };
 
-  // Capaian UMMI (Format tabel: Capaian UMMI -> Jilid/Tilawah/Gharib/Tajwid & Nilai)
+  // Capaian UMMI (Format tabel: Capaian UMMI -> Jilid/Tilawah/Gharib/Tajwid & Nilai Huruf)
   const [ummiCapaianDescription, setUmmiCapaianDescription] = useState<string>(
     computeUmmiCapaian(student, latestUmmiRecord)
   );
@@ -177,18 +223,107 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
     computeUmmiNilai(student, latestUmmiRecord)
   );
 
+  // Helper to ensure student name is NOT all capital letters ("tidak kapital semua"),
+  // matching Title Case / student data format: e.g. "Afiya Yumna Fajriya"
+  const formatStudentDisplayName = (rawName: string) => {
+    if (!rawName) return '';
+    const trimmed = rawName.trim();
+    // Jika nama di data tersimpan dalam huruf BESAR SEMUA (misal "AFIYA YUMNA FAJRIYA" atau "AHMAD RAYHAN"),
+    // ubah menjadi Title Case agar tidak kapital semua sesuai etika raport resmi Al Azhar
+    const isAllUpper = trimmed === trimmed.toUpperCase() && trimmed !== trimmed.toLowerCase();
+    if (isAllUpper) {
+      return trimmed
+        .toLowerCase()
+        .split(' ')
+        .map(word => {
+          if (!word) return '';
+          if (word.startsWith('al-')) {
+            return 'Al-' + word.charAt(3).toUpperCase() + word.slice(4);
+          }
+          return word.charAt(0).toUpperCase() + word.slice(1);
+        })
+        .join(' ');
+    }
+    return trimmed;
+  };
+
+  const [studentNameInput, setStudentNameInput] = useState<string>(
+    formatStudentDisplayName(student.name || '')
+  );
+
+  // Teacher Notes: Nama di catatan raport disesuaikan dengan nama lengkap santri
+  const getDefaultNotesForStudent = (s: Student, nameOverride?: string) => {
+    const displayName = formatStudentDisplayName(nameOverride || s.name);
+    return `Alhamdulillah ananda ${displayName} menunjukkan kedisiplinan dan semangat yang sangat baik dalam halaqah tahfizh dan pembiasaan tartil metode Ummi. Pertahankan kelancaran muraja'ah di rumah dan tingkatkan pengulangan ayat baru.`;
+  };
+
+  const formatPersonalizedNotes = (notes: string | undefined, s: Student, nameOverride?: string) => {
+    const displayName = formatStudentDisplayName(nameOverride || s.name);
+    if (!notes || notes.trim() === '') {
+      return getDefaultNotesForStudent(s, displayName);
+    }
+    // Jika catatan menggunakan format default tapi nama santri tidak cocok, perbarui dengan nama santri saat ini
+    if (notes.includes('menunjukkan kedisiplinan dan semangat yang sangat baik dalam halaqah tahfizh') && !notes.includes(displayName)) {
+      return getDefaultNotesForStudent(s, displayName);
+    }
+    return notes;
+  };
+
+  const [teacherNotes, setTeacherNotes] = useState<string>(
+    formatPersonalizedNotes(student.raportNotes, student)
+  );
+
+  // Feedback status
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string>('');
+
   // Sync state when student or Ummi records change
   useEffect(() => {
+    // 0. Sinkronkan nama santri (tidak huruf kapital semua)
+    setStudentNameInput(formatStudentDisplayName(student.name || ''));
+
+    // 1. Ummi Capaian & Nilai Huruf
     setUmmiCapaianDescription(computeUmmiCapaian(student, latestUmmiRecord));
     setUmmiNilaiScore(computeUmmiNilai(student, latestUmmiRecord));
-    setSuratAyatCapaian(student.lastHafalan || 'Al-Muzzammil : 9');
-    setHalaqahType(normalizeHalaqah(student.program));
-  }, [student.id, student.currentUmmiJilid, student.currentUmmiPage, latestUmmiRecord]);
+    
+    // 2. Hafalan & Target
+    setSuratAyatCapaian(student.lastHafalan && student.lastHafalan !== '-' ? student.lastHafalan : 'Al-Muzzammil : 9');
+    setTargetSuratAyat(student.raportTargetHafalan || student.targetSuratAyat || (student.targetJuz ? `Target ${student.targetJuz} Juz` : 'Al-A\'raf : 2'));
+    setHalaqahType(student.raportHalaqahType || normalizeHalaqah(student.program));
 
-  // Teacher Notes
-  const [teacherNotes, setTeacherNotes] = useState<string>(
-    `Alhamdulillah ananda ${student.nickname || student.name.split(' ')[0]} menunjukkan kedisiplinan dan semangat yang sangat baik dalam halaqah tahfizh dan pembiasaan tartil metode Ummi. Pertahankan kelancaran muraja'ah di rumah dan tingkatkan pengulangan ayat baru.`
-  );
+    // 3. Nama di catatan raport disesuaikan dengan nama lengkap santri
+    setTeacherNotes(formatPersonalizedNotes(student.raportNotes, student));
+
+    // 4. Presensi / Kehadiran (Sakit / Izin / Alfa)
+    const attCounts = storageService.getAttendanceCounts(student.id);
+    setSakitCount(student.raportSakit !== undefined ? student.raportSakit : attCounts.sakit);
+    setIzinCount(student.raportIzin !== undefined ? student.raportIzin : attCounts.izin);
+    setAlphaCount(student.raportAlpha !== undefined ? student.raportAlpha : attCounts.alfa);
+  }, [student.id, student.name, student.currentUmmiJilid, student.currentUmmiPage, latestUmmiRecord]);
+
+  // Method to persist student raport changes (Target hafalan, jenis halaqoh, catatan, nilai Ummi, dll)
+  const handleSaveStudentRaport = () => {
+    const finalName = studentNameInput.trim() || student.name;
+    const updatedStudent: Student = {
+      ...student,
+      name: finalName,
+      program: halaqahType,
+      targetSuratAyat: targetSuratAyat.trim(),
+      raportTargetHafalan: targetSuratAyat.trim(),
+      raportHalaqahType: halaqahType,
+      lastHafalan: suratAyatCapaian.trim(),
+      raportNotes: teacherNotes.trim(),
+      raportUmmiCapaian: ummiCapaianDescription.trim(),
+      raportUmmiNilai: ummiNilaiScore.trim(),
+      raportAlpha: alphaCount,
+      raportIzin: izinCount,
+      raportSakit: sakitCount
+    };
+
+    storageService.saveStudent(updatedStudent);
+    onUpdateStudent?.(updatedStudent);
+    setSaveSuccessMessage(`Data target hafalan (${targetSuratAyat.trim()}), halaqah (${halaqahType}), nama santri (${finalName}), dan raport berhasil disimpan ke database!`);
+    setTimeout(() => setSaveSuccessMessage(''), 5000);
+  };
 
   // Signatures & Settings (Synced with Admin Settings)
   const [headmasterName, setHeadmasterName] = useState<string>(
@@ -811,6 +946,16 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={handleSaveStudentRaport}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              title="Simpan target hafalan, jenis halaqah, dan seluruh data raport santri ini ke database"
+            >
+              <Save className="w-4 h-4 text-emerald-100" />
+              <span>Simpan Data Raport</span>
+            </button>
+
+            <button
+              type="button"
               disabled={isGeneratingPdf}
               onClick={handleDownloadPdf}
               className="px-4 py-2 rounded-xl bg-[#1E293B] hover:bg-slate-800 disabled:bg-slate-600 text-white text-xs font-bold shadow-sm transition flex items-center gap-2 cursor-pointer disabled:cursor-not-allowed"
@@ -890,12 +1035,40 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
           <div className="flex items-center justify-between border-b border-amber-200/80 pb-2">
             <h3 className="font-bold text-amber-950 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-amber-600" />
-              Editor Data Raport (Otomatis Disimpan Saat Dicetak)
+              Editor Data Raport (Tersimpan Permanen ke Database)
             </h3>
-            <span className="text-[11px] text-amber-800">Ubah nilai / catatan langsung di sini</span>
+            <span className="text-[11px] text-amber-800">Ubah nilai, target hafalan & jenis halaqah langsung di sini</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          {/* Quick Action Save Banner */}
+          <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-emerald-50 border border-emerald-300 rounded-xl shadow-2xs">
+            <div className="flex items-center gap-2 text-emerald-950 font-bold text-xs">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Target hafalan, jenis halaqah, dan evaluasi raport tersimpan ke database santri {student.name}</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleSaveStudentRaport}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition"
+            >
+              <Save className="w-4 h-4" />
+              <span>Simpan Perubahan Raport</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Nama Lengkap Santri (Data Murid):</label>
+              <input
+                type="text"
+                value={studentNameInput}
+                onChange={(e) => setStudentNameInput(e.target.value)}
+                placeholder="Nama santri"
+                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-semibold focus:ring-2 focus:ring-emerald-500"
+              />
+              <span className="text-[10px] text-slate-500 italic mt-0.5 block">Format rapi, tidak huruf kapital semua</span>
+            </div>
+
             <div>
               <label className="block font-bold text-slate-700 mb-1">Periode Semester:</label>
               <select
@@ -924,8 +1097,27 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
               <label className="block font-bold text-slate-700 mb-1">Halaqah Tahfizh:</label>
               <select
                 value={halaqahType}
-                onChange={(e) => setHalaqahType(e.target.value)}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-semibold"
+                onChange={(e) => {
+                  const newType = e.target.value;
+                  setHalaqahType(newType);
+                  const updatedStudent: Student = {
+                    ...student,
+                    program: newType,
+                    raportHalaqahType: newType,
+                    targetSuratAyat: targetSuratAyat.trim(),
+                    raportTargetHafalan: targetSuratAyat.trim(),
+                    lastHafalan: suratAyatCapaian.trim(),
+                    raportNotes: teacherNotes.trim(),
+                    raportUmmiCapaian: ummiCapaianDescription.trim(),
+                    raportUmmiNilai: ummiNilaiScore.trim(),
+                    raportAlpha: alphaCount,
+                    raportIzin: izinCount,
+                    raportSakit: sakitCount
+                  };
+                  storageService.saveStudent(updatedStudent);
+                  onUpdateStudent?.(updatedStudent);
+                }}
+                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-semibold focus:ring-2 focus:ring-emerald-500"
               >
                 <option value="Akselerasi">Akselerasi</option>
                 <option value="Reguler">Reguler</option>
@@ -939,6 +1131,24 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                 type="text"
                 value={suratAyatCapaian}
                 onChange={(e) => setSuratAyatCapaian(e.target.value)}
+                onBlur={() => {
+                  const updatedStudent: Student = {
+                    ...student,
+                    program: halaqahType,
+                    raportHalaqahType: halaqahType,
+                    targetSuratAyat: targetSuratAyat.trim(),
+                    raportTargetHafalan: targetSuratAyat.trim(),
+                    lastHafalan: suratAyatCapaian.trim(),
+                    raportNotes: teacherNotes.trim(),
+                    raportUmmiCapaian: ummiCapaianDescription.trim(),
+                    raportUmmiNilai: ummiNilaiScore.trim(),
+                    raportAlpha: alphaCount,
+                    raportIzin: izinCount,
+                    raportSakit: sakitCount
+                  };
+                  storageService.saveStudent(updatedStudent);
+                  onUpdateStudent?.(updatedStudent);
+                }}
                 placeholder="Contoh: Al-Muzzammil : 9"
                 className="w-full p-2 bg-white border border-slate-300 rounded-lg font-semibold"
               />
@@ -953,8 +1163,26 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                 type="text"
                 value={targetSuratAyat}
                 onChange={(e) => setTargetSuratAyat(e.target.value)}
+                onBlur={() => {
+                  const updatedStudent: Student = {
+                    ...student,
+                    program: halaqahType,
+                    raportHalaqahType: halaqahType,
+                    targetSuratAyat: targetSuratAyat.trim(),
+                    raportTargetHafalan: targetSuratAyat.trim(),
+                    lastHafalan: suratAyatCapaian.trim(),
+                    raportNotes: teacherNotes.trim(),
+                    raportUmmiCapaian: ummiCapaianDescription.trim(),
+                    raportUmmiNilai: ummiNilaiScore.trim(),
+                    raportAlpha: alphaCount,
+                    raportIzin: izinCount,
+                    raportSakit: sakitCount
+                  };
+                  storageService.saveStudent(updatedStudent);
+                  onUpdateStudent?.(updatedStudent);
+                }}
                 placeholder="Contoh: Al-A'raf : 2"
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-semibold"
+                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-semibold focus:ring-2 focus:ring-emerald-500"
               />
             </div>
 
@@ -992,20 +1220,20 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             </div>
           </div>
 
-          {/* Row 3: Capaian UMMI (Jilid/Tilawah/Gharib/Tajwid & Nilai) */}
-          <div className="bg-white p-3 rounded-lg border border-amber-300 space-y-2.5">
+          {/* Row 3: Capaian UMMI (Jilid/Tilawah/Gharib/Tajwid & Nilai Huruf) */}
+          <div className="bg-white p-3.5 rounded-lg border border-amber-300 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-1">
               <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <BookMarked className="w-3.5 h-3.5 text-[#D4AF37]" />
-                Capaian Metode Ummi Santri
+                Capaian Metode Ummi Santri (Nilai Huruf Standar Ummi)
               </span>
               {isGrade8or9Student(student, classes) ? (
                 <span className="text-[10px] bg-slate-100 text-slate-700 border border-slate-300 px-2 py-0.5 rounded font-medium">
                   Kebijakan TP Ini: Kelas 8 & 9 Tidak Mengikuti Pembelajaran Ummi
                 </span>
               ) : latestUmmiRecord ? (
-                <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded font-medium">
-                  ✓ Otomatis dari input terakhir: {latestUmmiRecord.jilid} hal. {latestUmmiRecord.page} (Nilai: {latestUmmiRecord.score})
+                <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded font-bold">
+                  ✓ Tersinkronisasi Otomatis: {latestUmmiRecord.jilid} hal. {latestUmmiRecord.page} (Grade {getGradeFromScore(latestUmmiRecord.score).letter})
                 </span>
               ) : null}
             </div>
@@ -1026,46 +1254,65 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Nilai Capaian UMMI:
+                  Nilai Capaian UMMI (Huruf):
                 </label>
+                <div className="flex flex-wrap gap-1 mb-1.5">
+                  {(['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'D'] as GradeLetter[]).map((ltr) => (
+                    <button
+                      key={ltr}
+                      type="button"
+                      onClick={() => setUmmiNilaiScore(ltr)}
+                      className={`px-1.5 py-0.5 rounded text-[11px] font-black border transition cursor-pointer ${
+                        ummiNilaiScore === ltr 
+                          ? 'bg-[#1E293B] text-[#D4AF37] border-slate-900 ring-2 ring-[#D4AF37]/50 shadow-xs' 
+                          : 'bg-slate-50 hover:bg-amber-100 text-slate-800 border-slate-200'
+                      }`}
+                    >
+                      {ltr}
+                    </button>
+                  ))}
+                </div>
                 <input
                   type="text"
                   value={ummiNilaiScore}
                   onChange={(e) => setUmmiNilaiScore(e.target.value)}
-                  placeholder="Nilai (contoh: 88 atau kosong)"
-                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-semibold text-xs text-center"
+                  placeholder="Contoh: A atau B+"
+                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-black text-xs text-center text-slate-900"
                 />
               </div>
             </div>
 
             {/* Quick selector from Ummi input history */}
             {studentUmmiRecords.length > 0 && (
-              <div className="pt-1 border-t border-slate-100">
+              <div className="pt-2 border-t border-slate-100">
                 <span className="text-[10px] text-slate-500 font-semibold block mb-1">
                   Pilih dari riwayat input pembelajaran Ummi ananda:
                 </span>
                 <div className="flex flex-wrap gap-1.5">
-                  {studentUmmiRecords.slice(0, 5).map((r) => (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => {
-                        setUmmiCapaianDescription(`${r.jilid} halaman ${r.page}`);
-                        setUmmiNilaiScore(String(r.score));
-                      }}
-                      className={`px-2 py-1 rounded text-[11px] font-semibold border transition cursor-pointer flex items-center gap-1 ${
-                        ummiCapaianDescription === `${r.jilid} halaman ${r.page}`
-                          ? 'bg-amber-100 text-amber-950 border-amber-400 font-bold'
-                          : 'bg-slate-50 hover:bg-amber-50 text-slate-700 border-slate-200'
-                      }`}
-                      title={`Klik untuk mengisi raport dengan data setoran tanggal ${r.date}`}
-                    >
-                      <span>{r.jilid} hal. {r.page}</span>
-                      <span className="text-slate-300">|</span>
-                      <span className="text-amber-900 font-bold">Nilai: {r.score}</span>
-                      <span className="text-[10px] text-slate-400">({r.date})</span>
-                    </button>
-                  ))}
+                  {studentUmmiRecords.slice(0, 5).map((r) => {
+                    const letter = getGradeFromScore(r.score).letter;
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => {
+                          setUmmiCapaianDescription(`${r.jilid} halaman ${r.page}`);
+                          setUmmiNilaiScore(letter);
+                        }}
+                        className={`px-2 py-1 rounded text-[11px] font-semibold border transition cursor-pointer flex items-center gap-1 ${
+                          ummiCapaianDescription === `${r.jilid} halaman ${r.page}`
+                            ? 'bg-amber-100 text-amber-950 border-amber-400 font-bold'
+                            : 'bg-slate-50 hover:bg-amber-50 text-slate-700 border-slate-200'
+                        }`}
+                        title={`Klik untuk mengisi raport dengan data setoran tanggal ${r.date}`}
+                      >
+                        <span>{r.jilid} hal. {r.page}</span>
+                        <span className="text-slate-300">|</span>
+                        <span className="text-amber-900 font-black">Grade {letter}</span>
+                        <span className="text-[10px] text-slate-400">({r.date})</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1073,13 +1320,35 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
 
           {/* Row 4: Catatan Pembimbing */}
           <div>
-            <label className="block font-bold text-slate-700 mb-1">Catatan Pembimbing / Evaluasi:</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block font-bold text-slate-700">Catatan Pembimbing / Evaluasi:</label>
+              <button
+                type="button"
+                onClick={() => setTeacherNotes(getDefaultNotesForStudent(student))}
+                className="text-[11px] text-blue-700 hover:text-blue-900 font-semibold underline cursor-pointer"
+                title="Sesuaikan nama santri dalam catatan secara otomatis"
+              >
+                🔄 Sesuaikan Nama Lengkap ({student.name})
+              </button>
+            </div>
             <textarea
               rows={2}
               value={teacherNotes}
               onChange={(e) => setTeacherNotes(e.target.value)}
               className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-normal text-xs"
             />
+          </div>
+
+          {/* Tombol Simpan Perubahan Raport Santri Ini */}
+          <div className="pt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={handleSaveStudentRaport}
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-md transition"
+            >
+              <Save className="w-4 h-4" />
+              <span>Simpan Seluruh Data Raport {student.name}</span>
+            </button>
           </div>
 
           {/* Row 5: Pengaturan Tanggal & Tanda Tangan */}
@@ -1155,7 +1424,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
               <div className="flex items-center justify-between p-2 bg-white rounded-xl border border-slate-200">
                 <div className="flex items-center gap-2">
                   <div className="w-9 h-9 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
-                    {yayasanLogoUrl && yayasanLogoUrl.trim() !== '' ? (
+                    {yayasanLogoUrl ? (
                       <img src={yayasanLogoUrl} alt="Logo Yayasan" className="w-full h-full object-contain p-0.5" />
                     ) : (
                       <ImageIcon className="w-4 h-4 text-slate-400 opacity-60" />
@@ -1197,7 +1466,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
               <div className="flex items-center justify-between p-2 bg-white rounded-xl border border-slate-200">
                 <div className="flex items-center gap-2">
                   <div className="w-9 h-9 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
-                    {bismillahImgUrl && bismillahImgUrl.trim() !== '' ? (
+                    {bismillahImgUrl ? (
                       <img src={bismillahImgUrl} alt="Bismillah PNG" className="w-full h-full object-contain p-0.5" />
                     ) : (
                       <ImageIcon className="w-4 h-4 text-slate-400 opacity-60" />
@@ -1239,7 +1508,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
               <div className="flex items-center justify-between p-2 bg-white rounded-xl border border-slate-200">
                 <div className="flex items-center gap-2">
                   <div className="w-9 h-9 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
-                    {raportFrameUrl && raportFrameUrl.trim() !== '' ? (
+                    {raportFrameUrl ? (
                       <img src={raportFrameUrl} alt="Bingkai Raport PNG" className="w-full h-full object-contain p-0.5" />
                     ) : (
                       <Square className="w-4 h-4 text-slate-400 opacity-60" />
@@ -1288,7 +1557,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                 <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
                   <div className="flex items-center gap-2.5">
                     <div className="w-16 h-10 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
-                      {headmasterSignatureUrl && headmasterSignatureUrl.trim() !== '' ? (
+                      {headmasterSignatureUrl ? (
                         <img
                           src={headmasterSignatureUrl}
                           alt="TTD Kepsek"
@@ -1334,7 +1603,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                 <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
                   <div className="flex items-center gap-2.5">
                     <div className="w-16 h-10 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
-                      {tahfizhCoordinatorSignatureUrl && tahfizhCoordinatorSignatureUrl.trim() !== '' ? (
+                      {tahfizhCoordinatorSignatureUrl ? (
                         <img
                           src={tahfizhCoordinatorSignatureUrl}
                           alt="TTD Koordinator"
@@ -1392,12 +1661,12 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             width: '215mm', 
             minHeight: '330mm',
             maxHeight: '330mm',
-            padding: '16mm 18mm 11mm 18mm',
+            padding: '16mm 18mm 14mm 18mm',
             fontFamily: "'Times New Roman', Times, serif" 
           }}
         >
           {/* BINGKAI RAPORT (UPLOAD MANUAL FORMAT PNG, MENGGANTIKAN LINE BINGKAI LAMA) */}
-          {Boolean(raportFrameUrl && raportFrameUrl.trim() !== '') && (
+          {raportFrameUrl && (
             <img
               src={raportFrameUrl}
               alt="Bingkai Raport PNG"
@@ -1406,26 +1675,33 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
           )}
 
           {/* INNER REPORT CONTENT - SAFELY BUFFERED FROM BINGKAI */}
-          <div className="relative z-10 space-y-3 text-[12.5px] leading-snug">
+          <div className="relative z-10 space-y-3.5 text-[12.5px] leading-snug">
             
-            {/* HEADER: LOGO SEKOLAH (KIRI BESAR) - BISMILLAH PNG (TENGAH) - LOGO YAYASAN (KANAN BESAR) */}
-            {/* Diberikan jarak 0,5 cm dari border agar proporsional dan tidak mepet */}
+            {/* HEADER: LOGO SEKOLAH (KIRI) - BISMILLAH PNG (TENGAH) - LOGO YAYASAN (KANAN) */}
+            {/* Berikan jarak 0,5 cm dari border bingkai agar proporsional dan tidak mepet */}
             <div 
               className="flex items-center justify-between gap-3 border-b border-transparent pb-1"
               style={{ paddingTop: '0.5cm', paddingLeft: '0.5cm', paddingRight: '0.5cm' }}
             >
-              {/* Left Logo: Sekolah (Al Azhar 21) */}
-              <div className="w-24 sm:w-28 flex justify-start items-center shrink-0">
-                <LogoAlAzhar size={88} customLogoUrl={settings.customLogoUrl} className="w-22 h-22 object-contain" />
+              {/* Left Logo: Sekolah (Al Azhar 21) - Jarak 0.5 cm dari border & proporsional */}
+              <div 
+                className="w-20 flex justify-start items-center shrink-0"
+                style={{ paddingLeft: '0.5cm', paddingTop: '0.5cm' }}
+              >
+                <LogoAlAzhar 
+                  size={65} 
+                  customLogoUrl={settings.customLogoUrl} 
+                  className="w-[65px] h-[65px] object-contain drop-shadow-xs" 
+                />
               </div>
 
               {/* Center Bismillah PNG (Ganti Tulisan Arab) */}
-              <div className="flex-1 px-2 flex flex-col items-center justify-center min-h-[72px]">
-                {bismillahImgUrl && bismillahImgUrl.trim() !== '' ? (
+              <div className="flex-1 px-2 flex flex-col items-center justify-center min-h-[64px]">
+                {bismillahImgUrl ? (
                   <img
                     src={bismillahImgUrl}
                     alt="Kaligrafi Bismillah"
-                    className="h-14 sm:h-16 max-w-[290px] object-contain mx-auto select-none"
+                    className="h-12 sm:h-14 max-w-[280px] object-contain mx-auto select-none"
                   />
                 ) : (
                   <div className="no-print flex flex-col items-center justify-center p-2 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 text-slate-400 text-center w-full max-w-[240px]">
@@ -1443,16 +1719,19 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                 )}
               </div>
 
-              {/* Right Logo: Yayasan (Upload Manual Besar Proporsional) */}
-              <div className="w-24 sm:w-28 flex justify-end items-center shrink-0">
-                {yayasanLogoUrl && yayasanLogoUrl.trim() !== '' ? (
+              {/* Right Logo: Yayasan - Jarak 0.5 cm dari border & proporsional */}
+              <div 
+                className="w-20 flex justify-end items-center shrink-0"
+                style={{ paddingRight: '0.5cm', paddingTop: '0.5cm' }}
+              >
+                {yayasanLogoUrl ? (
                   <img 
                     src={yayasanLogoUrl} 
                     alt="Logo Yayasan" 
-                    className="w-22 h-22 object-contain" 
+                    className="w-[65px] h-[65px] object-contain" 
                   />
                 ) : (
-                  <div className="no-print w-22 h-22 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-[9px] text-slate-400 text-center p-1 bg-slate-50/70">
+                  <div className="no-print w-16 h-16 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-[9px] text-slate-400 text-center p-1 bg-slate-50/70">
                     <span className="font-semibold text-slate-500">Logo Yayasan</span>
                     <label className="text-[#D4AF37] font-bold underline cursor-pointer text-[8px] mt-0.5">
                       + Upload
@@ -1468,11 +1747,8 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
               </div>
             </div>
 
-            {/* DOCUMENT TITLE (TULISAN JUDUL RAPORT - DIBERIKAN JARAK 0,5 CM SECARA PROPORSIONAL) */}
-            <div 
-              className="text-center space-y-0.5"
-              style={{ paddingTop: '0.5cm', paddingLeft: '0.5cm', paddingRight: '0.5cm' }}
-            >
+            {/* DOCUMENT TITLE (PERBAIKAN FORMAT SESUAI PERMINTAAN) */}
+            <div className="text-center space-y-0.5 pt-0.5">
               <h1 className="text-[15px] sm:text-[16px] font-black uppercase tracking-tight text-slate-950">
                 LAPORAN PROGRAM TAHFIZHUL QUR'AN
               </h1>
@@ -1496,7 +1772,9 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                   <tr>
                     <td className="w-36 py-1 font-bold text-slate-900">Nama</td>
                     <td className="w-4 text-center font-bold">:</td>
-                    <td className="py-1 font-bold text-slate-900">{student.name}</td>
+                    <td className="py-1 font-bold text-slate-900">
+                      {formatStudentDisplayName(studentNameInput || student.name)}
+                    </td>
                   </tr>
                   <tr>
                     <td className="py-1 font-bold text-slate-900">No. Induk / NISN</td>
@@ -1630,7 +1908,14 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                       {ummiCapaianDescription}
                     </td>
                     <td className="py-2.5 px-3 text-center font-bold font-mono text-slate-900 text-[13px]">
-                      {ummiNilaiScore}
+                      {(() => {
+                        if (!ummiNilaiScore || ummiNilaiScore === '-') return '-';
+                        const num = Number(ummiNilaiScore);
+                        if (!isNaN(num) && num > 0) {
+                          return getGradeFromScore(num).letter;
+                        }
+                        return ummiNilaiScore;
+                      })()}
                     </td>
                   </tr>
                 </tbody>
@@ -1653,19 +1938,19 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             {/* ========================================================================= */}
             {/* TANDA TANGAN (SIGNATURES) - SAMPAI SEBELUM BINGKAI BAWAH                   */}
             {/* ========================================================================= */}
-            <div className="pt-4 grid grid-cols-2 text-center text-[12.5px]">
-              {/* Left Signature: Kepala Sekolah */}
+            <div className="pt-5 grid grid-cols-2 text-center text-[12.5px]">
+              {/* Left Signature: Kepala Sekolah (Sinkron Admin) */}
               <div className="flex flex-col items-center justify-between min-h-[112px]">
                 <div>
                   <p className="text-slate-800">Mengetahui,</p>
-                  <p className="font-bold text-slate-950">
-                    Kepala SMP Islam Al Azhar 21
+                  <p className="font-bold text-slate-950 uppercase">
+                    Kepala {settings.schoolName || 'SMP ISLAM AL AZHAR 21 SUKOHARJO'}
                   </p>
                 </div>
                 
                 {/* Online Digital Signature Kepala Sekolah */}
                 <div className="relative w-full flex flex-col items-center justify-center my-0.5">
-                  {headmasterSignatureUrl && headmasterSignatureUrl.trim() !== '' ? (
+                  {headmasterSignatureUrl ? (
                     <div className="relative group flex items-center justify-center">
                       <img
                         src={headmasterSignatureUrl}
@@ -1718,7 +2003,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                 
                 {/* Online Digital Signature Koordinator Tahfizh */}
                 <div className="relative w-full flex flex-col items-center justify-center my-0.5">
-                  {tahfizhCoordinatorSignatureUrl && tahfizhCoordinatorSignatureUrl.trim() !== '' ? (
+                  {tahfizhCoordinatorSignatureUrl ? (
                     <div className="relative group flex items-center justify-center">
                       <img
                         src={tahfizhCoordinatorSignatureUrl}

@@ -19,6 +19,7 @@ import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, AppSetting
 import { storageService } from '../services/storageService';
 import { StudentRaportCard } from './StudentRaportCard';
 import { isGrade8or9Student } from '../utils/gradeHelper';
+import { getGradeFromScore } from '../utils/gradeConversion';
 
 interface ReportsViewProps {
   students: Student[];
@@ -330,6 +331,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           classes={classes}
           userRole={userRole}
           onSelectStudent={(id) => setSelectedIndividualStudentId(id)}
+          onUpdateStudent={(updated) => {
+            storageService.saveStudent(updated);
+          }}
         />
       )}
 
@@ -453,7 +457,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                         <>
                           <td className="p-2 border-r border-slate-200 font-bold text-emerald-800">{std.currentUmmiJilid}</td>
                           <td className="p-2 text-center border-r border-slate-200">Hal. {std.currentUmmiPage}</td>
-                          <td className="p-2 text-center border-r border-slate-200 font-bold">{std.avgScore}</td>
+                          <td className="p-2 text-center border-r border-slate-200 font-black text-slate-800">
+                            Grade {getGradeFromScore(std.avgScore || 85).letter}
+                          </td>
                           <td className="p-2 font-semibold text-emerald-700">Lulus Uji Halaman</td>
                         </>
                       )}

@@ -16,6 +16,7 @@ import {
   getDocFromServer
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
+export { firebaseConfig };
 
 // Initialize Firebase App
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -30,8 +31,12 @@ export async function testFirestoreConnection(): Promise<boolean> {
     await getDocFromServer(doc(db, 'test', 'connection'));
     return true;
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Please check your Firebase configuration or network connection.');
+    if (error instanceof Error) {
+      if (error.message.includes('the client is offline')) {
+        console.warn('Please check your Firebase configuration or network connection.');
+      } else if (error.message.includes('Quota exceeded') || error.message.includes('Quota limit exceeded')) {
+        console.warn('Firestore daily read quota limit reached. Using local cache.');
+      }
     }
     return true;
   }

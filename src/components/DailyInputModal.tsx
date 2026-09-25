@@ -14,7 +14,11 @@ import {
   Flame,
   ArrowRightLeft,
   Info,
-  Edit3
+  Edit3,
+  CalendarCheck,
+  UserX,
+  Clock,
+  Save
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -26,8 +30,11 @@ import {
   MemorizationRecord, 
   UmmiRecord, 
   ScoreCategory,
-  UmmiStatus
+  UmmiStatus,
+  AttendanceStatus,
+  AttendanceRecord
 } from '../types';
+import { storageService } from '../services/storageService';
 import { 
   SURAH_LIST, 
   calculateAyahCount, 
@@ -63,7 +70,7 @@ interface DailyInputModalProps {
   onSaveSuccess?: () => void;
   editRecord?: MemorizationRecord | null;
   editUmmiRecord?: UmmiRecord | null;
-  defaultTab?: 'quran' | 'ummi';
+  defaultTab?: 'quran' | 'ummi' | 'presensi';
 }
 
 export const DailyInputModal: React.FC<DailyInputModalProps> = ({
@@ -84,14 +91,19 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
   editUmmiRecord = null,
   defaultTab = 'quran'
 }) => {
-  // Mode: 'quran' | 'ummi'
-  const [activeTab, setActiveTab] = useState<'quran' | 'ummi'>(() => {
+  // Mode: 'quran' | 'ummi' | 'presensi'
+  const [activeTab, setActiveTab] = useState<'quran' | 'ummi' | 'presensi'>(() => {
     if (editUmmiRecord) return 'ummi';
     if (editRecord) return 'quran';
     return defaultTab;
   });
 
   const effectiveInitialStudentId = preSelectedStudentId || initialStudentId;
+
+  // Presensi State (Sakit, Izin, Alfa, Hadir)
+  const [attendanceStatus, setAttendanceStatus] = useState<AttendanceStatus>('Hadir');
+  const [attendanceNotes, setAttendanceNotes] = useState<string>('');
+  const [attendanceSuccessMessage, setAttendanceSuccessMessage] = useState<string>('');
 
   // Step 1: Selection
   const [filterMode, setFilterMode] = useState<'class' | 'halaqah' | 'all'>('class');
@@ -216,7 +228,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
     return !selectedClassId || s.classId === selectedClassId;
   });
 
-  const handleTabSwitch = (newTab: 'quran' | 'ummi') => {
+  const handleTabSwitch = (newTab: 'quran' | 'ummi' | 'presensi') => {
     setActiveTab(newTab);
     setValidationError(null);
     if (newTab === 'ummi') {
@@ -240,6 +252,92 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
         }
       }
     }
+  };
+
+  // Simpan Presensi Santri Terpilih
+  const handleSaveAttendanceDirect = (statusToSave?: AttendanceStatus, noteToSave?: string) => {
+    if (!selectedStudent) {
+      setValidationError('Silakan pilih siswa terlebih dahulu.');
+      return;
+    }
+    const stat = statusToSave || attendanceStatus;
+    const note = noteToSave !== undefined ? noteToSave : attendanceNotes;
+    const teacherId = currentTeacher?.id || selectedStudent.teacherId || allTeachers[0]?.id || 't-1';
+    
+    // Cek apakah data presensi tanggal ini sudah ada untuk santri ini
+    const existing = storageService.getAttendanceRecords().find(r => r.studentId === selectedStudent.id && r.date === recordDate);
+    if (existing) {
+      storageService.updateAttendanceRecord({
+        ...existing,
+        status: stat,
+        notes: note.trim(),
+        teacherId
+      });
+    } else {
+      const newRec: AttendanceRecord = {
+        id: 'att-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+        studentId: selectedStudent.id,
+        teacherId,
+        date: recordDate,
+        status: stat,
+        notes: note.trim()
+      };
+      storageService.addAttendanceRecord(newRec);
+    }
+    
+    setAttendanceSuccessMessage(`Presensi santri ${selectedStudent.name} (${stat}) tanggal ${recordDate} berhasil disimpan!`);
+    onSaveSuccess?.();
+    setTimeout(() => setAttendanceSuccessMessage(''), 4000);
+  };
+
+  // Tandai Presensi Siswa Tertentu secara Cepat (Inline Table)
+  const handleMarkStudentAttendance = (std: Student, stat: AttendanceStatus) => {
+    const teacherId = currentTeacher?.id || std.teacherId || allTeachers[0]?.id || 't-1';
+    const existing = storageService.getAttendanceRecords().find(r => r.studentId === std.id && r.date === recordDate);
+    if (existing) {
+      storageService.updateAttendanceRecord({
+        ...existing,
+        status: stat,
+        teacherId
+      });
+    } else {
+      storageService.addAttendanceRecord({
+        id: 'att-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+        studentId: std.id,
+        teacherId,
+        date: recordDate,
+        status: stat,
+        notes: ''
+      });
+    }
+    onSaveSuccess?.();
+  };
+
+  // Tandai Seluruh Siswa Rombel Ini Hadir
+  const handleMarkAllPresent = () => {
+    const teacherId = currentTeacher?.id || allTeachers[0]?.id || 't-1';
+    filteredStudents.forEach(std => {
+      const existing = storageService.getAttendanceRecords().find(r => r.studentId === std.id && r.date === recordDate);
+      if (existing) {
+        storageService.updateAttendanceRecord({
+          ...existing,
+          status: 'Hadir',
+          teacherId
+        });
+      } else {
+        storageService.addAttendanceRecord({
+          id: 'att-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+          studentId: std.id,
+          teacherId,
+          date: recordDate,
+          status: 'Hadir',
+          notes: ''
+        });
+      }
+    });
+    setAttendanceSuccessMessage(`Alhamdulillah, seluruh santri (${filteredStudents.length} siswa) berhasil ditandai Hadir pada tanggal ${recordDate}!`);
+    onSaveSuccess?.();
+    setTimeout(() => setAttendanceSuccessMessage(''), 4000);
   };
 
   // Calculate final score for Quran
@@ -673,7 +771,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
             )}
           </div>
 
-          {/* Step 2: Tab Switcher (Quran vs Ummi) */}
+          {/* Step 2: Tab Switcher (Quran vs Ummi vs Presensi) */}
           <div className="flex items-center border-b border-slate-200">
             <button
               onClick={() => handleTabSwitch('quran')}
@@ -684,7 +782,8 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
               }`}
             >
               <BookOpen className="w-4 h-4 text-[#D4AF37]" />
-              Hafalan Al-Qur'an (Ziyadah / Murojaah / Tasmi')
+              <span className="hidden sm:inline">Hafalan Al-Qur'an</span>
+              <span className="sm:hidden">Tahfizh</span>
             </button>
             <button
               onClick={() => handleTabSwitch('ummi')}
@@ -695,9 +794,39 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
               }`}
             >
               <BookMarked className="w-4 h-4 text-[#1E293B]" />
-              Pembelajaran Metode Ummi (Khusus Kelas 7)
+              <span className="hidden sm:inline">Metode Ummi (Kelas 7)</span>
+              <span className="sm:hidden">Ummi</span>
+            </button>
+            <button
+              onClick={() => handleTabSwitch('presensi')}
+              className={`flex-1 py-3 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 border-b-2 transition cursor-pointer ${
+                activeTab === 'presensi'
+                  ? 'border-emerald-600 text-emerald-950 bg-emerald-50'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <CalendarCheck className="w-4 h-4 text-emerald-600" />
+              <span className="hidden sm:inline">Presensi (Sakit / Izin / Alfa)</span>
+              <span className="sm:hidden">Presensi</span>
             </button>
           </div>
+
+          {/* Quick Presensi Link on Quran Tab */}
+          {activeTab === 'quran' && (
+            <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-2.5 text-xs text-amber-950 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <CalendarCheck className="w-4 h-4 text-amber-700 shrink-0" />
+                <span>Santri {selectedStudent?.name} berhalangan hadir (Sakit / Izin / Alfa)?</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleTabSwitch('presensi')}
+                className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold transition cursor-pointer"
+              >
+                Catat Presensi
+              </button>
+            </div>
+          )}
 
           {/* TAB 1: FORM HAFALAN AL-QUR'AN */}
           {activeTab === 'quran' && (
@@ -1247,56 +1376,49 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                 />
               </div>
 
-              {/* Ummi Score */}
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <div className="flex justify-between items-center text-xs mb-2">
-                  <span className="font-bold text-slate-800">Nilai Evaluasi Ummi (0–100)</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg font-bold text-[#8C7015]">{ummiScore}</span>
-                    <span className="px-2 py-0.5 rounded bg-blue-600 text-white text-xs font-black">
-                      Grade {getGradeFromScore(ummiScore).letter}
-                    </span>
-                  </div>
+              {/* Quick Presensi Link on Ummi Tab */}
+              <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-2.5 text-xs text-amber-950 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <CalendarCheck className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>Santri {selectedStudent?.name} berhalangan hadir (Sakit / Izin / Alfa)?</span>
                 </div>
-                <input
-                  type="range"
-                  min="50"
-                  max="100"
-                  value={ummiScore}
-                  onChange={(e) => {
-                    const val = Number(e.target.value);
-                    setUmmiScore(val);
-                    const grade = getGradeFromScore(val);
-                    setUmmiStatus(grade.canAdvance ? 'Lulus' : 'Perlu Mengulang');
-                  }}
-                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#D4AF37]"
-                />
-                <div className="flex justify-between text-[10px] text-slate-400 mt-1">
-                  <span>50 (Kurang)</span>
-                  <span>75 (Cukup)</span>
-                  <span>85 (Baik)</span>
-                  <span>100 (Mumtaz)</span>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => handleTabSwitch('presensi')}
+                  className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold transition cursor-pointer"
+                >
+                  Catat Presensi
+                </button>
               </div>
 
-              {/* Penilaian Huruf (A, B, C, D) Standar Ummi */}
-              <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3.5 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <Award className="w-4 h-4 text-amber-700" />
-                    <span className="text-xs font-bold text-slate-800">Skala Penilaian Huruf Metode Ummi (Buku Panduan)</span>
+              {/* Penilaian Huruf (A, B, C, D) Standar Ummi - Nilai Huruf Bukan Angka */}
+              <div className="bg-amber-50/70 border border-amber-300 rounded-2xl p-4 space-y-3 shadow-2xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Award className="w-5 h-5 text-amber-700 shrink-0" />
+                    <div>
+                      <span className="text-xs font-black text-slate-900 block">
+                        Nilai Evaluasi Ummi (Predikat Huruf Mutu Standar)
+                      </span>
+                      <span className="text-[10px] text-slate-500">Pilih predikat huruf mutu langsung sesuai kaidah Ummi</span>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowGradeGuide(!showGradeGuide)}
-                    className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 underline flex items-center gap-1 cursor-pointer"
-                  >
-                    <Info className="w-3.5 h-3.5" />
-                    {showGradeGuide ? 'Tutup Pedoman' : 'Lihat Pedoman Standar'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 rounded-xl bg-[#1E293B] text-[#D4AF37] text-sm font-black shadow-xs">
+                      Grade {getGradeFromScore(ummiScore).letter}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowGradeGuide(!showGradeGuide)}
+                      className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Info className="w-3.5 h-3.5" />
+                      {showGradeGuide ? 'Tutup Pedoman' : 'Lihat Pedoman Standar'}
+                    </button>
+                  </div>
                 </div>
 
-                {/* Quick Grade Buttons */}
+                {/* Primary Quick Grade Buttons - HURUF */}
                 <div className="grid grid-cols-3 sm:grid-cols-9 gap-1.5">
                   {GRADE_CONVERSION_TABLE.map((item) => {
                     const isSelected = getGradeFromScore(ummiScore).letter === item.letter;
@@ -1308,18 +1430,17 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                           setUmmiScore(item.scoreStandard);
                           setUmmiStatus(item.canAdvance ? 'Lulus' : 'Perlu Mengulang');
                         }}
-                        className={`p-2 rounded-lg text-center border transition cursor-pointer flex flex-col items-center justify-center ${
+                        className={`p-2.5 rounded-xl text-center border transition cursor-pointer flex flex-col items-center justify-center ${
                           isSelected
-                            ? 'bg-[#1E293B] text-[#D4AF37] border-slate-900 ring-2 ring-[#D4AF37]/50 shadow-xs'
-                            : 'bg-white hover:bg-amber-100 text-slate-800 border-slate-200'
+                            ? 'bg-[#1E293B] text-[#D4AF37] border-slate-900 ring-2 ring-[#D4AF37]/60 shadow-md scale-102'
+                            : 'bg-white hover:bg-amber-100 text-slate-800 border-slate-200 shadow-2xs'
                         }`}
                       >
-                        <span className="text-sm font-black">{item.letter}</span>
-                        <span className="text-[10px] font-mono opacity-80">{item.scoreStandard}</span>
-                        <span className={`text-[9px] font-bold px-1 rounded mt-0.5 ${
+                        <span className="text-base font-black">{item.letter}</span>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full mt-1 ${
                           item.canAdvance ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                         }`}>
-                          {item.canAdvance ? 'Lanjut' : 'Ulangi'}
+                          {item.canAdvance ? 'Lulus' : 'Ulang'}
                         </span>
                       </button>
                     );
@@ -1330,14 +1451,14 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                 {(() => {
                   const currentGrade = getGradeFromScore(ummiScore);
                   return (
-                    <div className="p-2.5 bg-white rounded-lg border border-amber-200 text-xs text-slate-700 flex items-start gap-2.5">
-                      <div className="w-8 h-8 rounded-md bg-[#1E293B] text-[#D4AF37] flex items-center justify-center font-black shrink-0 text-sm">
+                    <div className="p-2.5 bg-white rounded-xl border border-amber-200 text-xs text-slate-700 flex items-start gap-2.5">
+                      <div className="w-9 h-9 rounded-lg bg-[#1E293B] text-[#D4AF37] flex items-center justify-center font-black shrink-0 text-sm">
                         {currentGrade.letter}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-slate-900">
-                            Grade {currentGrade.letter} (Nilai: {ummiScore}) • {currentGrade.errors}
+                            Grade {currentGrade.letter} • {currentGrade.errors}
                           </span>
                           <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
                             currentGrade.canAdvance ? 'bg-blue-600 text-white' : 'bg-amber-500 text-slate-900'
@@ -1402,6 +1523,232 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
             </div>
           )}
 
+          {/* TAB 3: PRESENSI & KEHADIRAN (SAKIT / IZIN / ALFA) */}
+          {activeTab === 'presensi' && (
+            <div className="space-y-4">
+              {/* Status banner if saved */}
+              {attendanceSuccessMessage && (
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center justify-between gap-2 shadow-xs animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{attendanceSuccessMessage}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAttendanceSuccessMessage('')}
+                    className="text-emerald-700 hover:text-emerald-950 p-1 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* CARD 1: Pencatatan Presensi Santri Terpilih */}
+              <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                      <CalendarCheck className="w-4 h-4 text-emerald-600" />
+                      Presensi Santri: <span className="text-[#8C7015]">{selectedStudent?.name}</span>
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Catat kehadiran hari ini ({recordDate}) untuk halaqah tahfizh & pembelajaran Ummi
+                    </p>
+                  </div>
+                  {selectedStudent && (
+                    <div className="flex items-center gap-1.5 text-xs">
+                      {(() => {
+                        const counts = storageService.getAttendanceCounts(selectedStudent.id);
+                        return (
+                          <div className="flex items-center gap-2 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 text-[11px] font-semibold">
+                            <span className="text-emerald-700 font-bold">H: {counts.hadir}</span>
+                            <span className="text-amber-700 font-bold">S: {counts.sakit}</span>
+                            <span className="text-blue-700 font-bold">I: {counts.izin}</span>
+                            <span className="text-rose-700 font-bold">A: {counts.alfa}</span>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                {/* Pilihan Status Kehadiran (Hadir / Sakit / Izin / Alfa) */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-2">
+                    Pilih Status Kehadiran Santri:
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {[
+                      { status: 'Hadir' as AttendanceStatus, label: 'Hadir', desc: 'Mengikuti halaqah', color: 'border-emerald-500 bg-emerald-50/80 text-emerald-900', activeRing: 'ring-2 ring-emerald-500', badge: 'bg-emerald-600 text-white' },
+                      { status: 'Sakit' as AttendanceStatus, label: 'Sakit (S)', desc: 'Dengan surat/kabar', color: 'border-amber-400 bg-amber-50/80 text-amber-900', activeRing: 'ring-2 ring-amber-500', badge: 'bg-amber-600 text-white' },
+                      { status: 'Izin' as AttendanceStatus, label: 'Izin (I)', desc: 'Ada keperluan penting', color: 'border-blue-400 bg-blue-50/80 text-blue-900', activeRing: 'ring-2 ring-blue-500', badge: 'bg-blue-600 text-white' },
+                      { status: 'Alfa' as AttendanceStatus, label: 'Alfa (A)', desc: 'Tanpa keterangan', color: 'border-rose-400 bg-rose-50/80 text-rose-900', activeRing: 'ring-2 ring-rose-500', badge: 'bg-rose-600 text-white' },
+                    ].map((item) => {
+                      const isSelected = attendanceStatus === item.status;
+                      return (
+                        <button
+                          key={item.status}
+                          type="button"
+                          onClick={() => setAttendanceStatus(item.status)}
+                          className={`p-3 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                            isSelected
+                              ? `${item.color} ${item.activeRing} shadow-sm font-bold`
+                              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-black">{item.label}</span>
+                            {isSelected && (
+                              <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${item.badge}`}>
+                                Aktif
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] opacity-75">{item.desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Keterangan / Alasan Ketidakhadiran */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-800">
+                    Catatan / Alasan {attendanceStatus !== 'Hadir' ? `(${attendanceStatus})` : '(Opsional)'}:
+                  </label>
+                  
+                  {/* Quick Notes Tags */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      'Demam & Flu',
+                      'Periksa ke Dokter / RS',
+                      'Acara Keluarga',
+                      'Izin Pulang ke Rumah',
+                      'Pusing / Istirahat di UKS',
+                      'Tanpa Keterangan'
+                    ].map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => setAttendanceNotes(tag)}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition cursor-pointer"
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+
+                  <input
+                    type="text"
+                    value={attendanceNotes}
+                    onChange={(e) => setAttendanceNotes(e.target.value)}
+                    placeholder="Tulis keterangan atau pilih tombol cepat di atas..."
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+
+                {/* Tombol Simpan Presensi Individu */}
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => handleSaveAttendanceDirect()}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-2 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Simpan Presensi {selectedStudent?.name} ({attendanceStatus})</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* CARD 2: Presensi Cepat Seluruh Santri Rombel Ini (Fast Batch Marking) */}
+              <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200">
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                      <UserCheck className="w-4 h-4 text-emerald-700" />
+                      Presensi Cepat Rombel: {selectedClass?.name || 'Kelas Ini'} ({filteredStudents.length} Santri)
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      Tandai status seluruh santri halaqah sekali klik atau klik tombol status per santri
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleMarkAllPresent}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] transition shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Tandai Semua Hadir</span>
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-slate-100 text-slate-700 sticky top-0 font-bold border-b border-slate-200 z-10">
+                      <tr>
+                        <th className="py-2 px-3 w-10 text-center">No</th>
+                        <th className="py-2 px-3">Nama Santri</th>
+                        <th className="py-2 px-3 text-center">Status Tanggal {recordDate}</th>
+                        <th className="py-2 px-3 text-center w-24">Rekap S/I/A</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredStudents.map((std, idx) => {
+                        const recs = storageService.getAttendanceRecords();
+                        const todayRec = recs.find(r => r.studentId === std.id && r.date === recordDate);
+                        const currentStatus: AttendanceStatus = todayRec?.status || 'Hadir';
+                        const counts = storageService.getAttendanceCounts(std.id);
+
+                        return (
+                          <tr key={std.id} className="hover:bg-slate-50/80 transition">
+                            <td className="py-2 px-3 text-center text-slate-400 font-mono text-[11px]">{idx + 1}</td>
+                            <td className="py-2 px-3">
+                              <span className="font-bold text-slate-900 block truncate max-w-xs">{std.name}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">{std.nis}</span>
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 gap-0.5">
+                                {(['Hadir', 'Sakit', 'Izin', 'Alfa'] as AttendanceStatus[]).map((st) => {
+                                  const isActive = currentStatus === st;
+                                  return (
+                                    <button
+                                      key={st}
+                                      type="button"
+                                      onClick={() => handleMarkStudentAttendance(std, st)}
+                                      className={`px-2 py-1 rounded text-[10px] font-black transition cursor-pointer ${
+                                        isActive
+                                          ? st === 'Hadir'
+                                            ? 'bg-emerald-600 text-white shadow-xs'
+                                            : st === 'Sakit'
+                                            ? 'bg-amber-500 text-slate-950 shadow-xs'
+                                            : st === 'Izin'
+                                            ? 'bg-blue-600 text-white shadow-xs'
+                                            : 'bg-rose-600 text-white shadow-xs'
+                                          : 'text-slate-600 hover:bg-white'
+                                      }`}
+                                      title={`Tandai ${st}`}
+                                    >
+                                      {st === 'Hadir' ? 'Hadir' : st[0]}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </td>
+                            <td className="py-2 px-3 text-center text-[11px] font-mono text-slate-500">
+                              <span title={`Sakit: ${counts.sakit}, Izin: ${counts.izin}, Alfa: ${counts.alfa}`}>
+                                {counts.sakit}S / {counts.izin}I / {counts.alfa}A
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
 
         {/* Modal Footer */}
@@ -1415,15 +1762,26 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
           </button>
 
           <div className="flex items-center gap-2">
-            <button
-              id="btn-verifikasi-setoran"
-              type="button"
-              onClick={handleInitiateSave}
-              className="px-4 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs shadow-xs transition flex items-center gap-2 cursor-pointer"
-            >
-              <CheckCircle2 className="w-4 h-4 text-[#D4AF37]" />
-              <span>{editRecord || editUmmiRecord ? 'Simpan Perubahan Data' : 'Verifikasi & Simpan Data'}</span>
-            </button>
+            {activeTab === 'presensi' ? (
+              <button
+                type="button"
+                onClick={() => handleSaveAttendanceDirect()}
+                className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-2 cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4 text-emerald-100" />
+                <span>Simpan Presensi Santri ({attendanceStatus})</span>
+              </button>
+            ) : (
+              <button
+                id="btn-verifikasi-setoran"
+                type="button"
+                onClick={handleInitiateSave}
+                className="px-4 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs shadow-xs transition flex items-center gap-2 cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4 text-[#D4AF37]" />
+                <span>{editRecord || editUmmiRecord ? 'Simpan Perubahan Data' : 'Verifikasi & Simpan Data'}</span>
+              </button>
+            )}
           </div>
         </div>
 

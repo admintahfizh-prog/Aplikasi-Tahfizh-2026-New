@@ -9,6 +9,7 @@ import {
   TargetProgress, 
   NotificationItem, 
   TahfizhViolation,
+  AttendanceRecord,
   AppSettings 
 } from '../types';
 
@@ -242,6 +243,33 @@ export const INITIAL_STUDENTS: Student[] = [
     totalAyahHafal: 580,
     lastHafalan: 'An-Naba\': 1-40',
     lastHafalanDate: '2026-08-22',
+    avgScore: 92
+  },
+  {
+    id: 'std-1788551716146',
+    nis: '4321-2627301',
+    nisn: '0142380899',
+    name: 'Afiya Yumna Fajriya',
+    nickname: 'Afiya',
+    gender: 'P',
+    classId: 'cls-7a',
+    teacherId: 't-1',
+    halaqahGroupId: 'hlq-1-1',
+    halaqahGroupName: 'Halaqah 1 (Umar bin Khattab)',
+    parentName: 'Ibu Hj. Rahmania Fajri',
+    parentPhone: '081234567891',
+    parentEmail: 'afiya.fajri@gmail.com',
+    program: 'Reguler',
+    targetJuz: 3.0,
+    photo: '',
+    entryYear: '2026',
+    currentUmmiJilid: 'Jilid 3',
+    currentUmmiPage: 40,
+    totalJuzHafal: 1.5,
+    totalSurahHafal: 16,
+    totalAyahHafal: 280,
+    lastHafalan: 'An-Nazi\'at: 1-20',
+    lastHafalanDate: '2026-09-22',
     avgScore: 92
   },
   {
@@ -800,6 +828,37 @@ export const INITIAL_UMMI_RECORDS: UmmiRecord[] = [
     score: 86,
     status: 'Sedang Dipelajari',
     notes: 'Kadar dengung ghunnah sudah mulai teratur 2 ketukan.'
+  },
+  {
+    id: 'ummi-1790216274248',
+    studentId: 'std-1788551716146',
+    teacherId: 't-1',
+    date: '2026-09-22',
+    jilid: 'Jilid 3',
+    page: 40,
+    materialName: 'Huruf Tunggal & Sambung Fathah (A - Ba)',
+    score: 92,
+    status: 'Lulus',
+    notes: 'Membaca tartil dan tuntas evaluasi Jilid 3 halaman 40 dengan sangat baik.'
+  }
+];
+
+export const INITIAL_ATTENDANCE_RECORDS: AttendanceRecord[] = [
+  {
+    id: 'att-1',
+    studentId: 'std-1',
+    teacherId: 't-1',
+    date: '2026-09-20',
+    status: 'Hadir',
+    notes: 'Hadir tepat waktu'
+  },
+  {
+    id: 'att-2',
+    studentId: 'std-1788551716146',
+    teacherId: 't-1',
+    date: '2026-09-21',
+    status: 'Hadir',
+    notes: 'Hadir halaqah pagi'
   }
 ];
 

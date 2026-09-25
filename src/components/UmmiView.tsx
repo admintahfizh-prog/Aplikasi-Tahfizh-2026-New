@@ -553,7 +553,7 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
                       <th className="py-3 px-3.5">Tanggal Setoran</th>
                       <th className="py-3 px-3.5">Materi Pokok</th>
                       <th className="py-3 px-3.5">Status & Hasil</th>
-                      <th className="py-3 px-3.5">Nilai & Predikat</th>
+                      <th className="py-3 px-3.5">Nilai Huruf (Grade)</th>
                       <th className="py-3 px-3.5">Guru Penguji</th>
                       <th className="py-3 px-3.5 text-center">Aksi</th>
                     </tr>
@@ -668,15 +668,12 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
                               )}
                             </td>
 
-                            {/* Nilai & Predikat Huruf (A, B, C, D) */}
+                            {/* Nilai Huruf Mutu (A, B, C, D) */}
                             <td className="py-3 px-3.5 whitespace-nowrap">
                               {latestRecord && gradeInfo ? (
                                 <div className="flex items-center gap-1.5">
-                                  <span className={`px-2 py-0.5 rounded-md border text-xs font-black shadow-2xs ${getGradeBadgeClass(gradeInfo.grade)}`}>
+                                  <span className={`px-2.5 py-0.5 rounded-md border text-xs font-black shadow-2xs ${getGradeBadgeClass(gradeInfo.grade)}`}>
                                     Grade {gradeInfo.grade}
-                                  </span>
-                                  <span className="font-bold text-slate-800 text-xs">
-                                    ({latestRecord.score})
                                   </span>
                                 </div>
                               ) : (

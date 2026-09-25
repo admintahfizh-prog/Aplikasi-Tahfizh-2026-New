@@ -186,9 +186,27 @@
         "academicYear": { "type": "string" }
       },
       "required": ["schoolName"]
+    },
+    "AttendanceRecord": {
+      "title": "AttendanceRecord",
+      "description": "Daily student attendance record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "studentId", "date", "status"]
     }
   },
   "firestore": {
+    "/attendance_records/{recordId}": {
+      "schema": { "$ref": "#/entities/AttendanceRecord" },
+      "description": "Collection of student daily attendance"
+    },
     "/students/{studentId}": {
       "schema": { "$ref": "#/entities/Student" },
       "description": "Collection of students"

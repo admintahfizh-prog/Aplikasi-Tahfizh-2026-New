@@ -18,6 +18,7 @@ import { SettingsView } from './components/SettingsView';
 import { DailyInputModal } from './components/DailyInputModal';
 import { UserProfileModal } from './components/UserProfileModal';
 import { LoginView } from './components/LoginView';
+import { Database, AlertTriangle, ExternalLink, RefreshCw, X, ShieldAlert } from 'lucide-react';
 
 import { storageService } from './services/storageService';
 import { 
@@ -69,6 +70,7 @@ export default function App() {
   // Modal & Edit State
   const [isDailyInputOpen, setIsDailyInputOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isQuotaBannerDismissed, setIsQuotaBannerDismissed] = useState(false);
   const [prefilledStudentId, setPrefilledStudentId] = useState<string | undefined>(undefined);
   const [editingMemorizationRecord, setEditingMemorizationRecord] = useState<MemorizationRecord | null>(null);
   const [editingUmmiRecord, setEditingUmmiRecord] = useState<UmmiRecord | null>(null);
@@ -283,6 +285,67 @@ export default function App() {
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
           
+          {/* QUOTA LIMIT EXCEEDED NOTICE BANNER */}
+          {storageService.isQuotaExceeded() && !isQuotaBannerDismissed && (
+            <div className="mb-6 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-xl p-4 sm:p-5 shadow-sm text-slate-800 transition-all">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0 text-amber-700 mt-0.5 shadow-xs">
+                    <Database className="w-5 h-5 text-amber-700" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-bold text-slate-900 text-sm sm:text-base">
+                        Batas Kuota Harian Firebase Tercapai (Spark Free Tier)
+                      </h4>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200/80 text-amber-900 border border-amber-300">
+                        Mode Penyimpanan Lokal Aktif
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-slate-700 mt-1.5 leading-relaxed">
+                      Kuota baca gratis Firestore harian (50.000 read units per hari) untuk basis data proyek ini telah mencapai limit. 
+                      <strong className="text-slate-900 font-semibold ml-1">
+                        Seluruh fitur aplikasi (input setoran hafalan, mutasi nilai Ummi, data santri, cetak laporan) tetap berjalan 100% normal dan data tersimpan aman secara offline/lokal
+                      </strong> di perangkat ini. Kuota gratis harian akan di-reset otomatis esok hari oleh Google Firebase.
+                    </p>
+                    <div className="flex items-center gap-2.5 mt-3 flex-wrap">
+                      <a
+                        href={storageService.getQuotaInfo().upgradeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs shadow-xs transition"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Buka Upgrade Database di Firebase Console</span>
+                      </a>
+                      <button
+                        onClick={async () => {
+                          storageService.clearQuotaStatus();
+                          const res = await storageService.initCloudSync(true);
+                          if (!res.isQuotaExceeded) {
+                            setIsQuotaBannerDismissed(true);
+                          }
+                          loadAllData();
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium text-xs transition cursor-pointer"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Coba Hubungkan Ulang</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsQuotaBannerDismissed(true)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-amber-100/60 transition cursor-pointer"
+                  title="Tutup pemberitahuan"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+          
           {/* VIEW: DASHBOARD */}
           {currentView === 'dashboard' && (
             <DashboardView
@@ -407,9 +470,6 @@ export default function App() {
               targets={viewTargets}
               students={viewStudents}
               classes={classes}
-              teachers={teachers}
-              halaqahGroups={halaqahGroups}
-              currentUser={currentUser}
               userRole={currentUser.role}
               onRefreshData={loadAllData}
               onOpenStudentDetail={handleOpenStudentDetail}

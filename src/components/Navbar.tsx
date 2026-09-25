@@ -10,7 +10,8 @@ import {
   CheckCheck,
   Cloud,
   RefreshCw,
-  KeyRound
+  KeyRound,
+  Database
 } from 'lucide-react';
 import { User, NotificationItem } from '../types';
 import { LogoAlAzhar } from './LogoAlAzhar';
@@ -103,7 +104,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="flex items-center space-x-3 cursor-pointer group" 
             onClick={() => setActiveView && setActiveView(currentUser.role === 'wali' ? 'parent-portal' : 'dashboard')}
           >
-            {Boolean(storageService.getSettings()?.customLogoUrl?.trim()) && (
+            {storageService.getSettings()?.customLogoUrl && (
               <div className="p-1 bg-white rounded-lg border border-slate-200 shadow-xs group-hover:scale-105 transition flex items-center justify-center shrink-0">
                 <img
                   src={storageService.getSettings()?.customLogoUrl}
@@ -134,17 +135,32 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="font-medium text-[11px]">T.A. 2026/2027 • Semester Ganjil</span>
             </div>
 
-            <button
-              onClick={async () => {
-                const res = await storageService.initCloudSync();
-                storageService.notifyListeners();
-              }}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-semibold border border-emerald-200 transition cursor-pointer"
-              title="Cloud Database Aktif - Klik untuk sinkronisasi paksa"
-            >
-              <Cloud className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Cloud Realtime</span>
-            </button>
+            {storageService.isQuotaExceeded() ? (
+              <button
+                onClick={async () => {
+                  storageService.clearQuotaStatus();
+                  await storageService.initCloudSync(true);
+                  storageService.notifyListeners();
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-semibold border border-amber-300 transition cursor-pointer"
+                title="Batas kuota baca harian Firebase tercapai. Aplikasi beroperasi normal dalam Mode Offline / Penyimpanan Lokal. Klik untuk mencoba hubungkan ulang."
+              >
+                <Database className="w-3.5 h-3.5 text-amber-600" />
+                <span>Mode Offline (Kuota Tercapai)</span>
+              </button>
+            ) : (
+              <button
+                onClick={async () => {
+                  const res = await storageService.initCloudSync();
+                  storageService.notifyListeners();
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-semibold border border-emerald-200 transition cursor-pointer"
+                title="Cloud Database Aktif - Klik untuk sinkronisasi paksa"
+              >
+                <Cloud className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Cloud Realtime</span>
+              </button>
+            )}
           </div>
 
           {/* Right Actions Toolbar */}
