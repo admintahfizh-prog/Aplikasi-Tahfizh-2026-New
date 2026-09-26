@@ -67,8 +67,31 @@ const STORAGE_KEYS = {
   MATRIKULASI_RECORDS: 'tahfizh_smpia21_matrikulasi_records',
   ATTENDANCE: 'tahfizh_smpia21_attendance',
   CLOUD_SYNCED: 'tahfizh_smpia21_cloud_synced',
-  QUOTA_EXCEEDED: 'tahfizh_smpia21_quota_exceeded'
+  QUOTA_EXCEEDED: 'tahfizh_smpia21_quota_exceeded',
+  DELETED_IDS: 'tahfizh_smpia21_deleted_ids'
 };
+
+function getDeletedIdsSet(): Set<string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DELETED_IDS);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr.map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function markDeletedId(id: string): void {
+  if (!id) return;
+  try {
+    const set = getDeletedIdsSet();
+    set.add(String(id));
+    localStorage.setItem(STORAGE_KEYS.DELETED_IDS, JSON.stringify(Array.from(set)));
+  } catch (e) {
+    console.error('Error saving deleted ID:', e);
+  }
+}
 
 // Local storage helpers
 function getItem<T>(key: string, defaultVal: T): T {
@@ -162,19 +185,24 @@ function compareRecordsDesc(
   return String(b?.id || '').localeCompare(String(a?.id || ''), undefined, { numeric: true });
 }
 
-// Safe merge helper: ensures incoming cloud snapshots NEVER wipe out local items that haven't synced yet
+// Safe merge helper: ensures incoming cloud snapshots NEVER wipe out local items that haven't synced yet, and NEVER resurrect deleted items
 function mergeCloudSnapshotWithLocal<T extends { id: string }>(
   key: string,
   cloudList: T[],
   collectionName: string,
   sortCompare?: (a: T, b: T) => number
 ): T[] {
-  const localList = getItem<T[]>(key, []);
+  const deletedSet = getDeletedIdsSet();
+  const localList = getItem<T[]>(key, []).filter(item => item && item.id && !deletedSet.has(String(item.id)));
   const cloudMap = new Map<string, T>();
   
   cloudList.forEach(item => {
     if (item && item.id) {
       const idStr = String(item.id);
+      if (deletedSet.has(idStr)) {
+        deleteDocFromCloud(collectionName, idStr);
+        return;
+      }
       const existing = cloudMap.get(idStr);
       if (!existing || ((item as any)._updatedAt || 0) >= ((existing as any)._updatedAt || 0)) {
         cloudMap.set(idStr, item);
@@ -463,17 +491,29 @@ export const storageService = {
       this.startRealtimeSync();
 
       // Helper for intelligent 2-way sync: merge cloud items + local un-synced items
+      const deletedSet = getDeletedIdsSet();
       const mergeTwoWay = async <T extends { id: string }>(col: string, local: T[], cloud: T[]): Promise<T[]> => {
-        if (cloud.length === 0) {
-          if (local.length > 0) {
-            await syncCollectionToCloud(col, local);
+        const cleanLocal = local.filter(item => item && item.id && !deletedSet.has(String(item.id)));
+        const cleanCloud: T[] = [];
+        cloud.forEach(c => {
+          if (!c || !c.id) return;
+          if (deletedSet.has(String(c.id))) {
+            deleteDocFromCloud(col, String(c.id));
+          } else {
+            cleanCloud.push(c);
           }
-          return local;
+        });
+
+        if (cleanCloud.length === 0) {
+          if (cleanLocal.length > 0) {
+            await syncCollectionToCloud(col, cleanLocal);
+          }
+          return cleanLocal;
         }
         const map = new Map<string, T>();
-        cloud.forEach(c => map.set(c.id, c));
+        cleanCloud.forEach(c => map.set(c.id, c));
         const missingInCloud: T[] = [];
-        local.forEach(l => {
+        cleanLocal.forEach(l => {
           const existingCloud = map.get(l.id);
           if (!existingCloud) {
             map.set(l.id, l);
@@ -709,7 +749,10 @@ export const storageService = {
       // 8. Fetch & Merge Violations
       const vioSnap = await getDocs(collection(db, 'violations'));
       const cloudVio: TahfizhViolation[] = [];
-      vioSnap.forEach(d => cloudVio.push(d.data() as TahfizhViolation));
+      vioSnap.forEach(d => {
+        const item = d.data() as TahfizhViolation;
+        if (item) cloudVio.push({ ...item, id: item.id || d.id });
+      });
       const mergedVio = await mergeTwoWay('violations', this.getViolations(), cloudVio);
       mergedVio.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setItem(STORAGE_KEYS.VIOLATIONS, mergedVio);
@@ -717,13 +760,19 @@ export const storageService = {
       // 9. Fetch & Merge Matrikulasi
       const matStdSnap = await getDocs(collection(db, 'matrikulasi_students'));
       const cloudMatStd: MatrikulasiStudent[] = [];
-      matStdSnap.forEach(d => cloudMatStd.push(d.data() as MatrikulasiStudent));
+      matStdSnap.forEach(d => {
+        const item = d.data() as MatrikulasiStudent;
+        if (item) cloudMatStd.push({ ...item, id: item.id || d.id });
+      });
       const mergedMatStd = await mergeTwoWay('matrikulasi_students', this.getMatrikulasiStudents(), cloudMatStd);
       setItem(STORAGE_KEYS.MATRIKULASI_STUDENTS, mergedMatStd);
 
       const matRecSnap = await getDocs(collection(db, 'matrikulasi_records'));
       const cloudMatRec: MatrikulasiRecord[] = [];
-      matRecSnap.forEach(d => cloudMatRec.push(d.data() as MatrikulasiRecord));
+      matRecSnap.forEach(d => {
+        const item = d.data() as MatrikulasiRecord;
+        if (item) cloudMatRec.push({ ...item, id: item.id || d.id });
+      });
       const mergedMatRec = await mergeTwoWay('matrikulasi_records', this.getMatrikulasiRecords(), cloudMatRec);
       mergedMatRec.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setItem(STORAGE_KEYS.MATRIKULASI_RECORDS, mergedMatRec);
@@ -1929,7 +1978,10 @@ export const storageService = {
 
   // Memorization Records
   getMemorizationRecords(): MemorizationRecord[] {
-    return getItem(STORAGE_KEYS.MEMORIZATION, INITIAL_MEMORIZATION_RECORDS);
+    const deletedSet = getDeletedIdsSet();
+    return getItem(STORAGE_KEYS.MEMORIZATION, INITIAL_MEMORIZATION_RECORDS).filter(
+      r => r && r.id && !deletedSet.has(String(r.id))
+    );
   },
   addMemorizationRecord(record: MemorizationRecord): void {
     const list = this.getMemorizationRecords();
@@ -1939,6 +1991,7 @@ export const storageService = {
 
     // Update Student stats
     this.recalculateStudentMemorizationStats(record.studentId, record);
+    this.notifyListeners();
   },
   updateMemorizationRecord(record: MemorizationRecord): void {
     const list = this.getMemorizationRecords();
@@ -1953,8 +2006,10 @@ export const storageService = {
 
     // Recalculate stats for this student
     this.recalculateStudentMemorizationStats(record.studentId);
+    this.notifyListeners();
   },
   deleteMemorizationRecord(id: string): void {
+    markDeletedId(id);
     const list = this.getMemorizationRecords();
     const record = list.find(r => r.id === id);
     const studentId = record?.studentId;
@@ -1966,6 +2021,7 @@ export const storageService = {
     if (studentId) {
       this.recalculateStudentMemorizationStats(studentId);
     }
+    this.notifyListeners();
   },
 
   recalculateStudentMemorizationStats(studentId: string, latestRecordForNotif?: MemorizationRecord): void {
@@ -2026,7 +2082,10 @@ export const storageService = {
 
   // Ummi Records
   getUmmiRecords(): UmmiRecord[] {
-    const list = getItem(STORAGE_KEYS.UMMI, INITIAL_UMMI_RECORDS);
+    const deletedSet = getDeletedIdsSet();
+    const list = getItem(STORAGE_KEYS.UMMI, INITIAL_UMMI_RECORDS).filter(
+      r => r && r.id && !deletedSet.has(String(r.id))
+    );
     let modified = false;
     const sanitized = list.map(r => {
       let updatedJilid = r.jilid;
@@ -2122,6 +2181,7 @@ export const storageService = {
     this.notifyListeners();
   },
   deleteUmmiRecord(id: string): void {
+    markDeletedId(id);
     const list = this.getUmmiRecords();
     const record = list.find(r => r.id === id);
     const studentId = record?.studentId;
@@ -2131,18 +2191,30 @@ export const storageService = {
     deleteDocFromCloud('ummi_records', id);
 
     if (studentId) {
-      const remaining = filtered
-        .filter(r => r.studentId === studentId)
-        .sort(compareRecordsDesc);
-      const student = this.getStudentById(studentId);
-      if (student && remaining.length > 0) {
-        this.saveStudent({
-          ...student,
-          currentUmmiJilid: remaining[0].jilid,
-          currentUmmiPage: remaining[0].page
-        });
+      const allStudents = this.getStudents();
+      const student = allStudents.find(s => s.id === studentId || s.nis === studentId) || this.getStudentById(studentId);
+      if (student) {
+        const remaining = filtered
+          .filter(r => r.studentId === student.id || r.studentId === student.nis)
+          .sort(compareRecordsDesc);
+        if (remaining.length > 0) {
+          this.saveStudent({
+            ...student,
+            currentUmmiJilid: remaining[0].jilid,
+            currentUmmiPage: remaining[0].page,
+            raportUmmiCapaian: `${remaining[0].jilid} halaman ${remaining[0].page}`
+          });
+        } else {
+          this.saveStudent({
+            ...student,
+            currentUmmiJilid: 'Jilid 1',
+            currentUmmiPage: 1,
+            raportUmmiCapaian: 'Jilid 1 halaman 1'
+          });
+        }
       }
     }
+    this.notifyListeners();
   },
 
   // Attendance / Presensi (Hadir, Sakit, Izin, Alfa)
@@ -2402,7 +2474,10 @@ export const storageService = {
 
   // Violations & Kedisiplinan
   getViolations(): TahfizhViolation[] {
-    return getItem(STORAGE_KEYS.VIOLATIONS, INITIAL_VIOLATIONS);
+    const deletedSet = getDeletedIdsSet();
+    return getItem(STORAGE_KEYS.VIOLATIONS, INITIAL_VIOLATIONS).filter(
+      v => v && v.id && !deletedSet.has(String(v.id))
+    );
   },
 
   getViolationsByStudent(studentId: string): TahfizhViolation[] {
@@ -2418,6 +2493,7 @@ export const storageService = {
     violations.unshift(newViolation);
     setItem(STORAGE_KEYS.VIOLATIONS, violations);
     syncDocToCloud('violations', newViolation.id, newViolation);
+    this.notifyListeners();
     return newViolation;
   },
 
@@ -2428,13 +2504,16 @@ export const storageService = {
       violations[idx] = violation;
       setItem(STORAGE_KEYS.VIOLATIONS, violations);
       syncDocToCloud('violations', violation.id, violation);
+      this.notifyListeners();
     }
   },
 
   deleteViolation(id: string): void {
+    markDeletedId(id);
     const violations = this.getViolations().filter(v => v.id !== id);
     setItem(STORAGE_KEYS.VIOLATIONS, violations);
     deleteDocFromCloud('violations', id);
+    this.notifyListeners();
   },
 
   exportViolationsToCSV(): string {
@@ -2465,17 +2544,20 @@ export const storageService = {
 
   // Matrikulasi Iqro
   getMatrikulasiStudents(): MatrikulasiStudent[] {
-    let list = getItem<MatrikulasiStudent[]>(STORAGE_KEYS.MATRIKULASI_STUDENTS, []);
-    if (!list || list.length === 0) {
-      list = [...INITIAL_MATRIKULASI_STUDENTS];
-      setItem(STORAGE_KEYS.MATRIKULASI_STUDENTS, list);
+    const deletedSet = getDeletedIdsSet();
+    if (localStorage.getItem(STORAGE_KEYS.MATRIKULASI_STUDENTS) === null) {
+      const seeded = INITIAL_MATRIKULASI_STUDENTS.filter(s => s && s.id && !deletedSet.has(String(s.id)));
+      setItem(STORAGE_KEYS.MATRIKULASI_STUDENTS, seeded);
+      return seeded;
     }
-    return list;
+    const list = getItem<MatrikulasiStudent[]>(STORAGE_KEYS.MATRIKULASI_STUDENTS, []);
+    return (list || []).filter(s => s && s.id && !deletedSet.has(String(s.id)));
   },
 
   saveMatrikulasiStudents(list: MatrikulasiStudent[]): void {
     setItem(STORAGE_KEYS.MATRIKULASI_STUDENTS, list);
     syncCollectionToCloud('matrikulasi_students', list);
+    this.notifyListeners();
   },
 
   addMatrikulasiStudent(item: Omit<MatrikulasiStudent, 'id'> | MatrikulasiStudent): MatrikulasiStudent {
@@ -2499,23 +2581,28 @@ export const storageService = {
   },
 
   deleteMatrikulasiStudent(id: string): void {
+    markDeletedId(id);
     const list = this.getMatrikulasiStudents().filter(s => s.id !== id);
-    this.saveMatrikulasiStudents(list);
+    setItem(STORAGE_KEYS.MATRIKULASI_STUDENTS, list);
     deleteDocFromCloud('matrikulasi_students', id);
+    this.notifyListeners();
   },
 
   getMatrikulasiRecords(): MatrikulasiRecord[] {
-    let list = getItem<MatrikulasiRecord[]>(STORAGE_KEYS.MATRIKULASI_RECORDS, []);
-    if (!list || list.length === 0) {
-      list = [...INITIAL_MATRIKULASI_RECORDS];
-      setItem(STORAGE_KEYS.MATRIKULASI_RECORDS, list);
+    const deletedSet = getDeletedIdsSet();
+    if (localStorage.getItem(STORAGE_KEYS.MATRIKULASI_RECORDS) === null) {
+      const seeded = INITIAL_MATRIKULASI_RECORDS.filter(r => r && r.id && !deletedSet.has(String(r.id)));
+      setItem(STORAGE_KEYS.MATRIKULASI_RECORDS, seeded);
+      return seeded;
     }
-    return list;
+    const list = getItem<MatrikulasiRecord[]>(STORAGE_KEYS.MATRIKULASI_RECORDS, []);
+    return (list || []).filter(r => r && r.id && !deletedSet.has(String(r.id)));
   },
 
   saveMatrikulasiRecords(list: MatrikulasiRecord[]): void {
     setItem(STORAGE_KEYS.MATRIKULASI_RECORDS, list);
     syncCollectionToCloud('matrikulasi_records', list);
+    this.notifyListeners();
   },
 
   addMatrikulasiRecord(record: Omit<MatrikulasiRecord, 'id'> | MatrikulasiRecord): MatrikulasiRecord {
@@ -2548,9 +2635,30 @@ export const storageService = {
   },
 
   deleteMatrikulasiRecord(id: string): void {
-    const list = this.getMatrikulasiRecords().filter(r => r.id !== id);
-    this.saveMatrikulasiRecords(list);
+    markDeletedId(id);
+    const allRecords = this.getMatrikulasiRecords();
+    const deletedRecord = allRecords.find(r => r.id === id);
+    const list = allRecords.filter(r => r.id !== id);
+    setItem(STORAGE_KEYS.MATRIKULASI_RECORDS, list);
     deleteDocFromCloud('matrikulasi_records', id);
+
+    if (deletedRecord) {
+      const matStudents = this.getMatrikulasiStudents();
+      const targetMatStudent = matStudents.find(
+        ms => ms.id === deletedRecord.matrikulasiStudentId || ms.studentId === deletedRecord.studentId
+      );
+      if (targetMatStudent) {
+        const remaining = list
+          .filter(r => r.matrikulasiStudentId === targetMatStudent.id || r.studentId === targetMatStudent.studentId)
+          .sort(compareRecordsDesc);
+        if (remaining.length > 0) {
+          targetMatStudent.currentIqroJilid = remaining[0].jilid;
+          targetMatStudent.currentIqroPage = remaining[0].page;
+          this.updateMatrikulasiStudent(targetMatStudent);
+        }
+      }
+    }
+    this.notifyListeners();
   },
 
   exportMatrikulasiToCSV(): string {

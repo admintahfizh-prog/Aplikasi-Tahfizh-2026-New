@@ -78,6 +78,14 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
   const [inlineEditStudentId, setInlineEditStudentId] = useState<string | null>(null);
   const [inlineJilid, setInlineJilid] = useState<string>('Jilid 1');
   const [inlinePage, setInlinePage] = useState<number>(1);
+  const [deleteConfirmRecord, setDeleteConfirmRecord] = useState<UmmiRecord | null>(null);
+  const [resetConfirmStudent, setResetConfirmStudent] = useState<Student | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   const handleStartInlineEdit = (student: Student, currentJilid: string, currentPage: number) => {
     if (userRole === 'wali') return;
@@ -274,14 +282,45 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
   });
 
   const handleDelete = (id: string) => {
-    if (window.confirm('Hapus catatan setoran evaluasi Ummi ini?')) {
+    const target = ummiRecords.find(r => r.id === id);
+    if (target) {
+      setDeleteConfirmRecord(target);
+    } else {
       if (onDeleteRecord) {
         onDeleteRecord(id);
       } else {
         storageService.deleteUmmiRecord(id);
         onRefreshData();
       }
+      showToast('Data evaluasi Ummi berhasil dihapus');
     }
+  };
+
+  const confirmDeleteRecord = () => {
+    if (!deleteConfirmRecord) return;
+    const id = deleteConfirmRecord.id;
+    setDeleteConfirmRecord(null);
+    if (onDeleteRecord) {
+      onDeleteRecord(id);
+    } else {
+      storageService.deleteUmmiRecord(id);
+      onRefreshData();
+    }
+    showToast('Data evaluasi Ummi berhasil dihapus');
+  };
+
+  const confirmResetStudentUmmi = () => {
+    if (!resetConfirmStudent) return;
+    const student = resetConfirmStudent;
+    setResetConfirmStudent(null);
+    storageService.saveStudent({
+      ...student,
+      currentUmmiJilid: 'Jilid 1',
+      currentUmmiPage: 1,
+      raportUmmiCapaian: 'Jilid 1 halaman 1'
+    });
+    onRefreshData();
+    showToast(`Capaian Ummi ${student.name} berhasil direset`);
   };
 
   const handleExportCSV = () => {
@@ -813,15 +852,19 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
                                     >
                                       <Edit3 className="w-3.5 h-3.5" />
                                     </button>
-                                    {latestRecord && (
-                                      <button
-                                        onClick={() => handleDelete(latestRecord.id)}
-                                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
-                                        title="Hapus Evaluasi Terakhir"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
+                                    <button
+                                      onClick={() => {
+                                        if (latestRecord) {
+                                          handleDelete(latestRecord.id);
+                                        } else {
+                                          setResetConfirmStudent(student);
+                                        }
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                                      title={latestRecord ? "Hapus Evaluasi Terakhir" : "Reset Capaian Jilid Santri"}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                   </>
                                 )}
 
@@ -1255,6 +1298,92 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
                   <span>Catat Setoran Sekarang</span>
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-lg border border-slate-700 flex items-center gap-2.5 text-xs font-semibold animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-[#D4AF37] shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Hapus Evaluasi Ummi */}
+      {deleteConfirmRecord && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Hapus Catatan Evaluasi Ummi?</h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Anda akan menghapus catatan evaluasi{' '}
+                  <strong className="text-slate-800">
+                    {students.find(s => s.id === deleteConfirmRecord.studentId || s.nis === deleteConfirmRecord.studentId)?.name || 'Santri'}
+                  </strong>{' '}
+                  ({deleteConfirmRecord.jilid} Hal. {deleteConfirmRecord.page} pada {deleteConfirmRecord.date}). Data capaian Jilid santri akan disesuaikan secara otomatis.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmRecord(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteRecord}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Ya, Hapus Data</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Reset Capaian Santri (Jika belum ada log namun ingin di-reset) */}
+      {resetConfirmStudent && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Reset Capaian Jilid Santri?</h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Anda akan mereset capaian Ummi{' '}
+                  <strong className="text-slate-800">{resetConfirmStudent.name}</strong>{' '}
+                  kembali ke <strong className="text-slate-800">Jilid 1 Halaman 1</strong>.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setResetConfirmStudent(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={confirmResetStudentUmmi}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Ya, Reset Capaian</span>
+              </button>
             </div>
           </div>
         </div>

@@ -76,6 +76,13 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
   
   // Sort state for log table
   const [sortBy, setSortBy] = useState<'class-asc' | 'class-desc' | 'date-desc' | 'date-asc' | 'name-asc' | 'score-desc' | 'juz-asc'>('class-asc');
+  const [deleteConfirmRecord, setDeleteConfirmRecord] = useState<MemorizationRecord | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   // Active Teachers & Halaqah Groups
   const activeTeachers = useMemo(() => {
@@ -241,14 +248,31 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
   });
 
   const handleDelete = (id: string) => {
-    if (window.confirm('Hapus riwayat setoran ini? Data capaian santri akan dihitung ulang secara otomatis.')) {
+    const target = records.find(r => r.id === id);
+    if (target) {
+      setDeleteConfirmRecord(target);
+    } else {
       if (onDeleteRecord) {
         onDeleteRecord(id);
       } else {
         storageService.deleteMemorizationRecord(id);
         onRefreshData();
       }
+      showToast('Data setoran hafalan berhasil dihapus');
     }
+  };
+
+  const confirmDeleteRecord = () => {
+    if (!deleteConfirmRecord) return;
+    const id = deleteConfirmRecord.id;
+    setDeleteConfirmRecord(null);
+    if (onDeleteRecord) {
+      onDeleteRecord(id);
+    } else {
+      storageService.deleteMemorizationRecord(id);
+      onRefreshData();
+    }
+    showToast('Data setoran hafalan berhasil dihapus');
   };
 
   const handleExportCSV = () => {
@@ -1070,6 +1094,54 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
             )}
           </div>
 
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-lg border border-slate-700 flex items-center gap-2.5 text-xs font-semibold animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-[#D4AF37] shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Hapus Setoran Hafalan */}
+      {deleteConfirmRecord && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Hapus Data Evaluasi Hafalan?</h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Anda akan menghapus riwayat setoran{' '}
+                  <strong className="text-slate-800">
+                    { getStudent(deleteConfirmRecord.studentId)?.name || 'Santri' }
+                  </strong>{' '}
+                  ({deleteConfirmRecord.surahName} ayat {deleteConfirmRecord.startAyah}-{deleteConfirmRecord.endAyah} pada {deleteConfirmRecord.date}). Data capaian santri akan dihitung ulang secara otomatis.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmRecord(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteRecord}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Ya, Hapus Data</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

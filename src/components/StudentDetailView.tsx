@@ -20,7 +20,8 @@ import {
   ShieldCheck,
   ShieldAlert,
   AlertTriangle,
-  Target
+  Target,
+  Trash2
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -73,6 +74,34 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
   onRefreshData
 }) => {
   const [activeTab, setActiveTab] = useState<'hafalan' | 'ummi' | 'kedisiplinan' | 'grafik' | 'raport'>('hafalan');
+  const [deleteConfirmItem, setDeleteConfirmItem] = useState<{
+    type: 'hafalan' | 'ummi' | 'violation';
+    id: string;
+    label: string;
+  } | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleConfirmDeleteItem = () => {
+    if (!deleteConfirmItem) return;
+    const { type, id } = deleteConfirmItem;
+    setDeleteConfirmItem(null);
+    if (type === 'hafalan') {
+      storageService.deleteMemorizationRecord(id);
+      showToast('Data setoran hafalan berhasil dihapus');
+    } else if (type === 'ummi') {
+      storageService.deleteUmmiRecord(id);
+      showToast('Data evaluasi Ummi berhasil dihapus');
+    } else if (type === 'violation') {
+      storageService.deleteViolation(id);
+      showToast('Catatan pelanggaran berhasil dihapus');
+    }
+    onRefreshData?.();
+  };
 
   const student = students.find(s => s.id === studentId);
   if (!student) {
@@ -544,6 +573,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                   <th className="py-2.5 px-3">Nilai</th>
                   <th className="py-2.5 px-3">Predikat</th>
                   <th className="py-2.5 px-3">Catatan Guru</th>
+                  {userRole !== 'wali' && <th className="py-2.5 px-3 text-center">Aksi</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -584,6 +614,23 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                     <td className="py-3 px-3 text-slate-600 max-w-xs truncate" title={r.notes}>
                       {r.notes || '-'}
                     </td>
+                    {userRole !== 'wali' && (
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        <button
+                          onClick={() =>
+                            setDeleteConfirmItem({
+                              type: 'hafalan',
+                              id: r.id,
+                              label: `Setoran ${r.surahName} (${r.startAyah}-${r.endAyah}) pada ${r.date}`
+                            })
+                          }
+                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                          title="Hapus Setoran Ini"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -623,6 +670,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                     <th className="py-2.5 px-3">Status</th>
                     <th className="py-2.5 px-3">Nilai</th>
                     <th className="py-2.5 px-3">Catatan Pembimbing</th>
+                    {userRole !== 'wali' && <th className="py-2.5 px-3 text-center">Aksi</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -646,6 +694,23 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                       <td className="py-3 px-3 text-slate-600 max-w-xs truncate" title={u.notes}>
                         {u.notes || '-'}
                       </td>
+                      {userRole !== 'wali' && (
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          <button
+                            onClick={() =>
+                              setDeleteConfirmItem({
+                                type: 'ummi',
+                                id: u.id,
+                                label: `Evaluasi Ummi ${u.jilid} Hal. ${u.page} pada ${u.date}`
+                              })
+                            }
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                            title="Hapus Evaluasi Ini"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -692,6 +757,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                     <th className="py-2.5 px-3">Kronologi / Catatan</th>
                     <th className="py-2.5 px-3">Tindakan Pembinaan</th>
                     <th className="py-2.5 px-3 text-center">Status</th>
+                    {userRole !== 'wali' && <th className="py-2.5 px-3 text-center">Aksi</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -725,6 +791,23 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                             {v.status}
                           </span>
                         </td>
+                        {userRole !== 'wali' && (
+                          <td className="py-3 px-3 align-top text-center whitespace-nowrap">
+                            <button
+                              onClick={() =>
+                                setDeleteConfirmItem({
+                                  type: 'violation',
+                                  id: v.id,
+                                  label: `Pelanggaran "${v.typeName}" pada ${v.date}`
+                                })
+                              }
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                              title="Hapus Catatan Pelanggaran"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -777,6 +860,51 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
             userRole={userRole as any}
             onUpdateStudent={() => onRefreshData?.()}
           />
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-lg border border-slate-700 flex items-center gap-2.5 text-xs font-semibold animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-[#D4AF37] shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Hapus Riwayat */}
+      {deleteConfirmItem && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Hapus Data Ini?</h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Anda akan menghapus <strong className="text-slate-800">{deleteConfirmItem.label}</strong> milik{' '}
+                  <strong className="text-slate-800">{student.name}</strong>.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmItem(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteItem}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Ya, Hapus Data</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

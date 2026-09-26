@@ -119,8 +119,16 @@ export const ViolationsView: React.FC<ViolationsViewProps> = ({
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingViolation, setEditingViolation] = useState<TahfizhViolation | null>(null);
+  const [deleteConfirmViolation, setDeleteConfirmViolation] = useState<TahfizhViolation | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   // Form Fields
+  const [formClassId, setFormClassId] = useState('');
   const [formStudentId, setFormStudentId] = useState('');
   const [formTeacherId, setFormTeacherId] = useState(teachers[0]?.id || '');
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
@@ -202,7 +210,17 @@ export const ViolationsView: React.FC<ViolationsViewProps> = ({
 
   const handleOpenCreateModal = (studentId?: string, defaultType?: ViolationType) => {
     setEditingViolation(null);
-    setFormStudentId(studentId || students[0]?.id || '');
+    if (studentId) {
+      const targetStd = students.find(s => s.id === studentId);
+      setFormClassId(targetStd?.classId || '');
+      setFormStudentId(studentId);
+    } else if (selectedClassFilter !== 'all') {
+      setFormClassId(selectedClassFilter);
+      setFormStudentId('');
+    } else {
+      setFormClassId('');
+      setFormStudentId('');
+    }
     setFormTeacherId(teachers[0]?.id || '');
     setFormDate(new Date().toISOString().split('T')[0]);
     
@@ -219,6 +237,8 @@ export const ViolationsView: React.FC<ViolationsViewProps> = ({
 
   const handleOpenEditModal = (v: TahfizhViolation) => {
     setEditingViolation(v);
+    const targetStd = students.find(s => s.id === v.studentId);
+    setFormClassId(targetStd?.classId || 'all');
     setFormStudentId(v.studentId);
     setFormTeacherId(v.teacherId);
     setFormDate(v.date);
@@ -232,10 +252,19 @@ export const ViolationsView: React.FC<ViolationsViewProps> = ({
     setIsModalOpen(true);
   };
 
+  // Students filtered by selected class in modal
+  const modalFilteredStudents = useMemo(() => {
+    if (!formClassId) return [];
+    const list = formClassId === 'all'
+      ? students
+      : students.filter(s => s.classId === formClassId);
+    return [...list].sort((a, b) => a.name.localeCompare(b.name));
+  }, [students, formClassId]);
+
   const handleSaveViolation = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formStudentId) {
-      alert('Silakan pilih santri terlebih dahulu.');
+      showToast('Silakan pilih kelas dan santri terlebih dahulu');
       return;
     }
 
@@ -275,10 +304,23 @@ export const ViolationsView: React.FC<ViolationsViewProps> = ({
   };
 
   const handleDelete = (id: string) => {
-    if (window.confirm('Apakah Anda yakin ingin menghapus catatan pelanggaran ini?')) {
+    const target = violations.find(v => v.id === id);
+    if (target) {
+      setDeleteConfirmViolation(target);
+    } else {
       storageService.deleteViolation(id);
       onRefreshData();
+      showToast('Data pelanggaran berhasil dihapus');
     }
+  };
+
+  const confirmDeleteViolation = () => {
+    if (!deleteConfirmViolation) return;
+    const id = deleteConfirmViolation.id;
+    setDeleteConfirmViolation(null);
+    storageService.deleteViolation(id);
+    onRefreshData();
+    showToast('Data pelanggaran berhasil dihapus');
   };
 
   const handleToggleResolved = (v: TahfizhViolation) => {
@@ -745,37 +787,103 @@ export const ViolationsView: React.FC<ViolationsViewProps> = ({
             {/* Modal Form Content */}
             <form onSubmit={handleSaveViolation} className="p-5 overflow-y-auto space-y-4 text-xs">
               
-              {/* Row 1: Santri & Tanggal */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Row 1: Filter Kelas, Pilih Santri & Tanggal */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Pilih Santri:*</label>
-                  <select
-                    value={formStudentId}
-                    onChange={(e) => setFormStudentId(e.target.value)}
-                    required
-                    className="w-full p-2 bg-white border border-slate-300 rounded-lg font-semibold focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
-                  >
-                    <option value="">-- Pilih Santri --</option>
-                    {students.map(s => {
-                      const cName = classes.find(c => c.id === s.classId)?.name;
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block font-bold text-slate-800 flex items-center gap-1.5">
+                      <GraduationCap className="w-3.5 h-3.5 text-[#D4AF37]" />
+                      <span>1. Filter / Pilih Kelas Terlebih Dahulu:*</span>
+                    </label>
+                    {formClassId && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        {modalFilteredStudents.length} Santri di Kelas Ini
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {classes.map(c => {
+                      const count = students.filter(s => s.classId === c.id).length;
+                      const isSelected = formClassId === c.id;
                       return (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({cName} - NIS: {s.nis})
-                        </option>
+                        <button
+                          type="button"
+                          key={c.id}
+                          onClick={() => {
+                            setFormClassId(c.id);
+                            const currentStd = students.find(s => s.id === formStudentId);
+                            if (currentStd && currentStd.classId !== c.id) {
+                              setFormStudentId('');
+                            }
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer border ${
+                            isSelected
+                              ? 'bg-[#1E293B] text-[#D4AF37] border-[#1E293B] shadow-2xs'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          Kelas {c.name} <span className="opacity-70 font-normal">({count})</span>
+                        </button>
                       );
                     })}
-                  </select>
+                    <button
+                      type="button"
+                      onClick={() => setFormClassId('all')}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer border ${
+                        formClassId === 'all'
+                          ? 'bg-slate-800 text-white border-slate-800'
+                          : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      Semua Kelas ({students.length})
+                    </button>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Tanggal Kejadian:*</label>
-                  <input
-                    type="date"
-                    value={formDate}
-                    onChange={(e) => setFormDate(e.target.value)}
-                    required
-                    className="w-full p-2 bg-white border border-slate-300 rounded-lg font-medium focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">2. Pilih Santri:*</label>
+                    <select
+                      value={formStudentId}
+                      onChange={(e) => setFormStudentId(e.target.value)}
+                      required
+                      disabled={!formClassId}
+                      className={`w-full p-2 border rounded-lg font-semibold focus:ring-2 focus:ring-[#D4AF37] focus:outline-none ${
+                        !formClassId
+                          ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                          : 'bg-white border-slate-300 text-slate-900'
+                      }`}
+                    >
+                      {!formClassId ? (
+                        <option value="">-- Pilih Kelas Terlebih Dahulu di Atas --</option>
+                      ) : (
+                        <>
+                          <option value="">
+                            -- Pilih Santri {formClassId === 'all' ? 'Semua Kelas' : `Kelas ${classes.find(c => c.id === formClassId)?.name || ''}`} ({modalFilteredStudents.length} Anak) --
+                          </option>
+                          {modalFilteredStudents.map(s => {
+                            const cName = classes.find(c => c.id === s.classId)?.name;
+                            return (
+                              <option key={s.id} value={s.id}>
+                                {s.name} ({cName} - NIS: {s.nis})
+                              </option>
+                            );
+                          })}
+                        </>
+                      )}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Tanggal Kejadian:*</label>
+                    <input
+                      type="date"
+                      value={formDate}
+                      onChange={(e) => setFormDate(e.target.value)}
+                      required
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg font-medium focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -934,6 +1042,56 @@ export const ViolationsView: React.FC<ViolationsViewProps> = ({
 
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-lg border border-slate-700 flex items-center gap-2.5 text-xs font-semibold animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-[#D4AF37] shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Hapus Pelanggaran */}
+      {deleteConfirmViolation && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Hapus Catatan Pelanggaran?</h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Anda akan menghapus catatan pelanggaran{' '}
+                  <strong className="text-slate-800">{deleteConfirmViolation.typeName}</strong>{' '}
+                  milik{' '}
+                  <strong className="text-slate-800">
+                    {students.find(s => s.id === deleteConfirmViolation.studentId)?.name || 'Santri'}
+                  </strong>{' '}
+                  pada tanggal {deleteConfirmViolation.date}.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmViolation(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteViolation}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Ya, Hapus Data</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

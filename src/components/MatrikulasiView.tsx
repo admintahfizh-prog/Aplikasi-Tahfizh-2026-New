@@ -85,8 +85,17 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
   const [isEditStudentModalOpen, setIsEditStudentModalOpen] = useState(false);
   const [selectedMatStudentForRecord, setSelectedMatStudentForRecord] = useState<MatrikulasiStudent | null>(null);
   const [selectedMatStudentForEdit, setSelectedMatStudentForEdit] = useState<MatrikulasiStudent | null>(null);
+  const [deleteConfirmParticipant, setDeleteConfirmParticipant] = useState<{ id: string; name: string } | null>(null);
+  const [deleteConfirmRecord, setDeleteConfirmRecord] = useState<MatrikulasiRecord | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   // Form State: Enrollment
+  const [enrollClassId, setEnrollClassId] = useState<string>('');
   const [enrollStudentId, setEnrollStudentId] = useState<string>('');
   const [enrollJilid, setEnrollJilid] = useState<IqroJilid>('Iqro 1');
   const [enrollPage, setEnrollPage] = useState<number>(1);
@@ -95,6 +104,7 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
   const [enrollNotes, setEnrollNotes] = useState<string>('');
 
   // Form State: Record Session
+  const [recordClassId, setRecordClassId] = useState<string>('all');
   const [recordStudentId, setRecordStudentId] = useState<string>('');
   const [recordTeacherId, setRecordTeacherId] = useState<string>(teachers[0]?.id || 't-1');
   const [recordDate, setRecordDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
@@ -208,17 +218,34 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
     };
   }, [matrikulasiStudents, matrikulasiRecords, enrichedMatrikulasiStudents]);
 
+  // Filter candidates by selected class in enrollment modal
+  const enrollFilteredStudents = useMemo(() => {
+    if (!enrollClassId) return [];
+    const baseList = enrollClassId === 'all-8-9'
+      ? grade8and9Students
+      : enrollClassId === 'all'
+      ? students
+      : students.filter(s => s.classId === enrollClassId);
+    return [...baseList].sort((a, b) => a.name.localeCompare(b.name));
+  }, [students, grade8and9Students, enrollClassId]);
+
+  const handleOpenEnrollModal = () => {
+    setEnrollClassId(selectedClassFilter !== 'all' ? selectedClassFilter : '');
+    setEnrollStudentId('');
+    setIsEnrollModalOpen(true);
+  };
+
   // Handle Enrollment
   const handleEnrollSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!enrollStudentId) {
-      alert('Silakan pilih santri terlebih dahulu.');
+      showToast('Silakan pilih kelas dan santri terlebih dahulu');
       return;
     }
 
     const alreadyEnrolled = matrikulasiStudents.some(s => s.studentId === enrollStudentId);
     if (alreadyEnrolled) {
-      alert('Santri ini sudah terdaftar dalam program matrikulasi.');
+      showToast('Santri ini sudah terdaftar dalam program matrikulasi');
       return;
     }
 
@@ -236,17 +263,21 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
 
     setIsEnrollModalOpen(false);
     onRefreshData();
+    showToast('Santri berhasil didaftarkan ke program Matrikulasi Iqro');
   };
 
   // Handle Open Record Session Modal
   const handleOpenRecordModal = (matStudent?: MatrikulasiStudent) => {
     if (matStudent) {
+      const targetStd = students.find(s => s.id === matStudent.studentId);
+      setRecordClassId(targetStd?.classId || 'all');
       setSelectedMatStudentForRecord(matStudent);
       setRecordStudentId(matStudent.studentId);
       setRecordTeacherId(matStudent.assignedTeacherId);
       setRecordJilid(matStudent.currentIqroJilid);
       setRecordPage(matStudent.currentIqroPage);
     } else if (matrikulasiStudents.length > 0) {
+      setRecordClassId('all');
       const first = matrikulasiStudents[0];
       setSelectedMatStudentForRecord(first);
       setRecordStudentId(first.studentId);
@@ -269,13 +300,13 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
   const handleRecordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!recordStudentId) {
-      alert('Silakan pilih santri terlebih dahulu.');
+      showToast('Silakan pilih santri terlebih dahulu');
       return;
     }
 
     const targetMatStudent = matrikulasiStudents.find(s => s.studentId === recordStudentId);
     if (!targetMatStudent) {
-      alert('Santri belum terdaftar di program matrikulasi.');
+      showToast('Santri belum terdaftar di program matrikulasi');
       return;
     }
 
@@ -350,17 +381,36 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
   };
 
   const handleDeleteMatStudent = (id: string, name: string) => {
-    if (window.confirm(`Hapus santri "${name}" dari daftar peserta matrikulasi? Data riwayat bimbingan akan tetap tersimpan di arsip.`)) {
-      storageService.deleteMatrikulasiStudent(id);
-      onRefreshData();
-    }
+    setDeleteConfirmParticipant({ id, name: name || 'Santri' });
+  };
+
+  const confirmDeleteMatStudent = () => {
+    if (!deleteConfirmParticipant) return;
+    const { id, name } = deleteConfirmParticipant;
+    setDeleteConfirmParticipant(null);
+    storageService.deleteMatrikulasiStudent(id);
+    onRefreshData();
+    showToast(`Peserta matrikulasi "${name}" berhasil dihapus`);
   };
 
   const handleDeleteRecord = (id: string) => {
-    if (window.confirm('Hapus catatan mutaba\'ah sesi bimbingan ini?')) {
+    const target = matrikulasiRecords.find(r => r.id === id);
+    if (target) {
+      setDeleteConfirmRecord(target);
+    } else {
       storageService.deleteMatrikulasiRecord(id);
       onRefreshData();
+      showToast('Catatan sesi mutaba\'ah berhasil dihapus');
     }
+  };
+
+  const confirmDeleteRecord = () => {
+    if (!deleteConfirmRecord) return;
+    const id = deleteConfirmRecord.id;
+    setDeleteConfirmRecord(null);
+    storageService.deleteMatrikulasiRecord(id);
+    onRefreshData();
+    showToast('Catatan sesi mutaba\'ah berhasil dihapus');
   };
 
   const handleExportCSV = () => {
@@ -434,7 +484,7 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
               <>
                 <button
                   id="btn-enroll-matrikulasi"
-                  onClick={() => setIsEnrollModalOpen(true)}
+                  onClick={handleOpenEnrollModal}
                   className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50 transition shadow-xs cursor-pointer"
                 >
                   <UserPlus className="w-4 h-4 text-emerald-600" />
@@ -1021,7 +1071,7 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
 
             {userRole !== 'wali' && (
               <button
-                onClick={() => setIsEnrollModalOpen(true)}
+                onClick={handleOpenEnrollModal}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#1E293B] text-white text-xs font-bold hover:bg-slate-800 transition cursor-pointer"
               >
                 <UserPlus className="w-3.5 h-3.5 text-[#D4AF37]" />
@@ -1701,29 +1751,102 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
 
             <form onSubmit={handleEnrollSubmit} className="space-y-4 text-xs">
               
-              <div>
-                <label className="block font-bold text-slate-800 mb-1">
-                  Pilih Santri (Kelas 8 & 9) <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  required
-                  value={enrollStudentId}
-                  onChange={(e) => setEnrollStudentId(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-semibold text-slate-900 focus:ring-1 focus:ring-[#D4AF37] focus:outline-hidden"
-                >
-                  <option value="">-- Pilih Santri Kelas 8 atau 9 --</option>
-                  {grade8and9Students.map(s => {
-                    const cls = classes.find(c => c.id === s.classId);
-                    return (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({cls?.name || 'Kelas'}) - NIS: {s.nis}
-                      </option>
-                    );
-                  })}
-                </select>
-                <p className="text-[10px] text-slate-500 mt-1">
-                  *Menampilkan santri aktif di rombel kelas 8A, 8B, 9A, dan 9B.
-                </p>
+              {/* Filter Kelas Terlebih Dahulu */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block font-bold text-slate-800 flex items-center gap-1.5">
+                      <GraduationCap className="w-3.5 h-3.5 text-[#D4AF37]" />
+                      <span>1. Filter / Pilih Kelas Terlebih Dahulu <span className="text-rose-500">*</span></span>
+                    </label>
+                    {enrollClassId && (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        {enrollFilteredStudents.length} Santri di Kelas Ini
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Quick Class Filter Buttons */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {classes.map(c => {
+                      const count = students.filter(s => s.classId === c.id).length;
+                      const isSelected = enrollClassId === c.id;
+                      const isGrade8or9 = c.grade === '8' || c.grade === '9' || c.level === 8 || c.level === 9 || c.name.includes('8') || c.name.includes('9');
+                      return (
+                        <button
+                          type="button"
+                          key={c.id}
+                          onClick={() => {
+                            setEnrollClassId(c.id);
+                            setEnrollStudentId('');
+                          }}
+                          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition cursor-pointer border ${
+                            isSelected
+                              ? 'bg-[#1E293B] text-[#D4AF37] border-[#1E293B] shadow-2xs'
+                              : isGrade8or9
+                              ? 'bg-white text-slate-800 border-amber-300 hover:bg-amber-50/60'
+                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          Kelas {c.name} <span className="opacity-70 font-normal">({count})</span>
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEnrollClassId('all-8-9');
+                        setEnrollStudentId('');
+                      }}
+                      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition cursor-pointer border ${
+                        enrollClassId === 'all-8-9'
+                          ? 'bg-slate-800 text-white border-slate-800'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      Semua Kelas 8 & 9 ({grade8and9Students.length})
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    2. Pilih Santri <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={enrollStudentId}
+                    onChange={(e) => setEnrollStudentId(e.target.value)}
+                    disabled={!enrollClassId}
+                    className={`w-full p-2.5 border rounded-lg font-semibold focus:ring-1 focus:ring-[#D4AF37] focus:outline-hidden ${
+                      !enrollClassId
+                        ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-white border-slate-300 text-slate-900'
+                    }`}
+                  >
+                    {!enrollClassId ? (
+                      <option value="">-- Pilih Kelas Terlebih Dahulu di Atas --</option>
+                    ) : (
+                      <>
+                        <option value="">
+                          -- Pilih Santri {enrollClassId === 'all-8-9' ? 'Kelas 8 & 9' : `Kelas ${classes.find(c => c.id === enrollClassId)?.name || ''}`} ({enrollFilteredStudents.length} Anak) --
+                        </option>
+                        {enrollFilteredStudents.map(s => {
+                          const cls = classes.find(c => c.id === s.classId);
+                          const isAlreadyEnrolled = matrikulasiStudents.some(ms => ms.studentId === s.id);
+                          return (
+                            <option key={s.id} value={s.id} disabled={isAlreadyEnrolled}>
+                              {s.name} ({cls?.name || 'Kelas'}) - NIS: {s.nis}{isAlreadyEnrolled ? ' [Sudah Terdaftar]' : ''}
+                            </option>
+                          );
+                        })}
+                      </>
+                    )}
+                  </select>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    *Pilih kelas terlebih dahulu agar daftar nama santri tersaring sesuai kelasnya.
+                  </p>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1833,41 +1956,94 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
 
             <form onSubmit={handleRecordSubmit} className="space-y-4 text-xs">
               
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-800 mb-1">Pilih Santri Terbina</label>
-                  <select
-                    value={recordStudentId}
-                    onChange={(e) => {
-                      setRecordStudentId(e.target.value);
-                      const target = matrikulasiStudents.find(s => s.studentId === e.target.value);
-                      if (target) {
-                        setRecordJilid(target.currentIqroJilid);
-                        setRecordPage(target.currentIqroPage);
-                        setRecordTeacherId(target.assignedTeacherId);
-                      }
-                    }}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-900"
-                  >
-                    {enrichedMatrikulasiStudents.map(s => (
-                      <option key={s.studentId} value={s.studentId}>
-                        {s.student?.name} ({s.className} • {s.currentIqroJilid})
-                      </option>
-                    ))}
-                  </select>
+              {/* Filter Kelas Santri Terbina */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-bold text-slate-700 flex items-center gap-1">
+                    <GraduationCap className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    Filter Kelas Peserta:
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setRecordClassId('all')}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer border ${
+                        recordClassId === 'all'
+                          ? 'bg-[#1E293B] text-[#D4AF37] border-[#1E293B]'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      Semua Kelas ({enrichedMatrikulasiStudents.length})
+                    </button>
+                    {classes
+                      .filter(c => enrichedMatrikulasiStudents.some(s => s.student?.classId === c.id))
+                      .map(c => {
+                        const cnt = enrichedMatrikulasiStudents.filter(s => s.student?.classId === c.id).length;
+                        return (
+                          <button
+                            type="button"
+                            key={c.id}
+                            onClick={() => {
+                              setRecordClassId(c.id);
+                              const firstInClass = enrichedMatrikulasiStudents.find(s => s.student?.classId === c.id);
+                              if (firstInClass) {
+                                setRecordStudentId(firstInClass.studentId);
+                                setRecordJilid(firstInClass.currentIqroJilid);
+                                setRecordPage(firstInClass.currentIqroPage);
+                                setRecordTeacherId(firstInClass.assignedTeacherId);
+                              }
+                            }}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer border ${
+                              recordClassId === c.id
+                                ? 'bg-[#1E293B] text-[#D4AF37] border-[#1E293B]'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            Kelas {c.name} ({cnt})
+                          </button>
+                        );
+                      })}
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-800 mb-1">Hari Bimbingan</label>
-                  <select
-                    value={recordDay}
-                    onChange={(e) => setRecordDay(e.target.value as MatrikulasiDay)}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-emerald-800"
-                  >
-                    <option value="Selasa">Hari Selasa</option>
-                    <option value="Rabu">Hari Rabu</option>
-                    <option value="Kamis">Hari Kamis</option>
-                  </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-800 mb-1">Pilih Santri Terbina</label>
+                    <select
+                      value={recordStudentId}
+                      onChange={(e) => {
+                        setRecordStudentId(e.target.value);
+                        const target = matrikulasiStudents.find(s => s.studentId === e.target.value);
+                        if (target) {
+                          setRecordJilid(target.currentIqroJilid);
+                          setRecordPage(target.currentIqroPage);
+                          setRecordTeacherId(target.assignedTeacherId);
+                        }
+                      }}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg font-bold text-slate-900"
+                    >
+                      {enrichedMatrikulasiStudents
+                        .filter(s => recordClassId === 'all' || s.student?.classId === recordClassId)
+                        .map(s => (
+                          <option key={s.studentId} value={s.studentId}>
+                            {s.student?.name} ({s.className} • {s.currentIqroJilid})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-800 mb-1">Hari Bimbingan</label>
+                    <select
+                      value={recordDay}
+                      onChange={(e) => setRecordDay(e.target.value as MatrikulasiDay)}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg font-bold text-emerald-800"
+                    >
+                      <option value="Selasa">Hari Selasa</option>
+                      <option value="Rabu">Hari Rabu</option>
+                      <option value="Kamis">Hari Kamis</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -2138,6 +2314,92 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
 
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-lg border border-slate-700 flex items-center gap-2.5 text-xs font-semibold animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-[#D4AF37] shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Hapus Peserta Matrikulasi */}
+      {deleteConfirmParticipant && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Hapus Peserta Matrikulasi?</h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Apakah Anda yakin ingin menghapus santri{' '}
+                  <strong className="text-slate-800">"{deleteConfirmParticipant.name}"</strong>{' '}
+                  dari daftar peserta program Matrikulasi Iqro?
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmParticipant(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteMatStudent}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Ya, Hapus Peserta</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Hapus Catatan Mutaba'ah Matrikulasi */}
+      {deleteConfirmRecord && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Hapus Catatan Mutaba'ah Iqro?</h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Anda akan menghapus catatan sesi bimbingan{' '}
+                  <strong className="text-slate-800">
+                    {students.find(s => s.id === deleteConfirmRecord.studentId)?.name || 'Santri'}
+                  </strong>{' '}
+                  ({deleteConfirmRecord.jilid} Hal. {deleteConfirmRecord.page} pada hari {deleteConfirmRecord.day}, {deleteConfirmRecord.date}).
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmRecord(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteRecord}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Ya, Hapus Data</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
