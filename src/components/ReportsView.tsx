@@ -31,6 +31,7 @@ interface ReportsViewProps {
   userRole?: Role;
   currentUser?: User | null;
   onOpenStudentDetail: (studentId: string) => void;
+  onRefreshData?: () => void;
 }
 
 export const ReportsView: React.FC<ReportsViewProps> = ({
@@ -42,7 +43,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   settings,
   userRole,
   currentUser,
-  onOpenStudentDetail
+  onOpenStudentDetail,
+  onRefreshData
 }) => {
   const isWali = userRole === 'wali';
   const [reportType, setReportType] = useState<'raport_individu' | 'hafalan' | 'ummi' | 'rekap_nilai' | 'raport_kelas'>('raport_individu');
@@ -333,6 +335,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           onSelectStudent={(id) => setSelectedIndividualStudentId(id)}
           onUpdateStudent={(updated) => {
             storageService.saveStudent(updated);
+            onRefreshData?.();
           }}
         />
       )}
@@ -456,9 +459,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                       {reportType === 'ummi' && (
                         <>
                           <td className="p-2 border-r border-slate-200 font-bold text-emerald-800">{std.currentUmmiJilid}</td>
-                          <td className="p-2 text-center border-r border-slate-200">Hal. {std.currentUmmiPage}</td>
+                          <td className="p-2 text-center border-r border-slate-200">Hal. {std.currentUmmiPage || 1}</td>
                           <td className="p-2 text-center border-r border-slate-200 font-black text-slate-800">
-                            Grade {getGradeFromScore(std.avgScore || 85).letter}
+                            Grade {std.raportUmmiNilai || getGradeFromScore(std.avgScore || 85).letter}
                           </td>
                           <td className="p-2 font-semibold text-emerald-700">Lulus Uji Halaman</td>
                         </>

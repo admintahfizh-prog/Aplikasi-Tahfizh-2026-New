@@ -148,9 +148,11 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
 
   // Sync state when editRecord or editUmmiRecord changes
   useEffect(() => {
+    if (!isOpen) return;
     if (editRecord) {
       setActiveTab('quran');
-      setSelectedStudentId(editRecord.studentId);
+      const std = students.find(s => s.id === editRecord.studentId || s.nis === editRecord.studentId);
+      setSelectedStudentId(std ? std.id : editRecord.studentId);
       setRecordDate(editRecord.date);
       setSelectedStartSurahNumber(editRecord.surahNumber);
       setSelectedEndSurahNumber(editRecord.endSurahNumber || editRecord.surahNumber);
@@ -164,11 +166,15 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
       if (editRecord.tasmiHalamanCount) {
         setTasmiHalaman(editRecord.tasmiHalamanCount);
       }
-      const std = students.find(s => s.id === editRecord.studentId);
       if (std) setSelectedClassId(std.classId);
     } else if (editUmmiRecord) {
       setActiveTab('ummi');
-      setSelectedStudentId(editUmmiRecord.studentId);
+      const std = students.find(s =>
+        s.id === editUmmiRecord.studentId ||
+        s.nis === editUmmiRecord.studentId ||
+        (s.name && (editUmmiRecord as any).studentName && s.name.toLowerCase().trim() === (editUmmiRecord as any).studentName.toLowerCase().trim())
+      );
+      setSelectedStudentId(std ? std.id : editUmmiRecord.studentId);
       setRecordDate(editUmmiRecord.date);
       setUmmiJilid(editUmmiRecord.jilid);
       setUmmiPage(editUmmiRecord.page);
@@ -176,22 +182,24 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
       setUmmiScore(editUmmiRecord.score);
       setUmmiStatus(editUmmiRecord.status);
       setUmmiNotes(editUmmiRecord.notes || '');
-      const std = students.find(s => s.id === editUmmiRecord.studentId);
       if (std) setSelectedClassId(std.classId);
-    } else if (preSelectedStudentId) {
-      setSelectedStudentId(preSelectedStudentId);
-      const std = students.find(s => s.id === preSelectedStudentId);
-      if (std) {
-        setSelectedClassId(std.classId);
-        if (std.currentUmmiJilid) {
-          setUmmiJilid(std.currentUmmiJilid);
-        }
-        if (std.currentUmmiPage) {
-          setUmmiPage(std.currentUmmiPage);
+    } else {
+      setActiveTab(defaultTab);
+      if (preSelectedStudentId) {
+        const std = students.find(s => s.id === preSelectedStudentId || s.nis === preSelectedStudentId);
+        setSelectedStudentId(std ? std.id : preSelectedStudentId);
+        if (std) {
+          setSelectedClassId(std.classId);
+          if (std.currentUmmiJilid && std.currentUmmiJilid !== '-') {
+            setUmmiJilid(std.currentUmmiJilid);
+          }
+          if (std.currentUmmiPage) {
+            setUmmiPage(std.currentUmmiPage);
+          }
         }
       }
     }
-  }, [editRecord, editUmmiRecord, preSelectedStudentId, students]);
+  }, [isOpen, editRecord?.id, editUmmiRecord?.id, preSelectedStudentId, defaultTab]);
 
   if (!isOpen) return null;
 
@@ -199,7 +207,11 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
   const endSurah = SURAH_LIST.find(s => s.number === selectedEndSurahNumber) || startSurah;
   const isMultiSurah = selectedStartSurahNumber !== selectedEndSurahNumber;
 
-  const selectedStudent = students.find(s => s.id === selectedStudentId) || students[0];
+  const selectedStudent = students.find(s =>
+    s.id === selectedStudentId ||
+    s.nis === selectedStudentId ||
+    (editUmmiRecord && s.name && (editUmmiRecord as any).studentName && s.name.toLowerCase().trim() === (editUmmiRecord as any).studentName.toLowerCase().trim())
+  ) || students[0];
   const selectedClass = classes.find(c => c.id === selectedClassId) || classes[0];
 
   // Rombel yang tampil: Untuk Ummi hanya Kelas 7
@@ -1305,7 +1317,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                   <input
                     type="number"
                     min={1}
-                    max={50}
+                    max={604}
                     value={ummiPage}
                     onChange={(e) => setUmmiPage(Number(e.target.value))}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-900"

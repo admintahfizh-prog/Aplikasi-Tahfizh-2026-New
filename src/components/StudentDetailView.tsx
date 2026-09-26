@@ -98,8 +98,24 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
   };
 
   const halaqahName = normalizeHalaqah(student.program);
-  const studentRecords = records.filter(r => r.studentId === student.id);
-  const studentUmmiRecords = ummiRecords.filter(r => r.studentId === student.id);
+  const studentRecords = records.filter(r => r.studentId === student.id || r.studentId === student.nis);
+  const studentUmmiRecords = ummiRecords
+    .filter(r =>
+      r.studentId === student.id ||
+      r.studentId === student.nis ||
+      (student.name && (r as any).studentName && (r as any).studentName.toLowerCase().trim() === student.name.toLowerCase().trim())
+    )
+    .sort((a, b) => {
+      const timeB = a?.date ? new Date(b.date).getTime() : 0;
+      const timeA = b?.date ? new Date(a.date).getTime() : 0;
+      if (!isNaN(timeB) && !isNaN(timeA) && timeB !== timeA) {
+        return timeB - timeA;
+      }
+      const updB = (b as any)._updatedAt || 0;
+      const updA = (a as any)._updatedAt || 0;
+      if (updB !== updA) return updB - updA;
+      return String(b.id || '').localeCompare(String(a.id || ''));
+    });
   const studentViolations = storageService.getViolationsByStudent(student.id);
 
   const progressPercent = Math.min(100, Math.round((student.totalJuzHafal / student.targetJuz) * 100));
@@ -758,6 +774,8 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
             settings={settings}
             allStudents={students}
             classes={classes}
+            userRole={userRole as any}
+            onUpdateStudent={() => onRefreshData?.()}
           />
         </div>
       )}

@@ -236,6 +236,8 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
       return;
     }
 
+    const nextJilid = formData.currentUmmiJilid || 'Jilid 1';
+    const nextPage = Number(formData.currentUmmiPage) || 1;
     const studentToSave: Student = {
       ...(editingStudent || {
         id: 'std-' + Date.now(),
@@ -248,7 +250,9 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
       }),
       ...formData,
       targetJuz: Number(formData.targetJuz) || 4.0,
-      currentUmmiPage: Number(formData.currentUmmiPage) || 1
+      currentUmmiJilid: nextJilid,
+      currentUmmiPage: nextPage,
+      raportUmmiCapaian: nextJilid !== '-' ? `${nextJilid} halaman ${nextPage}` : '-'
     } as Student;
 
     storageService.saveStudent(studentToSave);

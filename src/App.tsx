@@ -488,6 +488,7 @@ export default function App() {
               userRole={currentUser.role}
               currentUser={currentUser}
               onOpenStudentDetail={handleOpenStudentDetail}
+              onRefreshData={loadAllData}
             />
           )}
 
@@ -579,6 +580,7 @@ export default function App() {
         }}
         preSelectedStudentId={prefilledStudentId}
         initialStudentId={prefilledStudentId}
+        defaultTab={currentView === 'ummi' ? 'ummi' : 'quran'}
         onSaveSuccess={() => {
           loadAllData();
         }}
