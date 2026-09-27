@@ -402,10 +402,14 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
     settings.headmasterNik || '01.0125'
   );
   const [tahfizhCoordinatorName, setTahfizhCoordinatorName] = useState<string>(
-    settings.tahfizhCoordinator || teacher?.name || 'Sekar Ningtyas Dewi Pratiwi, S.Pd'
+    (settings.tahfizhCoordinator && !settings.tahfizhCoordinator.toLowerCase().includes('fauzan') && !settings.tahfizhCoordinator.toLowerCase().includes('sekar'))
+      ? settings.tahfizhCoordinator
+      : 'Ustadz Muhammad Yusrie Alfian, S.Ag.'
   );
   const [tahfizhCoordinatorNik, setTahfizhCoordinatorNik] = useState<string>(
-    settings.tahfizhCoordinatorNik || teacher?.nip || '02.0367'
+    (settings.tahfizhCoordinatorNik && settings.tahfizhCoordinatorNik !== '02.0367')
+      ? settings.tahfizhCoordinatorNik
+      : '04.0413'
   );
   const [cityDate, setCityDate] = useState<string>(
     settings.raportDate || `Sukoharjo, 20 Desember 2026`

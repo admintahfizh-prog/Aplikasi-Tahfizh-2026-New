@@ -274,8 +274,9 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
       const standard = getStudentStandardTermTarget(std, currentTermKey, 'Ummi');
       const curJilid = std.currentUmmiJilid || 'Jilid 1';
       const curPage = std.currentUmmiPage || 1;
-      const tgtJilid = storedTarget?.targetUmmiJilid || standard.targetJilid || 'Jilid 1';
-      const tgtPage = storedTarget?.targetUmmiPage || standard.targetPage || 40;
+      const isOldAutoJilid3 = currentTermKey === 'Term 1' && curJilid === 'Jilid 3' && storedTarget?.targetUmmiJilid === 'Al-Qur\'an' && (storedTarget?.notes || '').startsWith('Target Term 1: Pemantapan tilawah');
+      const tgtJilid = (isOldAutoJilid3 ? standard.targetJilid : storedTarget?.targetUmmiJilid) || standard.targetJilid || 'Jilid 1';
+      const tgtPage = (isOldAutoJilid3 ? standard.targetPage : storedTarget?.targetUmmiPage) || standard.targetPage || 40;
       const evalRes = evaluateUmmiTerm(curJilid, curPage, tgtJilid, tgtPage);
 
       const target: TargetProgress = {

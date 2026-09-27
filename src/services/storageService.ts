@@ -877,7 +877,16 @@ export const storageService = {
 
   // Settings
   getSettings(): AppSettings {
-    return getItem(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
+    const settings = getItem(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
+    const teachers = getItem<Teacher[]>(STORAGE_KEYS.TEACHERS, INITIAL_TEACHERS);
+    const yusrieTeacher = teachers.find(t => (t.name || '').toLowerCase().includes('yusrie'));
+    const coordLower = (settings.tahfizhCoordinator || '').toLowerCase();
+    if (!settings.tahfizhCoordinator || coordLower.includes('fauzan') || coordLower.includes('sekar')) {
+      settings.tahfizhCoordinator = yusrieTeacher?.name || 'Ustadz Muhammad Yusrie Alfian, S.Ag.';
+      settings.tahfizhCoordinatorNik = yusrieTeacher?.nip || '04.0413';
+      setItem(STORAGE_KEYS.SETTINGS, settings);
+    }
+    return settings;
   },
   saveSettings(settings: AppSettings): void {
     setItem(STORAGE_KEYS.SETTINGS, settings);

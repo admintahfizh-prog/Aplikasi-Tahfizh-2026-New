@@ -284,10 +284,11 @@ export function getStudentStandardTermTarget(
     // Ummi Target (Khusus Kelas 7)
     // Berdasarkan currentUmmiJilid awal atau posisi masuk
     const currentJilid = (student.currentUmmiJilid || 'Jilid 1').trim();
-    const isAdvanced = ['Jilid 3', 'Al-Qur\'an', 'Gharib', 'Tajwid', 'Munaqosyah'].includes(currentJilid);
+    const isJilid3 = currentJilid === 'Jilid 3';
+    const isAdvanced = ['Al-Qur\'an', 'Al-Quran', 'Gharib', 'Tajwid', 'Turjuman', 'Munaqosyah', 'Tahfizh'].includes(currentJilid);
 
-    if (!isAdvanced) {
-      // Standar: T1 -> Jilid 1 Hal 40, T2 -> Jilid 2 Hal 40, T3 -> Jilid 3 Hal 40, T4 -> Al-Qur'an & Munaqosyah
+    if (!isAdvanced && !isJilid3) {
+      // Standar (Jilid 1 / Jilid 2): T1 -> Jilid 1 Hal 40, T2 -> Jilid 2 Hal 40, T3 -> Jilid 3 Hal 40, T4 -> Al-Qur'an & Munaqosyah
       if (qIndex === 1) {
         return {
           targetValue: 'Tuntas Jilid 1',
@@ -325,11 +326,50 @@ export function getStudentStandardTermTarget(
           notes: 'Target Term 4: Transisi Al-Qur\'an dan persiapan Ujian Munaqosyah Ummi.'
         };
       }
-    } else {
-      // Jalur Lanjutan:
+    } else if (isJilid3) {
+      // Jalur Menengah (Jilid 3): T1 -> Jilid 3 Hal 40, T2 -> Al-Qur'an / Gharib, T3 -> Tajwid, T4 -> Munaqosyah
       if (qIndex === 1) {
         return {
-          targetValue: 'Tuntas Jilid 3 / Al-Qur\'an',
+          targetValue: 'Tuntas Jilid 3',
+          targetNumber: 40,
+          targetJilid: 'Jilid 3',
+          targetPage: 40,
+          deadline: termDef.defaultDeadline,
+          notes: 'Target Term 1: Menuntaskan Jilid 3 (Hal 1-40) mengenai waqaf dan mad far\'i.'
+        };
+      } else if (qIndex === 2) {
+        return {
+          targetValue: 'Tuntas Gharibul Qur\'an',
+          targetNumber: 40,
+          targetJilid: 'Gharib',
+          targetPage: 40,
+          deadline: termDef.defaultDeadline,
+          notes: 'Target Term 2: Tuntas menghafal kaidah ayat-ayat gharib Ummi.'
+        };
+      } else if (qIndex === 3) {
+        return {
+          targetValue: 'Tuntas Tajwid Praktis',
+          targetNumber: 40,
+          targetJilid: 'Tajwid',
+          targetPage: 40,
+          deadline: termDef.defaultDeadline,
+          notes: 'Target Term 3: Tuntas kaidah tajwid praktis dan latihan soal munaqosyah.'
+        };
+      } else {
+        return {
+          targetValue: 'Lulus Munaqosyah',
+          targetNumber: 100,
+          targetJilid: 'Munaqosyah',
+          targetPage: 1,
+          deadline: termDef.defaultDeadline,
+          notes: 'Target Term 4: Lulus Ujian Munaqosyah Ummi dan siap Wisuda Khotmil Qur\'an.'
+        };
+      }
+    } else {
+      // Jalur Lanjutan (Al-Qur'an, Gharib, Tajwid, Munaqosyah):
+      if (qIndex === 1) {
+        return {
+          targetValue: 'Tuntas Tilawah Al-Qur\'an',
           targetNumber: 100,
           targetJilid: 'Al-Qur\'an',
           targetPage: 50,
@@ -385,13 +425,18 @@ export function evaluateHafalanTerm(
 
 // Peringkat jenjang Jilid Ummi untuk kalkulasi progress
 const UMMI_JILID_ORDER: Record<string, number> = {
+  'Pra-TK': 0,
   'Jilid 1': 1,
   'Jilid 2': 2,
   'Jilid 3': 3,
+  'Jilid 4': 3.2,
+  'Jilid 5': 3.5,
+  'Jilid 6': 3.8,
   'Al-Qur\'an': 4,
   'Al-Quran': 4,
   'Gharib': 5,
   'Tajwid': 6,
+  'Turjuman': 6.5,
   'Munaqosyah': 7,
   'Tahfizh': 8
 };

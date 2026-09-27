@@ -15,11 +15,12 @@ import {
   UserCheck,
   FileCheck2
 } from 'lucide-react';
-import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, AppSettings, Role, User } from '../types';
+import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, AppSettings, Role, User, TermName, TargetProgress } from '../types';
 import { storageService } from '../services/storageService';
 import { StudentRaportCard } from './StudentRaportCard';
 import { isGrade8or9Student } from '../utils/gradeHelper';
 import { getGradeFromScore } from '../utils/gradeConversion';
+import { getStudentStandardTermTarget, evaluateUmmiTerm, TERM_DEFINITIONS } from '../data/targetTermData';
 
 interface ReportsViewProps {
   students: Student[];
@@ -51,9 +52,47 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   const [selectedClass, setSelectedClass] = useState<string>('');
   const [selectedTeacher, setSelectedTeacher] = useState<string>('');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const [selectedUmmiTerm, setSelectedUmmiTerm] = useState<TermName>('Term 1');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [sortBy, setSortBy] = useState<'class-asc' | 'class-desc' | 'name-asc' | 'score-desc' | 'juz-desc'>('class-asc');
   const [selectedIndividualStudentId, setSelectedIndividualStudentId] = useState<string>(students[0]?.id || '');
+
+  const allTargets = React.useMemo(() => storageService.getTargets(), [students, ummiRecords, records]);
+
+  const getStudentUmmiTargetInfo = (std: Student, termKey: TermName = selectedUmmiTerm) => {
+    const storedTarget = allTargets.find(t =>
+      t.studentId === std.id &&
+      (t.category === 'Ummi' || Boolean(t.targetUmmiJilid)) &&
+      (t.term === termKey || (!t.term && termKey === 'Term 1') || (t.period && t.period.includes(termKey)))
+    );
+    const standard = getStudentStandardTermTarget(std, termKey, 'Ummi');
+    const curJilid = std.currentUmmiJilid && std.currentUmmiJilid !== '-' ? std.currentUmmiJilid : 'Jilid 1';
+    const curPage = std.currentUmmiPage || 1;
+    const isOldAutoJilid3 = termKey === 'Term 1' && curJilid === 'Jilid 3' && storedTarget?.targetUmmiJilid === 'Al-Qur\'an' && (storedTarget?.notes || '').startsWith('Target Term 1: Pemantapan tilawah');
+    const targetJilid = (isOldAutoJilid3 ? standard.targetJilid : storedTarget?.targetUmmiJilid) || standard.targetJilid || 'Jilid 1';
+    const targetPage = (isOldAutoJilid3 ? standard.targetPage : storedTarget?.targetUmmiPage) || standard.targetPage || 40;
+    const evalRes = evaluateUmmiTerm(curJilid, curPage, targetJilid, targetPage);
+
+    return {
+      targetJilid,
+      targetPage,
+      curJilid,
+      curPage,
+      percentage: evalRes.percentage,
+      status: evalRes.status,
+      summary: evalRes.summary
+    };
+  };
+
+  const yusrieTeacher = teachers.find(t => (t.name || '').toLowerCase().includes('yusrie'));
+  const coordinatorName = (settings.tahfizhCoordinator && !settings.tahfizhCoordinator.toLowerCase().includes('fauzan') && !settings.tahfizhCoordinator.toLowerCase().includes('sekar'))
+    ? settings.tahfizhCoordinator
+    : (yusrieTeacher?.name || 'Ustadz Muhammad Yusrie Alfian, S.Ag.');
+  const coordinatorNik = (settings.tahfizhCoordinatorNik && settings.tahfizhCoordinatorNik !== '02.0367')
+    ? settings.tahfizhCoordinatorNik
+    : (yusrieTeacher?.nip || '04.0413');
+  const headmasterName = settings.headmasterName || settings.principalName || 'Muh Saifuddin,S.Si';
+  const headmasterNik = settings.headmasterNik || '01.0125';
 
   // If user is wali, always lock to raport_individu
   React.useEffect(() => {
@@ -316,6 +355,31 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 ))}
               </select>
             </div>
+
+            {reportType === 'ummi' && (
+              <div className="sm:col-span-2 lg:col-span-4 pt-1 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-slate-600 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  Periode Target Evaluasi Metode Ummi:
+                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {TERM_DEFINITIONS.map(td => (
+                    <button
+                      key={td.term}
+                      type="button"
+                      onClick={() => setSelectedUmmiTerm(td.term)}
+                      className={`px-3 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                        selectedUmmiTerm === td.term
+                          ? 'bg-[#1E293B] text-white shadow-2xs'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                      }`}
+                    >
+                      {td.label} ({td.months})
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -361,7 +425,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           <div className="text-center space-y-1">
             <h3 className="text-sm sm:text-base font-bold uppercase tracking-wide text-slate-900">
               {reportType === 'hafalan' && 'REKAPITULASI CAPAIAN HAFALAN AL-QUR\'AN'}
-              {reportType === 'ummi' && 'REKAPITULASI PEMBELAJARAN METODE UMMI (KELAS 7)'}
+              {reportType === 'ummi' && `REKAPITULASI PEMBELAJARAN & CAPAIAN TARGET METODE UMMI (KELAS 7 - ${selectedUmmiTerm.toUpperCase()})`}
               {reportType === 'rekap_nilai' && 'REKAPITULASI NILAI & EVALUASI TAJWID'}
               {reportType === 'raport_kelas' && 'BUKU INDUK MONITORING TAHFIZH & UMMI'}
             </h3>
@@ -376,7 +440,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               <div>
                 <p className="font-bold">Kebijakan TP Ini: Pembelajaran UMMI Khusus Jenjang Kelas 7</p>
                 <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                  Sesuai kebijakan kurikulum, seluruh santri Kelas 8 dan 9 tidak mengikuti pembelajaran UMMI dan tidak masuk jilid Ummi. Rekapitulasi di bawah ini menampilkan santri Kelas 7 yang aktif mengikuti program Metode Ummi.
+                  Sesuai kebijakan kurikulum, seluruh santri Kelas 8 dan 9 tidak mengikuti pembelajaran UMMI dan tidak masuk jilid Ummi. Rekapitulasi di bawah ini menampilkan santri Kelas 7 beserta target Ummi ({selectedUmmiTerm}) dan status ketercapaian targetnya.
                 </p>
               </div>
             </div>
@@ -404,10 +468,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
                   {reportType === 'ummi' && (
                     <>
-                      <th className="p-2 text-left border-r border-slate-200">Jilid Ummi</th>
-                      <th className="p-2 text-center border-r border-slate-200">Halaman</th>
+                      <th className="p-2 text-center border-r border-slate-200">Target Ummi</th>
+                      <th className="p-2 text-center border-r border-slate-200">Capaian Riil</th>
+                      <th className="p-2 text-center border-r border-slate-200">% Capaian</th>
                       <th className="p-2 text-center border-r border-slate-200">Nilai Rata-rata</th>
-                      <th className="p-2 text-left">Status Kelulusan</th>
+                      <th className="p-2 text-center">Status</th>
                     </>
                   )}
 
@@ -436,6 +501,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                   const cls = classes.find(c => c.id === std.classId);
                   const teacher = teachers.find(t => t.id === std.teacherId);
                   const percent = Math.min(100, Math.round((std.totalJuzHafal / std.targetJuz) * 100));
+                  const ummiTargetInfo = reportType === 'ummi' ? getStudentUmmiTargetInfo(std, selectedUmmiTerm) : null;
 
                   return (
                     <tr key={std.id} className="hover:bg-slate-50">
@@ -456,14 +522,27 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                         </>
                       )}
 
-                      {reportType === 'ummi' && (
+                      {reportType === 'ummi' && ummiTargetInfo && (
                         <>
-                          <td className="p-2 border-r border-slate-200 font-bold text-emerald-800">{std.currentUmmiJilid}</td>
-                          <td className="p-2 text-center border-r border-slate-200">Hal. {std.currentUmmiPage || 1}</td>
+                          <td className="p-2 text-center border-r border-slate-200 font-semibold text-slate-800">
+                            {ummiTargetInfo.targetJilid} <span className="text-slate-500 text-[11px]">(Hal. {ummiTargetInfo.targetPage})</span>
+                          </td>
+                          <td className="p-2 text-center border-r border-slate-200 font-bold text-[#8C7015]">
+                            {ummiTargetInfo.curJilid} <span className="text-slate-600 font-semibold text-[11px]">(Hal. {ummiTargetInfo.curPage})</span>
+                          </td>
+                          <td className="p-2 text-center border-r border-slate-200 font-bold text-emerald-700">
+                            {ummiTargetInfo.percentage}%
+                          </td>
                           <td className="p-2 text-center border-r border-slate-200 font-black text-slate-800">
                             Grade {std.raportUmmiNilai || getGradeFromScore(std.avgScore || 85).letter}
                           </td>
-                          <td className="p-2 font-semibold text-emerald-700">Lulus Uji Halaman</td>
+                          <td className="p-2 text-center font-bold text-[10px]">
+                            {ummiTargetInfo.status === 'on-track'
+                              ? '🟢 Sesuai Target'
+                              : ummiTargetInfo.status === 'needs-attention'
+                              ? '🟡 Perlu Ditingkatkan'
+                              : '🔴 Tertinggal'}
+                          </td>
                         </>
                       )}
 
@@ -513,20 +592,48 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
           {/* Lembar Tanda Tangan */}
           <div className="pt-8 grid grid-cols-2 text-center text-xs">
-            <div>
-              <p className="text-slate-500">Mengetahui,</p>
-              <p className="font-bold text-slate-800">Kepala SMP Islam Al Azhar 21</p>
-              <div className="h-16"></div>
-              <p className="font-bold text-slate-900 underline">{settings.headmasterName || 'H. M. Ridwan, M.Pd.I'}</p>
-              <p className="text-[10px] text-slate-500 font-mono">NIK. 01.0125</p>
+            <div className="flex flex-col items-center justify-between">
+              <div>
+                <p className="text-slate-500">Mengetahui,</p>
+                <p className="font-bold text-slate-800">Kepala SMP Islam Al Azhar 21</p>
+              </div>
+              {settings.headmasterSignatureUrl ? (
+                <div className="h-16 flex items-center justify-center my-1">
+                  <img
+                    src={settings.headmasterSignatureUrl}
+                    alt="TTD Kepala Sekolah"
+                    className="h-14 max-w-[140px] object-contain select-none"
+                  />
+                </div>
+              ) : (
+                <div className="h-16"></div>
+              )}
+              <div>
+                <p className="font-bold text-slate-900 underline">{headmasterName}</p>
+                <p className="text-[10px] text-slate-500 font-mono">NIK. {headmasterNik}</p>
+              </div>
             </div>
 
-            <div>
-              <p className="text-slate-500">Sukoharjo, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-              <p className="font-bold text-slate-800">Koordinator Tahfizh & Metode Ummi</p>
-              <div className="h-16"></div>
-              <p className="font-bold text-slate-900 underline">Ustadz Ahmad Fauzan, Lc., M.Ag.</p>
-              <p className="text-[10px] text-slate-500 font-mono">NIK. 02.0367</p>
+            <div className="flex flex-col items-center justify-between">
+              <div>
+                <p className="text-slate-500">Sukoharjo, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                <p className="font-bold text-slate-800">Koordinator Tahfizh & Metode Ummi</p>
+              </div>
+              {settings.tahfizhCoordinatorSignatureUrl ? (
+                <div className="h-16 flex items-center justify-center my-1">
+                  <img
+                    src={settings.tahfizhCoordinatorSignatureUrl}
+                    alt="TTD Koordinator Tahfizh"
+                    className="h-14 max-w-[140px] object-contain select-none"
+                  />
+                </div>
+              ) : (
+                <div className="h-16"></div>
+              )}
+              <div>
+                <p className="font-bold text-slate-900 underline">{coordinatorName}</p>
+                <p className="text-[10px] text-slate-500 font-mono">NIK. {coordinatorNik}</p>
+              </div>
             </div>
           </div>
 

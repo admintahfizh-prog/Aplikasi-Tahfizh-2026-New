@@ -1634,11 +1634,18 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
               </div>
 
               <div>
-                <p className="text-slate-500">Jakarta, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                <p className="text-slate-500">Sukoharjo, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                 <p className="font-bold text-slate-800">Koordinator Tahfizh</p>
                 <div className="h-16 flex items-end justify-center">
-                  <p className="font-bold underline text-slate-900">{settings.tahfizhCoordinator || 'Ustadz Ahmad Fauzan, Lc., M.Ag.'}</p>
+                  <p className="font-bold underline text-slate-900">
+                    {(settings.tahfizhCoordinator && !settings.tahfizhCoordinator.toLowerCase().includes('fauzan') && !settings.tahfizhCoordinator.toLowerCase().includes('sekar'))
+                      ? settings.tahfizhCoordinator
+                      : 'Ustadz Muhammad Yusrie Alfian, S.Ag.'}
+                  </p>
                 </div>
+                <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                  NIK. {(settings.tahfizhCoordinatorNik && settings.tahfizhCoordinatorNik !== '02.0367') ? settings.tahfizhCoordinatorNik : '04.0413'}
+                </p>
               </div>
 
               <div className="col-span-2 sm:col-span-1">
