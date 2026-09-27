@@ -68,12 +68,35 @@ export default function App() {
   });
 
   // Modal & Edit State
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('tahfizh_sidebar_open');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isDailyInputOpen, setIsDailyInputOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isQuotaBannerDismissed, setIsQuotaBannerDismissed] = useState(false);
   const [prefilledStudentId, setPrefilledStudentId] = useState<string | undefined>(undefined);
   const [editingMemorizationRecord, setEditingMemorizationRecord] = useState<MemorizationRecord | null>(null);
   const [editingUmmiRecord, setEditingUmmiRecord] = useState<UmmiRecord | null>(null);
+
+  const handleToggleSidebar = useCallback(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setIsMobileSidebarOpen(prev => !prev);
+    } else {
+      setIsSidebarOpen(prev => {
+        const next = !prev;
+        try {
+          localStorage.setItem('tahfizh_sidebar_open', String(next));
+        } catch {}
+        return next;
+      });
+    }
+  }, []);
 
   // Synchronize navigation view to localStorage
   useEffect(() => {
@@ -260,10 +283,12 @@ export default function App() {
         schoolName={settings.schoolName}
         activeView={currentView}
         setActiveView={(v) => setCurrentView(v)}
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={handleToggleSidebar}
       />
 
       {/* Main Container Layout */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
         
         {/* Sidebar Navigation */}
         <Sidebar
@@ -280,10 +305,26 @@ export default function App() {
           currentUser={currentUser}
           currentTeacher={currentTeacher}
           onOpenProfile={() => setIsProfileModalOpen(true)}
+          isOpen={isSidebarOpen}
+          onToggle={() => {
+            setIsSidebarOpen(prev => {
+              const next = !prev;
+              try {
+                localStorage.setItem('tahfizh_sidebar_open', String(next));
+              } catch {}
+              return next;
+            });
+          }}
+          isMobileOpen={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
         />
 
         {/* Content Area */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+        <main
+          className={`flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 mx-auto w-full transition-all duration-200 ${
+            isSidebarOpen ? 'max-w-[1600px]' : 'max-w-full'
+          }`}
+        >
           
           {/* QUOTA LIMIT EXCEEDED NOTICE BANNER */}
           {storageService.isQuotaExceeded() && !isQuotaBannerDismissed && (

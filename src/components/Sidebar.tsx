@@ -15,7 +15,10 @@ import {
   HeartHandshake,
   ShieldAlert,
   Sparkles,
-  UserCheck
+  UserCheck,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X
 } from 'lucide-react';
 import { Role, User, Teacher } from '../types';
 import { AvatarBadge } from './AvatarBadge';
@@ -30,6 +33,10 @@ interface SidebarProps {
   currentTeacher?: Teacher;
   onOpenDailyInput?: () => void;
   onOpenProfile?: () => void;
+  isOpen?: boolean;
+  onToggle?: () => void;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -41,12 +48,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentUser,
   currentTeacher,
   onOpenDailyInput,
-  onOpenProfile
+  onOpenProfile,
+  isOpen = true,
+  onToggle,
+  isMobileOpen = false,
+  onCloseMobile
 }) => {
   const current = activeView || currentView || 'dashboard';
   const handleSelectView = (view: string) => {
     if (setActiveView) setActiveView(view);
     if (onViewChange) onViewChange(view);
+    if (onCloseMobile) onCloseMobile();
   };
 
   const getNavItems = () => {
@@ -86,106 +98,200 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Desktop / Tablet Sidebar */}
-      <aside className="no-print hidden md:flex flex-col w-64 bg-[#1E293B] text-white shrink-0 min-h-[calc(100vh-4rem)] border-r border-slate-700/80">
-        
-        {/* Brand header */}
-        <div className="p-5 flex items-center gap-3 border-b border-slate-700">
-          <div className="w-8 h-8 bg-[#D4AF37] rounded flex items-center justify-center font-bold text-[#1E293B] text-base shrink-0">
-            T
-          </div>
-          <div className="flex flex-col min-w-0">
-            <span className="text-sm font-bold tracking-tight text-white truncate">TAHFIZH SMPIA21</span>
-            <span className="text-[10px] text-slate-400 uppercase tracking-widest truncate">
-              {userRole === 'admin' ? 'Admin Portal' : userRole === 'guru' ? 'Guru Portal' : 'Wali Portal'}
-            </span>
-          </div>
-        </div>
+      {/* Quick Floating Open Button on Desktop when Sidebar is Hidden */}
+      {!isOpen && onToggle && (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="no-print hidden md:flex fixed left-0 top-20 z-30 items-center gap-1.5 pl-2.5 pr-3 py-2 bg-[#1E293B] hover:bg-slate-800 text-white rounded-r-xl border border-l-0 border-slate-700 shadow-lg transition cursor-pointer group"
+          title="Klik untuk menampilkan Sidebar Menu"
+        >
+          <PanelLeftOpen className="w-4 h-4 text-[#D4AF37] group-hover:scale-110 transition" />
+          <span className="text-[11px] font-bold tracking-tight">Menu</span>
+        </button>
+      )}
 
-        {/* Navigation Items */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = current === item.id || 
-              (item.id === 'teachers' && (current === 'teachers' || current === 'teachers-classes')) ||
-              (item.id === 'parent-portal' && (current === 'parent-portal' || current === 'portal-wali'));
-            
-            return (
-              <button
-                key={item.id}
-                id={`nav-item-${item.id}`}
-                onClick={() => handleSelectView(item.id)}
-                className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs transition cursor-pointer text-left ${
-                  isActive
-                    ? 'bg-[#D4AF37] text-white font-medium shadow-md shadow-[#D4AF37]/20'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                  <span className="whitespace-nowrap font-medium text-xs">{item.label}</span>
+      {/* Mobile Sidebar Backdrop & Slide-Over Drawer */}
+      {isMobileOpen && (
+        <div className="no-print md:hidden fixed inset-0 z-50 flex">
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+            onClick={onCloseMobile}
+          />
+          <aside className="relative z-10 flex flex-col w-64 max-w-[80vw] bg-[#1E293B] text-white h-full shadow-2xl border-r border-slate-700/80">
+            <div className="p-4 flex items-center justify-between gap-2 border-b border-slate-700">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 bg-[#D4AF37] rounded flex items-center justify-center font-bold text-[#1E293B] text-base shrink-0">
+                  T
                 </div>
-                {item.badge && (
-                  <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
-                    isActive ? 'bg-white/20 text-white' : 'bg-slate-700/80 text-amber-300'
-                  }`}>
-                    {item.badge}
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-bold tracking-tight text-white truncate">TAHFIZH SMPIA21</span>
+                  <span className="text-[10px] text-slate-400 uppercase tracking-widest truncate">
+                    {userRole === 'admin' ? 'Admin Portal' : userRole === 'guru' ? 'Guru Portal' : 'Wali Portal'}
                   </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Dynamic User Card at bottom of sidebar */}
-        <div className="p-3 border-t border-slate-700/80 bg-slate-900/70">
-          <div className="flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={onOpenProfile}
-              className="flex items-center gap-2.5 min-w-0 text-left hover:opacity-90 transition cursor-pointer flex-1 group"
-              title="Klik untuk membuka Pengaturan Profil, Ganti Kata Sandi & Upload Foto"
-            >
-              <div className="relative shrink-0">
-                <AvatarBadge
-                  name={currentUser?.name || (userRole === 'admin' ? 'Administrator' : currentTeacher?.name || 'Pengguna')}
-                  photoUrl={currentUser?.avatar || currentTeacher?.photo}
-                  role={currentUser?.role || userRole}
-                  gender={currentUser?.role === 'guru' ? (currentTeacher?.gender || 'L') : undefined}
-                  size="sm"
-                  className="ring-2 ring-[#D4AF37]/60 group-hover:ring-[#D4AF37] transition"
-                />
-                <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#1E293B]" title="Status Online"></span>
+                </div>
               </div>
-              <div className="flex flex-col min-w-0 flex-1">
-                <span className="text-xs font-bold text-white truncate group-hover:text-[#D4AF37] transition">
-                  {currentUser?.name || (userRole === 'admin' ? 'Administrator Tahfizh' : currentTeacher?.name || 'Guru Tahfizh')}
-                </span>
-                <span className="text-[10px] text-slate-400 capitalize truncate">
-                  {currentUser?.title || (
-                    userRole === 'admin' 
-                      ? 'Koordinator Tahfizh' 
-                      : userRole === 'guru' 
-                      ? (currentTeacher?.specialization || 'Guru Halaqah')
-                      : 'Wali Santri'
-                  )}
-                </span>
-              </div>
-            </button>
-
-            {onOpenProfile && (
               <button
                 type="button"
-                onClick={onOpenProfile}
-                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-[#D4AF37] border border-slate-700 transition cursor-pointer shrink-0"
-                title="Pengaturan Akun (Ganti Password & Foto)"
+                onClick={onCloseMobile}
+                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition cursor-pointer shrink-0"
+                title="Tutup Menu"
               >
-                <Settings className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = current === item.id || 
+                  (item.id === 'teachers' && (current === 'teachers' || current === 'teachers-classes')) ||
+                  (item.id === 'parent-portal' && (current === 'parent-portal' || current === 'portal-wali'));
+                
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleSelectView(item.id)}
+                    className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs transition cursor-pointer text-left ${
+                      isActive
+                        ? 'bg-[#D4AF37] text-white font-medium shadow-md shadow-[#D4AF37]/20'
+                        : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                      <span className="whitespace-nowrap font-medium text-xs">{item.label}</span>
+                    </div>
+                    {item.badge && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-slate-700/80 text-amber-300'
+                      }`}>
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+          </aside>
+        </div>
+      )}
+
+      {/* Desktop / Tablet Sidebar */}
+      {isOpen && (
+        <aside className="no-print hidden md:flex flex-col w-64 bg-[#1E293B] text-white shrink-0 min-h-[calc(100vh-4rem)] border-r border-slate-700/80 transition-all duration-200">
+          
+          {/* Brand header with Hide Sidebar button */}
+          <div className="p-4 flex items-center justify-between gap-2 border-b border-slate-700">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 bg-[#D4AF37] rounded flex items-center justify-center font-bold text-[#1E293B] text-base shrink-0">
+                T
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-sm font-bold tracking-tight text-white truncate">TAHFIZH SMPIA21</span>
+                <span className="text-[10px] text-slate-400 uppercase tracking-widest truncate">
+                  {userRole === 'admin' ? 'Admin Portal' : userRole === 'guru' ? 'Guru Portal' : 'Wali Portal'}
+                </span>
+              </div>
+            </div>
+
+            {onToggle && (
+              <button
+                type="button"
+                onClick={onToggle}
+                className="p-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-[#D4AF37] border border-slate-700 transition cursor-pointer shrink-0"
+                title="Sembunyikan Sidebar Kiri (Tampilan Lebih Full)"
+              >
+                <PanelLeftClose className="w-4 h-4" />
               </button>
             )}
           </div>
-        </div>
-      </aside>
+
+          {/* Navigation Items */}
+          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = current === item.id || 
+                (item.id === 'teachers' && (current === 'teachers' || current === 'teachers-classes')) ||
+                (item.id === 'parent-portal' && (current === 'parent-portal' || current === 'portal-wali'));
+              
+              return (
+                <button
+                  key={item.id}
+                  id={`nav-item-${item.id}`}
+                  onClick={() => handleSelectView(item.id)}
+                  className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs transition cursor-pointer text-left ${
+                    isActive
+                      ? 'bg-[#D4AF37] text-white font-medium shadow-md shadow-[#D4AF37]/20'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                    <span className="whitespace-nowrap font-medium text-xs">{item.label}</span>
+                  </div>
+                  {item.badge && (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-slate-700/80 text-amber-300'
+                    }`}>
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Dynamic User Card at bottom of sidebar */}
+          <div className="p-3 border-t border-slate-700/80 bg-slate-900/70">
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={onOpenProfile}
+                className="flex items-center gap-2.5 min-w-0 text-left hover:opacity-90 transition cursor-pointer flex-1 group"
+                title="Klik untuk membuka Pengaturan Profil, Ganti Kata Sandi & Upload Foto"
+              >
+                <div className="relative shrink-0">
+                  <AvatarBadge
+                    name={currentUser?.name || (userRole === 'admin' ? 'Administrator' : currentTeacher?.name || 'Pengguna')}
+                    photoUrl={currentUser?.avatar || currentTeacher?.photo}
+                    role={currentUser?.role || userRole}
+                    gender={currentUser?.role === 'guru' ? (currentTeacher?.gender || 'L') : undefined}
+                    size="sm"
+                    className="ring-2 ring-[#D4AF37]/60 group-hover:ring-[#D4AF37] transition"
+                  />
+                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#1E293B]" title="Status Online"></span>
+                </div>
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="text-xs font-bold text-white truncate group-hover:text-[#D4AF37] transition">
+                    {currentUser?.name || (userRole === 'admin' ? 'Administrator Tahfizh' : currentTeacher?.name || 'Guru Tahfizh')}
+                  </span>
+                  <span className="text-[10px] text-slate-400 capitalize truncate">
+                    {currentUser?.title || (
+                      userRole === 'admin' 
+                        ? 'Koordinator Tahfizh' 
+                        : userRole === 'guru' 
+                        ? (currentTeacher?.specialization || 'Guru Halaqah')
+                        : 'Wali Santri'
+                    )}
+                  </span>
+                </div>
+              </button>
+
+              {onOpenProfile && (
+                <button
+                  type="button"
+                  onClick={onOpenProfile}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-[#D4AF37] border border-slate-700 transition cursor-pointer shrink-0"
+                  title="Pengaturan Akun (Ganti Password & Foto)"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </aside>
+      )}
 
       {/* Mobile Bottom Navigation Bar */}
       <nav className="no-print md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1E293B] border-t border-slate-700 px-2 py-1 flex items-center justify-around">

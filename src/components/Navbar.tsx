@@ -11,7 +11,9 @@ import {
   Cloud,
   RefreshCw,
   KeyRound,
-  Database
+  Database,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 import { User, NotificationItem } from '../types';
 import { LogoAlAzhar } from './LogoAlAzhar';
@@ -32,6 +34,8 @@ interface NavbarProps {
   schoolName?: string;
   activeView?: string;
   setActiveView?: (view: string) => void;
+  isSidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -43,7 +47,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSettings,
   onOpenProfile,
   schoolName = 'SMP Islam Al Azhar 21',
-  setActiveView
+  setActiveView,
+  isSidebarOpen = true,
+  onToggleSidebar
 }) => {
   const [showNotifMenu, setShowNotifMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -96,35 +102,62 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header className="no-print sticky top-0 z-30 bg-white text-slate-800 shadow-xs border-b border-slate-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           
-          {/* Logo & Brand Header */}
-          <div 
-            className="flex items-center space-x-3 cursor-pointer group" 
-            onClick={() => setActiveView && setActiveView(currentUser.role === 'wali' ? 'parent-portal' : 'dashboard')}
-          >
-            {storageService.getSettings()?.customLogoUrl && (
-              <div className="p-1 bg-white rounded-lg border border-slate-200 shadow-xs group-hover:scale-105 transition flex items-center justify-center shrink-0">
-                <img
-                  src={storageService.getSettings()?.customLogoUrl}
-                  alt="Logo Sekolah"
-                  className="w-9 h-9 sm:w-10 sm:h-10 object-contain rounded-md"
-                />
-              </div>
+          {/* Left: Sidebar Toggle + Logo & Brand Header */}
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            {onToggleSidebar && (
+              <button
+                type="button"
+                onClick={onToggleSidebar}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg border text-xs font-semibold transition cursor-pointer ${
+                  isSidebarOpen
+                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                    : 'bg-[#1E293B] hover:bg-slate-800 text-white border-[#1E293B] shadow-xs'
+                }`}
+                title={isSidebarOpen ? 'Sembunyikan Sidebar Kiri (Tampilan Penuh)' : 'Tampilkan Menu Sidebar Kiri'}
+              >
+                {isSidebarOpen ? (
+                  <>
+                    <PanelLeftClose className="w-4 h-4 text-slate-700" />
+                    <span className="hidden xl:inline text-[11px]">Tutup Menu</span>
+                  </>
+                ) : (
+                  <>
+                    <PanelLeftOpen className="w-4 h-4 text-[#D4AF37]" />
+                    <span className="hidden sm:inline text-[11px]">Menu</span>
+                  </>
+                )}
+              </button>
             )}
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold tracking-tight text-base sm:text-lg text-slate-900 font-sans">
-                  TAHFIZH SMPIA 21
-                </span>
-                <span className="hidden sm:inline-block text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-slate-100 text-slate-700 rounded border border-slate-200">
-                  {currentUser.role === 'admin' ? 'Admin' : currentUser.role === 'guru' ? 'Guru' : 'Wali'}
-                </span>
+
+            <div 
+              className="flex items-center space-x-3 cursor-pointer group" 
+              onClick={() => setActiveView && setActiveView(currentUser.role === 'wali' ? 'parent-portal' : 'dashboard')}
+            >
+              {storageService.getSettings()?.customLogoUrl && (
+                <div className="p-1 bg-white rounded-lg border border-slate-200 shadow-xs group-hover:scale-105 transition flex items-center justify-center shrink-0">
+                  <img
+                    src={storageService.getSettings()?.customLogoUrl}
+                    alt="Logo Sekolah"
+                    className="w-9 h-9 sm:w-10 sm:h-10 object-contain rounded-md"
+                  />
+                </div>
+              )}
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold tracking-tight text-base sm:text-lg text-slate-900 font-sans">
+                    TAHFIZH SMPIA 21
+                  </span>
+                  <span className="hidden sm:inline-block text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-slate-100 text-slate-700 rounded border border-slate-200">
+                    {currentUser.role === 'admin' ? 'Admin' : currentUser.role === 'guru' ? 'Guru' : 'Wali'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-medium hidden md:block">
+                  {schoolName} • Monitoring Tahfizh & Metode Ummi
+                </p>
               </div>
-              <p className="text-[11px] text-slate-500 font-medium hidden md:block">
-                {schoolName} • Monitoring Tahfizh & Metode Ummi
-              </p>
             </div>
           </div>
 
