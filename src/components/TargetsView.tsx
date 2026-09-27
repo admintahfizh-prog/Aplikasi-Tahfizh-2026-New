@@ -1047,14 +1047,19 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
           {/* Halaqah Filter Bar */}
           <HalaqahFilterBar
             selectedHalaqahFilter={selectedHalaqahFilter}
-            onSelectHalaqahFilter={setSelectedHalaqahFilter}
+            onHalaqahFilterChange={(val) => {
+              setSelectedHalaqahFilter(val);
+              if (val === 'my-halaqah' || val !== 'all') {
+                setViewGroupingMode('halaqah');
+              }
+            }}
             viewGroupingMode={viewGroupingMode}
-            onChangeGroupingMode={setViewGroupingMode}
+            onViewGroupingModeChange={setViewGroupingMode}
             halaqahGroups={activeHalaqahGroups}
             teachers={activeTeachers}
             currentUser={currentUser}
-            allStudentsCount={students.length}
-            filteredStudentsCount={allFilteredStudents.length}
+            totalFilteredCount={allFilteredStudents.length}
+            showGroupingToggle={true}
           />
 
           {/* Filters Bar */}

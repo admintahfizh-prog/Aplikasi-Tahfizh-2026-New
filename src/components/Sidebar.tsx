@@ -18,7 +18,10 @@ import {
   UserCheck,
   PanelLeftClose,
   PanelLeftOpen,
-  X
+  X,
+  Award,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { Role, User, Teacher } from '../types';
 import { AvatarBadge } from './AvatarBadge';
@@ -39,6 +42,14 @@ interface SidebarProps {
   onCloseMobile?: () => void;
 }
 
+interface NavItemConfig {
+  id: string;
+  label: string;
+  icon: any;
+  badge?: string;
+  children?: { id: string; label: string }[];
+}
+
 export const Sidebar: React.FC<SidebarProps> = ({
   activeView,
   setActiveView,
@@ -55,30 +66,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile
 }) => {
   const current = activeView || currentView || 'dashboard';
+  const isExamViewActive =
+    current === 'ujian' ||
+    current === 'ujian-kenaikan-jilid' ||
+    current === 'ujian-munaqosyah' ||
+    current === 'ujian-juziyyah';
+
+  const [isExamDropdownOpen, setIsExamDropdownOpen] = React.useState<boolean>(() => isExamViewActive);
+
+  React.useEffect(() => {
+    if (isExamViewActive) {
+      setIsExamDropdownOpen(true);
+    }
+  }, [isExamViewActive]);
+
   const handleSelectView = (view: string) => {
     if (setActiveView) setActiveView(view);
     if (onViewChange) onViewChange(view);
     if (onCloseMobile) onCloseMobile();
   };
 
-  const getNavItems = () => {
+  const examSubItems = [
+    { id: 'ujian-kenaikan-jilid', label: 'Ujian Kenaikan Jilid UMMI' },
+    { id: 'ujian-munaqosyah', label: 'Ujian Munaqosyah' },
+    { id: 'ujian-juziyyah', label: 'Ujian Juziyyah' }
+  ];
+
+  const getNavItems = (): NavItemConfig[] => {
     if (userRole === 'wali') {
       return [
         { id: 'parent-portal', label: 'Dashboard Ananda', icon: HeartHandshake },
         { id: 'hafalan', label: 'Riwayat Hafalan', icon: BookOpen },
         { id: 'ummi', label: 'Perkembangan Ummi', icon: BookMarked },
+        { id: 'ujian', label: 'Ujian & Undangan', icon: Award, children: examSubItems },
         { id: 'matrikulasi', label: 'Matrikulasi Iqro', icon: Sparkles, badge: 'Sel-Kam' },
         { id: 'violations', label: 'Catatan Kedisiplinan', icon: ShieldAlert },
         { id: 'reports', label: 'Raport Tahfizh', icon: BarChart3 },
       ];
     }
 
-    const items = [
+    const items: NavItemConfig[] = [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'students', label: 'Data Siswa', icon: GraduationCap },
       { id: 'teachers', label: 'Guru & Kelas', icon: Users },
       { id: 'hafalan', label: 'Hafalan Al-Qur\'an', icon: BookOpen },
       { id: 'ummi', label: 'Pembelajaran Ummi', icon: BookMarked },
+      { id: 'ujian', label: 'Menu Ujian', icon: Award, badge: '3 Ujian', children: examSubItems },
       { id: 'matrikulasi', label: 'Matrikulasi Iqro', icon: Sparkles, badge: 'Kls 8-9' },
       { id: 'violations', label: 'Pelanggaran Tahfizh', icon: ShieldAlert },
       { id: 'materials', label: 'Materi & Kurikulum', icon: FileText },
@@ -95,6 +128,96 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const navItems = getNavItems();
+
+  const renderNavItem = (item: NavItemConfig) => {
+    const Icon = item.icon;
+    if (item.children && item.children.length > 0) {
+      return (
+        <div key={item.id} className="space-y-1">
+          <button
+            type="button"
+            onClick={() => setIsExamDropdownOpen(prev => !prev)}
+            className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs transition cursor-pointer text-left ${
+              isExamViewActive
+                ? 'bg-slate-800 text-[#D4AF37] font-bold border border-[#D4AF37]/40'
+                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <Icon className={`w-4 h-4 shrink-0 ${isExamViewActive ? 'text-[#D4AF37]' : 'text-slate-400'}`} />
+              <span className="whitespace-nowrap font-semibold text-xs">{item.label}</span>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {item.badge && (
+                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-700/80 text-amber-300">
+                  {item.badge}
+                </span>
+              )}
+              {isExamDropdownOpen ? (
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              ) : (
+                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+              )}
+            </div>
+          </button>
+
+          {isExamDropdownOpen && (
+            <div className="pl-6 pr-1 py-1 space-y-1 border-l border-slate-700/80 ml-4">
+              {item.children.map(sub => {
+                const isSubActive = current === sub.id || (current === 'ujian' && sub.id === 'ujian-kenaikan-jilid');
+                return (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => handleSelectView(sub.id)}
+                    className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[11px] transition cursor-pointer text-left ${
+                      isSubActive
+                        ? 'bg-[#D4AF37] text-white font-bold shadow-sm'
+                        : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                    }`}
+                  >
+                    <span className="truncate">{sub.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const isActive =
+      current === item.id ||
+      (item.id === 'teachers' && (current === 'teachers' || current === 'teachers-classes')) ||
+      (item.id === 'parent-portal' && (current === 'parent-portal' || current === 'portal-wali'));
+
+    return (
+      <button
+        key={item.id}
+        id={`nav-item-${item.id}`}
+        onClick={() => handleSelectView(item.id)}
+        className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs transition cursor-pointer text-left ${
+          isActive
+            ? 'bg-[#D4AF37] text-white font-medium shadow-md shadow-[#D4AF37]/20'
+            : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+        }`}
+      >
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+          <span className="whitespace-nowrap font-medium text-xs">{item.label}</span>
+        </div>
+        {item.badge && (
+          <span
+            className={`text-[10px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
+              isActive ? 'bg-white/20 text-white' : 'bg-slate-700/80 text-amber-300'
+            }`}
+          >
+            {item.badge}
+          </span>
+        )}
+      </button>
+    );
+  };
 
   return (
     <>
@@ -142,36 +265,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = current === item.id || 
-                  (item.id === 'teachers' && (current === 'teachers' || current === 'teachers-classes')) ||
-                  (item.id === 'parent-portal' && (current === 'parent-portal' || current === 'portal-wali'));
-                
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => handleSelectView(item.id)}
-                    className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs transition cursor-pointer text-left ${
-                      isActive
-                        ? 'bg-[#D4AF37] text-white font-medium shadow-md shadow-[#D4AF37]/20'
-                        : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                      <span className="whitespace-nowrap font-medium text-xs">{item.label}</span>
-                    </div>
-                    {item.badge && (
-                      <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
-                        isActive ? 'bg-white/20 text-white' : 'bg-slate-700/80 text-amber-300'
-                      }`}>
-                        {item.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+              {navItems.map(item => renderNavItem(item))}
             </nav>
           </aside>
         </div>
@@ -209,37 +303,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Navigation Items */}
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = current === item.id || 
-                (item.id === 'teachers' && (current === 'teachers' || current === 'teachers-classes')) ||
-                (item.id === 'parent-portal' && (current === 'parent-portal' || current === 'portal-wali'));
-              
-              return (
-                <button
-                  key={item.id}
-                  id={`nav-item-${item.id}`}
-                  onClick={() => handleSelectView(item.id)}
-                  className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs transition cursor-pointer text-left ${
-                    isActive
-                      ? 'bg-[#D4AF37] text-white font-medium shadow-md shadow-[#D4AF37]/20'
-                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                    <span className="whitespace-nowrap font-medium text-xs">{item.label}</span>
-                  </div>
-                  {item.badge && (
-                    <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
-                      isActive ? 'bg-white/20 text-white' : 'bg-slate-700/80 text-amber-300'
-                    }`}>
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+            {navItems.map(item => renderNavItem(item))}
           </nav>
 
           {/* Dynamic User Card at bottom of sidebar */}

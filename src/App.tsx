@@ -14,6 +14,7 @@ import { TeachersClassesView } from './components/TeachersClassesView';
 import { MaterialsView } from './components/MaterialsView';
 import { ViolationsView } from './components/ViolationsView';
 import { MatrikulasiView } from './components/MatrikulasiView';
+import { ExamManagementView } from './components/ExamManagementView';
 import { SettingsView } from './components/SettingsView';
 import { DailyInputModal } from './components/DailyInputModal';
 import { UserProfileModal } from './components/UserProfileModal';
@@ -50,7 +51,7 @@ export default function App() {
       const saved = localStorage.getItem('tahfizh_active_view');
       const user = storageService.getCurrentUser();
       if (user?.role === 'wali') {
-        const allowedWaliViews = ['parent-portal', 'hafalan', 'ummi', 'reports', 'matrikulasi', 'violations', 'student-detail'];
+        const allowedWaliViews = ['parent-portal', 'hafalan', 'ummi', 'ujian', 'ujian-kenaikan-jilid', 'ujian-munaqosyah', 'ujian-juziyyah', 'reports', 'matrikulasi', 'violations', 'student-detail'];
         if (saved && allowedWaliViews.includes(saved)) return saved;
         return 'parent-portal';
       }
@@ -242,7 +243,7 @@ export default function App() {
   // Enforce view protection: Wali users can only access their allowed personal views
   useEffect(() => {
     if (isWali) {
-      const allowedWaliViews = ['parent-portal', 'hafalan', 'ummi', 'matrikulasi', 'violations', 'pelanggaran', 'reports', 'targets', 'student-detail'];
+      const allowedWaliViews = ['parent-portal', 'hafalan', 'ummi', 'ujian', 'ujian-kenaikan-jilid', 'ujian-munaqosyah', 'ujian-juziyyah', 'matrikulasi', 'violations', 'pelanggaran', 'reports', 'targets', 'student-detail'];
       if (!allowedWaliViews.includes(currentView)) {
         setCurrentView('parent-portal');
       }
@@ -408,6 +409,8 @@ export default function App() {
               teachers={teachers}
               classes={classes}
               userRole={currentUser.role}
+              currentUser={currentUser}
+              halaqahGroups={halaqahGroups}
               onOpenStudentDetail={handleOpenStudentDetail}
               onRefreshData={loadAllData}
               onOpenDailyInputWithStudent={handleOpenDailyInput}
@@ -441,6 +444,8 @@ export default function App() {
               students={viewStudents}
               teachers={teachers}
               classes={classes}
+              halaqahGroups={halaqahGroups}
+              currentUser={currentUser}
               userRole={currentUser.role}
               onOpenDailyInput={(studentId) => handleOpenDailyInput(studentId)}
               onRefreshData={loadAllData}
@@ -463,6 +468,34 @@ export default function App() {
               onOpenStudentDetail={handleOpenStudentDetail}
               onEditRecord={handleEditUmmi}
               onDeleteRecord={handleDeleteUmmi}
+            />
+          )}
+
+          {/* VIEW: MENU UJIAN (KENAIKAN JILID UMMI, MUNAQOSYAH, JUZIYYAH) */}
+          {(currentView === 'ujian' ||
+            currentView === 'ujian-kenaikan-jilid' ||
+            currentView === 'ujian-munaqosyah' ||
+            currentView === 'ujian-juziyyah') && (
+            <ExamManagementView
+              activeExamCategory={
+                currentView === 'ujian-munaqosyah'
+                  ? 'munaqosyah'
+                  : currentView === 'ujian-juziyyah'
+                  ? 'juziyyah'
+                  : 'kenaikan_jilid'
+              }
+              onChangeExamCategory={(cat) => {
+                if (cat === 'munaqosyah') setCurrentView('ujian-munaqosyah');
+                else if (cat === 'juziyyah') setCurrentView('ujian-juziyyah');
+                else setCurrentView('ujian-kenaikan-jilid');
+              }}
+              students={viewStudents}
+              teachers={teachers}
+              classes={classes}
+              settings={settings}
+              userRole={currentUser.role}
+              currentUser={currentUser}
+              onRefreshData={loadAllData}
             />
           )}
 
@@ -511,6 +544,9 @@ export default function App() {
               targets={viewTargets}
               students={viewStudents}
               classes={classes}
+              teachers={teachers}
+              currentUser={currentUser}
+              halaqahGroups={halaqahGroups}
               userRole={currentUser.role}
               onRefreshData={loadAllData}
               onOpenStudentDetail={handleOpenStudentDetail}

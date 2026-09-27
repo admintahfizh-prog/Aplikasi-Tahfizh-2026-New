@@ -27,7 +27,7 @@ import { SURAH_LIST } from '../data/quranData';
 import { AvatarBadge } from './AvatarBadge';
 import { getGradeFromScore, getGradeBadgeClass } from '../utils/gradeConversion';
 import { HalaqahFilterBar } from './HalaqahFilterBar';
-import { filterStudentsByHalaqah, groupStudentsByHalaqah, DEFAULT_HALAQAH_GROUPS } from '../utils/halaqahHelper';
+import { filterStudentsByHalaqah, groupStudentsByHalaqah, resolveCurrentTeacher, DEFAULT_HALAQAH_GROUPS } from '../utils/halaqahHelper';
 
 interface HafalanViewProps {
   records: MemorizationRecord[];
@@ -94,12 +94,7 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
   }, [halaqahGroups]);
 
   const currentTeacher = useMemo(() => {
-    if (!currentUser) return null;
-    return activeTeachers.find(t => 
-      (currentUser.teacherId && t.id === currentUser.teacherId) ||
-      t.id === currentUser.id ||
-      (currentUser.email && t.email && t.email.toLowerCase() === currentUser.email.toLowerCase())
-    ) || null;
+    return resolveCurrentTeacher(currentUser, activeTeachers) || null;
   }, [currentUser, activeTeachers]);
 
   // Students filtered by halaqah
@@ -164,7 +159,13 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
 
   // Compute enriched halaqah groups with students and latest records
   const enrichedHalaqahs = useMemo(() => {
-    const grouped = groupStudentsByHalaqah(studentsFilteredByHalaqah, activeHalaqahGroups, activeTeachers);
+    const grouped = groupStudentsByHalaqah(
+      studentsFilteredByHalaqah,
+      activeHalaqahGroups,
+      activeTeachers,
+      selectedHalaqahFilter,
+      currentTeacher
+    );
 
     return grouped.map(g => {
       const filteredGroupStudents = g.students.filter(s => {
@@ -184,7 +185,7 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
         students: filteredGroupStudents
       };
     });
-  }, [studentsFilteredByHalaqah, activeHalaqahGroups, activeTeachers, selectedClassFilter, searchTerm, studentLatestRecords]);
+  }, [studentsFilteredByHalaqah, activeHalaqahGroups, activeTeachers, selectedHalaqahFilter, currentTeacher, selectedClassFilter, searchTerm, studentLatestRecords]);
 
   // Filtered individual records for the Log view
   const filteredRecords = records.filter(r => {
@@ -612,6 +613,26 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
         </div>
       </div>
 
+      {/* Halaqah Filter Bar */}
+      {userRole !== 'wali' && (
+        <HalaqahFilterBar
+          halaqahGroups={activeHalaqahGroups}
+          teachers={activeTeachers}
+          currentUser={currentUser}
+          selectedHalaqahFilter={selectedHalaqahFilter}
+          onHalaqahFilterChange={(val) => {
+            setSelectedHalaqahFilter(val);
+            if (val === 'my-halaqah' || val !== 'all') {
+              setViewGroupingMode('halaqah');
+            }
+          }}
+          viewGroupingMode={viewGroupingMode}
+          onViewGroupingModeChange={setViewGroupingMode}
+          totalFilteredCount={studentsFilteredByHalaqah.length}
+          showGroupingToggle={true}
+        />
+      )}
+
       {/* Search Toolbar */}
       <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[240px]">
@@ -636,11 +657,41 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* TAB 1: UI SEMUA KELAS -> DAFTAR SANTRI + CAPAIAN TERAKHIR + TANGGAL SETORAN */}
+      {/* TAB 1: UI SEMUA KELAS / HALAQAH -> DAFTAR SANTRI + CAPAIAN TERAKHIR */}
       {/* ========================================================================= */}
       {activeTab === 'all-classes' && (
         <div className="space-y-6">
-          {enrichedClasses.map((cls) => (
+          {viewGroupingMode === 'halaqah' ? (
+            enrichedHalaqahs
+              .filter(grp => grp.students.length > 0 || selectedHalaqahFilter !== 'all')
+              .map((grp) => (
+                <div key={grp.id} className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+                  <div className="px-5 py-3.5 bg-gradient-to-r from-slate-900 to-[#1E293B] text-white flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-[#D4AF37] text-slate-950 flex items-center justify-center font-black text-sm shadow-xs">
+                        <Users className="w-4 h-4 text-slate-950" />
+                      </div>
+                      <div>
+                        <h2 className="text-sm font-bold tracking-tight text-white flex items-center gap-2">
+                          <span>{grp.name}</span>
+                        </h2>
+                        <p className="text-[11px] text-[#D4AF37]">
+                          Musyrif Pengampu: <span className="text-white font-medium">{grp.teacherName}</span>
+                          {grp.room ? ` • ${grp.room}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 rounded-md bg-slate-800/80 text-slate-200 border border-slate-700 text-xs font-bold">
+                        {grp.students.length} Santri Halaqah
+                      </span>
+                    </div>
+                  </div>
+                  {renderStudentTable(grp.students, grp.name)}
+                </div>
+              ))
+          ) : (
+            enrichedClasses.map((cls) => (
             <div key={cls.id} className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
               {/* Class Card Header */}
               <div className="px-5 py-3.5 bg-gradient-to-r from-slate-900 to-[#1E293B] text-white flex flex-wrap items-center justify-between gap-3">
@@ -850,7 +901,8 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
                 </table>
               </div>
             </div>
-          ))}
+          ))
+          )}
         </div>
       )}
 

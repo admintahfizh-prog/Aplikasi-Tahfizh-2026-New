@@ -38,6 +38,11 @@ export function resolveCurrentTeacher(
     if (byName) return byName;
   }
 
+  // 5. Fallback untuk admin agar fitur "Halaqah Saya" tetap berfungsi (menggunakan koordinator / guru pertama)
+  if (currentUser.role === 'admin') {
+    return teachers[0];
+  }
+
   return undefined;
 }
 

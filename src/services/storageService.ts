@@ -12,6 +12,7 @@ import {
   MatrikulasiStudent,
   MatrikulasiRecord,
   AttendanceRecord,
+  ExamSubmission,
   AppSettings, 
   User 
 } from '../types';
@@ -66,6 +67,7 @@ const STORAGE_KEYS = {
   MATRIKULASI_STUDENTS: 'tahfizh_smpia21_matrikulasi_students',
   MATRIKULASI_RECORDS: 'tahfizh_smpia21_matrikulasi_records',
   ATTENDANCE: 'tahfizh_smpia21_attendance',
+  EXAM_SUBMISSIONS: 'tahfizh_smpia21_exam_submissions',
   CLOUD_SYNCED: 'tahfizh_smpia21_cloud_synced',
   QUOTA_EXCEEDED: 'tahfizh_smpia21_quota_exceeded',
   DELETED_IDS: 'tahfizh_smpia21_deleted_ids'
@@ -431,6 +433,22 @@ export const storageService = {
         );
         this.notifyListeners();
       }, (err) => console.warn('[Cloud Sync] Attendance records listener warning:', err));
+
+      // 10c. Exam Submissions (Ujian Kenaikan Jilid, Munaqosyah, Juziyyah)
+      onSnapshot(collection(db, 'exam_submissions'), (snap) => {
+        const list: ExamSubmission[] = [];
+        snap.forEach(d => {
+          const item = d.data() as ExamSubmission;
+          if (item) list.push({ ...item, id: item.id || d.id });
+        });
+        mergeCloudSnapshotWithLocal(
+          STORAGE_KEYS.EXAM_SUBMISSIONS,
+          list,
+          'exam_submissions',
+          (a, b) => new Date(b.submissionDate || b.createdAt).getTime() - new Date(a.submissionDate || a.createdAt).getTime()
+        );
+        this.notifyListeners();
+      }, (err) => console.warn('[Cloud Sync] Exam submissions listener warning:', err));
 
       // 11. Users
       onSnapshot(collection(db, 'users'), (snap) => {
@@ -2712,5 +2730,265 @@ export const storageService = {
     });
 
     return [headers.join(','), ...rows].join('\n');
+  },
+
+  // Exam Submissions (Ujian Kenaikan Jilid UMMI, Ujian Munaqosyah, Ujian Juziyyah)
+  getExamSubmissions(): ExamSubmission[] {
+    const deletedSet = getDeletedIdsSet();
+    const raw = localStorage.getItem(STORAGE_KEYS.EXAM_SUBMISSIONS);
+    if (raw === null) {
+      const students = this.getStudents();
+      const classes = this.getClasses();
+      const teachers = this.getTeachers();
+      const g7Students = students.filter(s => {
+        const cls = classes.find(c => c.id === s.classId);
+        return cls ? String(cls.name).startsWith('7') : true;
+      });
+      const sampleS1 = g7Students[0] || students[0];
+      const sampleS2 = g7Students[1] || students[1] || sampleS1;
+      const sampleS3 = students[2] || sampleS1;
+      const cls1 = classes.find(c => c.id === sampleS1?.classId)?.name || '7A';
+      const cls2 = classes.find(c => c.id === sampleS2?.classId)?.name || '7A';
+      const cls3 = classes.find(c => c.id === sampleS3?.classId)?.name || '8A';
+      const musyrif = teachers[0];
+
+      const initialExams: ExamSubmission[] = sampleS1 ? [
+        {
+          id: 'exm-kenaikan-1',
+          category: 'kenaikan_jilid',
+          submissionDate: '2026-09-25',
+          proposedDateText: 'Senin, 28 September 2026',
+          teacherId: musyrif?.id || 't-1',
+          teacherName: musyrif?.name || 'Ustadz Ahmad Fauzan, Lc.',
+          halaqahName: 'Halaqah 1',
+          participants: [
+            {
+              studentId: sampleS1.id,
+              studentName: sampleS1.name,
+              studentNis: sampleS1.nis,
+              classId: sampleS1.classId,
+              className: cls1,
+              jilidOrJuz: sampleS1.currentUmmiJilid && sampleS1.currentUmmiJilid !== '-' ? sampleS1.currentUmmiJilid : 'Jilid 2',
+              promotedToJilid: 'Jilid 3',
+              parentName: sampleS1.parentName,
+              parentPhone: sampleS1.parentPhone,
+              resultStatus: 'Lulus',
+              scoreDetails: { aspect1: 92, aspect2: 90, aspect3: 94 },
+              score: 92,
+              gradeLetter: 'A',
+              predicate: 'MUMTAZ (Istimewa)',
+              examinerName: 'Ustadz Muhammad Yusrie Alfian, S.Ag.',
+              examinerNotes: 'Bacaan tartil, makhraj dan sifat huruf sangat baik, siap naik ke jilid berikutnya.',
+              certificateNumber: '001/SYH-UMMI/SMPIA21/X/2026',
+              evaluatedAt: '2026-10-01'
+            },
+            ...(sampleS2 && sampleS2.id !== sampleS1.id ? [{
+              studentId: sampleS2.id,
+              studentName: sampleS2.name,
+              studentNis: sampleS2.nis,
+              classId: sampleS2.classId,
+              className: cls2,
+              jilidOrJuz: sampleS2.currentUmmiJilid && sampleS2.currentUmmiJilid !== '-' ? sampleS2.currentUmmiJilid : 'Jilid 2',
+              promotedToJilid: 'Jilid 3',
+              parentName: sampleS2.parentName,
+              parentPhone: sampleS2.parentPhone,
+              resultStatus: 'Lulus' as const,
+              scoreDetails: { aspect1: 88, aspect2: 86, aspect3: 87 },
+              score: 87,
+              gradeLetter: 'A-',
+              predicate: 'JAYYID JIDDAN (Sangat Baik)',
+              examinerName: 'Ustadz Muhammad Yusrie Alfian, S.Ag.',
+              examinerNotes: 'Kelancaran dan mizan stabil, pertahankan ketepatan panjang pendek mad.',
+              certificateNumber: '002/SYH-UMMI/SMPIA21/X/2026',
+              evaluatedAt: '2026-10-01'
+            }] : [])
+          ],
+          status: 'Terjadwal',
+          scheduledDay: 'Kamis',
+          scheduledDate: '2026-10-01',
+          scheduledTime: '07.30 - 09.00 WIB',
+          scheduledRoom: 'Masjid Lt. 1 SMPI Al Azhar 21',
+          examinerName: 'Ustadz Muhammad Yusrie Alfian, S.Ag.',
+          coordinatorName: 'Ustadz Muhammad Yusrie Alfian, S.Ag.',
+          coordinatorNotes: 'Mohon membawa buku Ummi dan kartu prestasi.',
+          createdAt: '2026-09-25T08:00:00.000Z',
+          _updatedAt: Date.now()
+        },
+        {
+          id: 'exm-munaqosyah-1',
+          category: 'munaqosyah',
+          submissionDate: '2026-09-26',
+          proposedDateText: 'Rabu, 30 September 2026',
+          teacherId: musyrif?.id || 't-1',
+          teacherName: musyrif?.name || 'Ustadz Ahmad Fauzan, Lc.',
+          halaqahName: 'Halaqah Munaqosyah',
+          participants: [
+            {
+              studentId: sampleS1.id,
+              studentName: sampleS1.name,
+              studentNis: sampleS1.nis,
+              classId: sampleS1.classId,
+              className: cls1,
+              jilidOrJuz: 'Munaqosyah Tartil Al-Qur\'an (Gharib & Tajwid)',
+              parentName: sampleS1.parentName,
+              parentPhone: sampleS1.parentPhone,
+              resultStatus: 'Lulus',
+              scoreDetails: { aspect1: 93, aspect2: 91, aspect3: 90, aspect4: 94 },
+              score: 92,
+              gradeLetter: 'A',
+              predicate: 'MUMTAZ (Istimewa)',
+              examinerName: 'Ustadz Muhammad Yusrie Alfian, S.Ag.',
+              examinerNotes: 'Penguasaan Gharibul Qur\'an dan penguraian hukum tajwid sangat baik dan lancar.',
+              certificateNumber: '001/SYH-MNQ/SMPIA21/X/2026',
+              evaluatedAt: '2026-10-03'
+            }
+          ],
+          status: 'Terjadwal',
+          scheduledDay: 'Sabtu',
+          scheduledDate: '2026-10-03',
+          scheduledTime: '08.00 - 11.00 WIB',
+          scheduledRoom: 'Aula Utama SMPI Al Azhar 21',
+          examinerName: 'Ustadz Muhammad Yusrie Alfian, S.Ag.',
+          coordinatorName: 'Ustadz Muhammad Yusrie Alfian, S.Ag.',
+          coordinatorNotes: 'Ujian Munaqosyah Metode Ummi (Tartil, Fashahah, Gharib, Tajwid).',
+          createdAt: '2026-09-26T08:00:00.000Z',
+          _updatedAt: Date.now()
+        },
+        {
+          id: 'exm-juziyyah-1',
+          category: 'juziyyah',
+          submissionDate: '2026-09-26',
+          proposedDateText: 'Kamis, 1 Oktober 2026',
+          teacherId: musyrif?.id || 't-1',
+          teacherName: musyrif?.name || 'Ustadz Ahmad Fauzan, Lc.',
+          halaqahName: 'Halaqah Tahfizh',
+          participants: [
+            {
+              studentId: (sampleS3 || sampleS1).id,
+              studentName: (sampleS3 || sampleS1).name,
+              studentNis: (sampleS3 || sampleS1).nis,
+              classId: (sampleS3 || sampleS1).classId,
+              className: cls3,
+              jilidOrJuz: 'Juz 30 (Sekali Duduk)',
+              parentName: (sampleS3 || sampleS1).parentName,
+              parentPhone: (sampleS3 || sampleS1).parentPhone,
+              resultStatus: 'Lulus',
+              scoreDetails: { aspect1: 95, aspect2: 92, aspect3: 93, aspect4: 96 },
+              score: 94,
+              gradeLetter: 'A',
+              predicate: 'MUMTAZ (Istimewa)',
+              examinerName: 'Ustadz Muhammad Yusrie Alfian, S.Ag.',
+              examinerNotes: 'Alhamdulillah tasmi\' Juz 30 sekali duduk lancar, mutqin, dan makhraj terjaga.',
+              certificateNumber: '001/SYH-JZY/SMPIA21/X/2026',
+              evaluatedAt: '2026-10-02'
+            }
+          ],
+          status: 'Terjadwal',
+          scheduledDay: 'Jumat',
+          scheduledDate: '2026-10-02',
+          scheduledTime: '07.30 - 09.30 WIB',
+          scheduledRoom: 'Serambi Utama Masjid Al Azhar 21',
+          examinerName: 'Ustadz Muhammad Yusrie Alfian, S.Ag.',
+          coordinatorName: 'Ustadz Muhammad Yusrie Alfian, S.Ag.',
+          coordinatorNotes: 'Tasmi\' Ujian Juziyyah 1 Juz sekali duduk.',
+          createdAt: '2026-09-26T09:00:00.000Z',
+          _updatedAt: Date.now()
+        }
+      ] : [];
+
+      const filteredInitial = initialExams.filter(x => !deletedSet.has(x.id));
+      setItem(STORAGE_KEYS.EXAM_SUBMISSIONS, filteredInitial);
+      return filteredInitial;
+    }
+
+    const list = getItem<ExamSubmission[]>(STORAGE_KEYS.EXAM_SUBMISSIONS, []);
+    let changed = false;
+    const enriched = (list || [])
+      .filter(item => item && item.id && !deletedSet.has(String(item.id)))
+      .map(item => {
+        if (
+          (item.id === 'exm-kenaikan-1' || item.id === 'exm-munaqosyah-1' || item.id === 'exm-juziyyah-1') &&
+          item.participants.length > 0 &&
+          item.participants.every(p => p.score === undefined)
+        ) {
+          changed = true;
+          return {
+            ...item,
+            participants: item.participants.map((p, idx) => {
+              if (item.category === 'kenaikan_jilid') {
+                return {
+                  ...p,
+                  promotedToJilid: p.promotedToJilid || 'Jilid 3',
+                  resultStatus: 'Lulus' as const,
+                  scoreDetails: { aspect1: 92 - idx * 4, aspect2: 90 - idx * 4, aspect3: 94 - idx * 5 },
+                  score: 92 - idx * 4,
+                  gradeLetter: idx === 0 ? 'A' : 'A-',
+                  predicate: idx === 0 ? 'MUMTAZ (Istimewa)' : 'JAYYID JIDDAN (Sangat Baik)',
+                  examinerName: item.examinerName || 'Ustadz Muhammad Yusrie Alfian, S.Ag.',
+                  examinerNotes: 'Bacaan tartil, makhraj dan sifat huruf sangat baik, lulus naik ke jilid berikutnya.',
+                  certificateNumber: `00${idx + 1}/SYH-UMMI/SMPIA21/X/2026`,
+                  evaluatedAt: item.scheduledDate || '2026-10-01'
+                };
+              }
+              if (item.category === 'munaqosyah') {
+                return {
+                  ...p,
+                  resultStatus: 'Lulus' as const,
+                  scoreDetails: { aspect1: 93, aspect2: 91, aspect3: 90, aspect4: 94 },
+                  score: 92,
+                  gradeLetter: 'A',
+                  predicate: 'MUMTAZ (Istimewa)',
+                  examinerName: item.examinerName || 'Ustadz Muhammad Yusrie Alfian, S.Ag.',
+                  examinerNotes: 'Penguasaan Gharibul Qur\'an dan penguraian hukum tajwid sangat baik dan lancar.',
+                  certificateNumber: `00${idx + 1}/SYH-MNQ/SMPIA21/X/2026`,
+                  evaluatedAt: item.scheduledDate || '2026-10-03'
+                };
+              }
+              return {
+                ...p,
+                resultStatus: 'Lulus' as const,
+                scoreDetails: { aspect1: 95, aspect2: 92, aspect3: 93, aspect4: 96 },
+                score: 94,
+                gradeLetter: 'A',
+                predicate: 'MUMTAZ (Istimewa)',
+                examinerName: item.examinerName || 'Ustadz Muhammad Yusrie Alfian, S.Ag.',
+                examinerNotes: 'Alhamdulillah tasmi\' sekali duduk lancar, mutqin, dan makhraj terjaga.',
+                certificateNumber: `00${idx + 1}/SYH-JZY/SMPIA21/X/2026`,
+                evaluatedAt: item.scheduledDate || '2026-10-02'
+              };
+            })
+          };
+        }
+        return item;
+      });
+    if (changed) {
+      setItem(STORAGE_KEYS.EXAM_SUBMISSIONS, enriched);
+    }
+    return enriched;
+  },
+
+  saveExamSubmission(submission: ExamSubmission): void {
+    const list = this.getExamSubmissions();
+    const stamped: ExamSubmission = {
+      ...submission,
+      _updatedAt: Date.now()
+    };
+    const idx = list.findIndex(x => x.id === stamped.id);
+    if (idx >= 0) {
+      list[idx] = stamped;
+    } else {
+      list.unshift(stamped);
+    }
+    setItem(STORAGE_KEYS.EXAM_SUBMISSIONS, list);
+    syncDocToCloud('exam_submissions', stamped.id, stamped);
+    this.notifyListeners();
+  },
+
+  deleteExamSubmission(id: string): void {
+    markDeletedId(id);
+    const list = this.getExamSubmissions().filter(x => x.id !== id);
+    setItem(STORAGE_KEYS.EXAM_SUBMISSIONS, list);
+    deleteDocFromCloud('exam_submissions', id);
+    this.notifyListeners();
   }
 };

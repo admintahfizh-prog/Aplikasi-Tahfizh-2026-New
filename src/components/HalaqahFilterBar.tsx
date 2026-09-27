@@ -8,12 +8,16 @@ interface HalaqahFilterBarProps {
   teachers: Teacher[];
   currentUser?: User | UserProfile | null;
   selectedHalaqahFilter: string; // 'all' | 'my-halaqah' | halaqahGroupId
-  onHalaqahFilterChange: (filterValue: string) => void;
+  onHalaqahFilterChange?: (filterValue: string) => void;
+  onSelectHalaqahFilter?: (filterValue: string) => void;
   // Optional view mode switch (e.g. 'halaqah' vs 'class')
   viewGroupingMode?: 'halaqah' | 'class';
   onViewGroupingModeChange?: (mode: 'halaqah' | 'class') => void;
+  onChangeGroupingMode?: (mode: 'halaqah' | 'class') => void;
   // Optional counter badge
   totalFilteredCount?: number;
+  filteredStudentsCount?: number;
+  allStudentsCount?: number;
   className?: string;
   showGroupingToggle?: boolean;
 }
@@ -24,12 +28,27 @@ export const HalaqahFilterBar: React.FC<HalaqahFilterBarProps> = ({
   currentUser,
   selectedHalaqahFilter,
   onHalaqahFilterChange,
+  onSelectHalaqahFilter,
   viewGroupingMode,
   onViewGroupingModeChange,
+  onChangeGroupingMode,
   totalFilteredCount,
+  filteredStudentsCount,
   className = '',
-  showGroupingToggle = false
+  showGroupingToggle
 }) => {
+  const handleFilterChange = (val: string) => {
+    if (typeof onHalaqahFilterChange === 'function') {
+      onHalaqahFilterChange(val);
+    } else if (typeof onSelectHalaqahFilter === 'function') {
+      onSelectHalaqahFilter(val);
+    }
+  };
+
+  const handleGroupingChange = onViewGroupingModeChange || onChangeGroupingMode;
+  const effectiveShowGroupingToggle = showGroupingToggle ?? Boolean(handleGroupingChange);
+  const effectiveFilteredCount = typeof totalFilteredCount === 'number' ? totalFilteredCount : filteredStudentsCount;
+
   const currentTeacher = resolveCurrentTeacher(currentUser, teachers) || (currentUser?.role === 'admin' ? teachers[0] : undefined);
   const isGuru = currentUser?.role === 'guru' || !!currentUser?.teacherId;
   const myGroups = currentTeacher ? halaqahGroups.filter(g => g.teacherId === currentTeacher.id) : [];
@@ -52,9 +71,9 @@ export const HalaqahFilterBar: React.FC<HalaqahFilterBarProps> = ({
             type="button"
             onClick={() => {
               if (isMyHalaqahSelected) {
-                onHalaqahFilterChange('all');
+                handleFilterChange('all');
               } else {
-                onHalaqahFilterChange('my-halaqah');
+                handleFilterChange('my-halaqah');
               }
             }}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
@@ -77,7 +96,7 @@ export const HalaqahFilterBar: React.FC<HalaqahFilterBarProps> = ({
           <div className="relative shrink-0">
             <select
               value={selectedHalaqahFilter}
-              onChange={(e) => onHalaqahFilterChange(e.target.value)}
+              onChange={(e) => handleFilterChange(e.target.value)}
               className="py-1.5 pl-3 pr-7 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none cursor-pointer transition max-w-[280px] truncate"
             >
               <option value="all">Semua Halaqah ({halaqahGroups.length} Kelompok)</option>
@@ -103,11 +122,11 @@ export const HalaqahFilterBar: React.FC<HalaqahFilterBarProps> = ({
 
         {/* Right side: Grouping view toggle (Per Halaqah vs Per Kelas) & Info Count */}
         <div className="flex items-center gap-2 ml-auto">
-          {showGroupingToggle && onViewGroupingModeChange && (
+          {effectiveShowGroupingToggle && typeof handleGroupingChange === 'function' && (
             <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-[11px] font-bold">
               <button
                 type="button"
-                onClick={() => onViewGroupingModeChange('halaqah')}
+                onClick={() => handleGroupingChange('halaqah')}
                 className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
                   viewGroupingMode === 'halaqah'
                     ? 'bg-white text-slate-900 shadow-2xs font-bold'
@@ -119,7 +138,7 @@ export const HalaqahFilterBar: React.FC<HalaqahFilterBarProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => onViewGroupingModeChange('class')}
+                onClick={() => handleGroupingChange('class')}
                 className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
                   viewGroupingMode === 'class'
                     ? 'bg-white text-slate-900 shadow-2xs font-bold'
@@ -132,9 +151,9 @@ export const HalaqahFilterBar: React.FC<HalaqahFilterBarProps> = ({
             </div>
           )}
 
-          {typeof totalFilteredCount === 'number' && (
+          {typeof effectiveFilteredCount === 'number' && (
             <span className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 px-2 py-1 rounded-md font-medium shrink-0">
-              {totalFilteredCount} santri aktif
+              {effectiveFilteredCount} santri aktif
             </span>
           )}
         </div>
@@ -165,7 +184,7 @@ export const HalaqahFilterBar: React.FC<HalaqahFilterBarProps> = ({
           </div>
           <button
             type="button"
-            onClick={() => onHalaqahFilterChange('all')}
+            onClick={() => handleFilterChange('all')}
             className="text-[11px] font-bold text-amber-800 hover:text-amber-950 underline cursor-pointer ml-2 shrink-0"
           >
             Tampilkan Semua

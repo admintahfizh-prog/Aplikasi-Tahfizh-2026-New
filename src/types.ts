@@ -315,3 +315,56 @@ export interface AttendanceRecord {
   status: AttendanceStatus;
   notes?: string;
 }
+
+export type ExamCategory = 'kenaikan_jilid' | 'munaqosyah' | 'juziyyah';
+export type ExamSubmissionStatus = 'Diajukan Musyrif' | 'Terjadwal' | 'Selesai';
+
+export interface ExamScoreDetails {
+  aspect1: number; // Fashahah/Makhraj (Kenaikan) | Tartil & Fashahah (Munaqosyah) | Kelancaran/Itqan (Juziyyah)
+  aspect2: number; // Tajwid & Kaidah (Kenaikan) | Gharibul Qur'an (Munaqosyah) | Tajwid & Ahkam (Juziyyah)
+  aspect3: number; // Kelancaran & Mizan (Kenaikan) | Teori & Praktik Tajwid (Munaqosyah) | Fashahah & Waqaf (Juziyyah)
+  aspect4?: number; // Tahfizh Wajib (Munaqosyah) | Adab & Ketahanan Tasmi' (Juziyyah)
+}
+
+export interface ExamParticipantItem {
+  studentId: string;
+  studentName: string;
+  studentNis?: string;
+  classId: string;
+  className: string;
+  jilidOrJuz: string; // e.g. 'Jilid 2', 'Munaqosyah Metode Ummi', 'Juz 30'
+  promotedToJilid?: string; // e.g. 'Jilid 3' (khusus kenaikan jilid)
+  parentName?: string;
+  parentPhone?: string;
+  resultStatus?: 'Belum Diuji' | 'Lulus' | 'Belum Lulus';
+  score?: number; // Nilai rata-rata akhir (0 - 100)
+  gradeLetter?: string; // 'A', 'A-', 'B+', dst.
+  predicate?: string; // 'MUMTAZ (Istimewa)', 'JAYYID JIDDAN (Sangat Baik)', 'JAYYID (Baik)', 'MAQBUL (Cukup)'
+  scoreDetails?: ExamScoreDetails;
+  examinerName?: string;
+  examinerNotes?: string;
+  certificateNumber?: string;
+  evaluatedAt?: string;
+}
+
+export interface ExamSubmission {
+  id: string;
+  category: ExamCategory;
+  submissionDate: string; // YYYY-MM-DD
+  proposedDateText?: string;
+  teacherId: string;
+  teacherName: string;
+  halaqahName?: string;
+  participants: ExamParticipantItem[];
+  status: ExamSubmissionStatus;
+  scheduledDay?: string;
+  scheduledDate?: string; // YYYY-MM-DD
+  scheduledTime?: string;
+  scheduledRoom?: string;
+  examinerName?: string;
+  coordinatorName?: string;
+  coordinatorNotes?: string;
+  createdAt: string;
+  _updatedAt?: number;
+}
+
