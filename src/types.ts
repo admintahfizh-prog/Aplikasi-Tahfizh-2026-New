@@ -303,6 +303,11 @@ export interface AppSettings {
   bismillahImgUrl?: string;
   headmasterSignatureUrl?: string;
   tahfizhCoordinatorSignatureUrl?: string;
+  letterHeaderUrl?: string;
+  letterFooterUrl?: string;
+  syahadahTemplateUrl?: string;
+  syahadahOverlayMode?: 'full_content' | 'no_kop' | 'data_only';
+  syahadahTopOffset?: number;
 }
 
 export type AttendanceStatus = 'Hadir' | 'Sakit' | 'Izin' | 'Alfa';
@@ -336,6 +341,7 @@ export interface ExamParticipantItem {
   promotedToJilid?: string; // e.g. 'Jilid 3' (khusus kenaikan jilid)
   parentName?: string;
   parentPhone?: string;
+  scheduledTime?: string; // Waktu ujian spesifik peserta (opsional)
   resultStatus?: 'Belum Diuji' | 'Lulus' | 'Belum Lulus';
   score?: number; // Nilai rata-rata akhir (0 - 100)
   gradeLetter?: string; // 'A', 'A-', 'B+', dst.
@@ -362,6 +368,8 @@ export interface ExamSubmission {
   scheduledTime?: string;
   scheduledRoom?: string;
   examinerName?: string;
+  letterNumber?: string;
+  hijriDateText?: string;
   coordinatorName?: string;
   coordinatorNotes?: string;
   createdAt: string;

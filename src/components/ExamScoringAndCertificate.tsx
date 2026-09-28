@@ -11,7 +11,11 @@ import {
   Save,
   Sparkles,
   UserCheck,
-  X
+  X,
+  Upload,
+  Image as ImageIcon,
+  Sliders,
+  Trash2
 } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
 import {
@@ -25,6 +29,20 @@ import {
 } from '../types';
 import { storageService } from '../services/storageService';
 import { UMMI_JILIDS } from '../data/ummiData';
+import {
+  AlAzhar21CircularEmblem,
+  DirektoratAlAzharSoloBaruEmblem,
+  DirekturAlAzharSignatureSvg,
+  MudirYktnSignatureSvg,
+  Syahadah2025WaveBackground,
+  YktnCircularEmblem,
+  YpiAlAzharShieldEmblem,
+  buildDefaultSyahadahNumber,
+  compressUploadedImage,
+  formatHijriDateArabic,
+  formatHijriDateIndo,
+  formatJuzForSyahadah
+} from './OfficialLetterheadEmblems';
 
 export interface AspectDefinition {
   key: keyof ExamScoreDetails;
@@ -146,8 +164,10 @@ export function buildDefaultCertificateNumber(
   index: number,
   dateStr?: string
 ): string {
-  const code =
-    category === 'kenaikan_jilid' ? 'SYH-UMMI' : category === 'munaqosyah' ? 'SYH-MNQ' : 'SYH-JZY';
+  if (category === 'juziyyah') {
+    return buildDefaultSyahadahNumber(category, index, dateStr);
+  }
+  const code = category === 'kenaikan_jilid' ? 'SYH-UMMI' : 'SYH-MNQ';
   const year = dateStr ? dateStr.slice(0, 4) : new Date().getFullYear().toString();
   const num = String(index + 1).padStart(3, '0');
   return `${num}/${code}/SMPIA21/X/${year}`;
@@ -215,9 +235,156 @@ export const ExamScoringAndCertificate: React.FC<ExamScoringAndCertificateProps>
   const headmasterName = settings.headmasterName || 'Muh Saifuddin, S.Si';
   const headmasterNik = settings.headmasterNik || '01.0125';
 
+  // Complete list of all Ustadz & Ustadzah for Examiner (Penguji) dropdown
+  const allExaminerTeachers = React.useMemo(() => {
+    const fromStorage = storageService.getTeachers();
+    const map = new Map<string, string>();
+    if (coordinatorName) {
+      map.set(coordinatorName.trim().toLowerCase(), coordinatorName.trim());
+    }
+    [...teachers, ...fromStorage].forEach(t => {
+      if (t.name && t.name.trim()) {
+        map.set(t.name.trim().toLowerCase(), t.name.trim());
+      }
+    });
+    return Array.from(map.values());
+  }, [teachers, coordinatorName]);
+
   const scoringSheetRef = useRef<HTMLDivElement>(null);
   const certificateRef = useRef<HTMLDivElement>(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [syahadahTemplateStyle, setSyahadahTemplateStyle] = useState<'bilingual_syahadah' | 'score_table'>(
+    category === 'juziyyah' ? 'bilingual_syahadah' : 'score_table'
+  );
+
+  // Template image & data adjustment states for Syahadah Juziyyah
+  const [syahadahTemplateUrl, setSyahadahTemplateUrl] = useState<string | undefined>(
+    settings.syahadahTemplateUrl
+  );
+  const [syahadahOverlayMode, setSyahadahOverlayMode] = useState<'full_text' | 'data_only'>(
+    settings.syahadahOverlayMode || 'full_text'
+  );
+  const [syahadahTopOffset, setSyahadahTopOffset] = useState<number>(
+    settings.syahadahTopOffset ?? 0
+  );
+  const [syahadahSidePadding, setSyahadahSidePadding] = useState<number>(56);
+  const [hideBuiltInHeaderOnImage, setHideBuiltInHeaderOnImage] = useState<boolean>(true);
+  const [isUploadingSyahadahImg, setIsUploadingSyahadahImg] = useState<boolean>(false);
+  const [showDataAdjustPanel, setShowDataAdjustPanel] = useState<boolean>(false);
+
+  // Quick inline data override inputs for adjusting Syahadah data directly
+  const [customCertNo, setCustomCertNo] = useState<string>('');
+  const [customStudentName, setCustomStudentName] = useState<string>('');
+  const [customJuzText, setCustomJuzText] = useState<string>('');
+  const [customHijriIndo, setCustomHijriIndo] = useState<string>('');
+  const [customHijriArab, setCustomHijriArab] = useState<string>('');
+  const [customLeftSignerName, setCustomLeftSignerName] = useState<string>(
+    "Ma'mun Al Qurthubi Al Hafizh"
+  );
+  const [customLeftSignerRole, setCustomLeftSignerRole] = useState<string>('Mudir YKTN');
+  const [customRightSignerName, setCustomRightSignerName] = useState<string>(
+    'Kartika Dewi A. R., M. Psi., Psikolog'
+  );
+  const [customRightSignerRole, setCustomRightSignerRole] = useState<string>('Direktur');
+
+  React.useEffect(() => {
+    setSyahadahTemplateUrl(settings.syahadahTemplateUrl);
+    if (settings.syahadahOverlayMode) {
+      setSyahadahOverlayMode(settings.syahadahOverlayMode);
+    }
+    if (typeof settings.syahadahTopOffset === 'number') {
+      setSyahadahTopOffset(settings.syahadahTopOffset);
+    }
+  }, [settings.syahadahTemplateUrl, settings.syahadahOverlayMode, settings.syahadahTopOffset]);
+
+  React.useEffect(() => {
+    setSyahadahTemplateStyle(category === 'juziyyah' ? 'bilingual_syahadah' : 'score_table');
+  }, [category]);
+
+  React.useEffect(() => {
+    const p = submission.participants[selectedParticipantIndex] || submission.participants[0];
+    if (!p) return;
+    const rawDate = p.evaluatedAt || submission.scheduledDate || submission.submissionDate;
+    setCustomCertNo(
+      p.certificateNumber ||
+        buildDefaultCertificateNumber(category, selectedParticipantIndex, rawDate)
+    );
+    setCustomStudentName(p.studentName || '');
+    setCustomJuzText(p.jilidOrJuz || 'Juz 30');
+    setCustomHijriIndo(submission.hijriDateText || formatHijriDateIndo(rawDate));
+    setCustomHijriArab(formatHijriDateArabic(rawDate));
+  }, [selectedParticipantIndex, submission, category]);
+
+  const handleUploadSyahadahTemplate = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setIsUploadingSyahadahImg(true);
+    try {
+      const dataUrl = await compressUploadedImage(file, 2000, 1414, 'image/jpeg', 0.88);
+      setSyahadahTemplateUrl(dataUrl);
+      const currentSettings = storageService.getSettings();
+      await storageService.saveSettings({
+        ...currentSettings,
+        syahadahTemplateUrl: dataUrl
+      });
+      onSubmissionUpdated();
+      onShowToast('Gambar template Syahadah Juziyyah berhasil diunggah & disimpan.');
+    } catch (err) {
+      console.error('Failed to upload syahadah template:', err);
+      onShowToast('Gagal mengunggah gambar template Syahadah.');
+    } finally {
+      setIsUploadingSyahadahImg(false);
+    }
+  };
+
+  const handleRemoveSyahadahTemplate = async () => {
+    setSyahadahTemplateUrl(undefined);
+    const currentSettings = storageService.getSettings();
+    await storageService.saveSettings({
+      ...currentSettings,
+      syahadahTemplateUrl: ''
+    });
+    onSubmissionUpdated();
+    onShowToast('Gambar template Syahadah dihapus (kembali ke desain standar).');
+  };
+
+  const handleSaveOverlaySettings = async (
+    nextMode: 'full_text' | 'data_only',
+    nextOffset: number
+  ) => {
+    setSyahadahOverlayMode(nextMode);
+    setSyahadahTopOffset(nextOffset);
+    const currentSettings = storageService.getSettings();
+    await storageService.saveSettings({
+      ...currentSettings,
+      syahadahOverlayMode: nextMode,
+      syahadahTopOffset: nextOffset
+    });
+  };
+
+  const handleSaveQuickSyahadahData = async () => {
+    const p = submission.participants[selectedParticipantIndex];
+    if (!p) return;
+    const updatedParticipants = submission.participants.map((item, idx) =>
+      idx === selectedParticipantIndex
+        ? {
+            ...item,
+            studentName: customStudentName.trim() || item.studentName,
+            jilidOrJuz: customJuzText.trim() || item.jilidOrJuz,
+            certificateNumber: customCertNo.trim() || item.certificateNumber
+          }
+        : item
+    );
+    const updatedSubmission: ExamSubmission = {
+      ...submission,
+      hijriDateText: customHijriIndo.trim() || submission.hijriDateText,
+      participants: updatedParticipants
+    };
+    await storageService.saveExamSubmission(updatedSubmission);
+    onSubmissionUpdated();
+    onShowToast('Data Syahadah santri berhasil disesuaikan & disimpan.');
+  };
 
   // ============================================================================
   // MODAL INPUT NILAI PENGUJI PER PESERTA
@@ -244,7 +411,11 @@ export const ExamScoringAndCertificate: React.FC<ExamScoringAndCertificateProps>
     setAsp3(part.scoreDetails?.aspect3 ?? 90);
     setAsp4(part.scoreDetails?.aspect4 ?? 92);
     setPromotedToJilid(part.promotedToJilid || suggestNextUmmiJilid(part.jilidOrJuz));
-    setExaminerNameInput(part.examinerName || submission.examinerName || coordinatorName);
+    setExaminerNameInput(
+      category === 'kenaikan_jilid'
+        ? coordinatorName
+        : part.examinerName || submission.examinerName || coordinatorName
+    );
     setExaminerNotesInput(
       part.examinerNotes ||
         (category === 'kenaikan_jilid'
@@ -294,7 +465,10 @@ export const ExamScoringAndCertificate: React.FC<ExamScoringAndCertificateProps>
         gradeLetter: liveEvaluation.gradeLetter,
         predicate: liveEvaluation.predicate,
         resultStatus: liveEvaluation.resultStatus,
-        examinerName: examinerNameInput.trim() || coordinatorName,
+        examinerName:
+          category === 'kenaikan_jilid'
+            ? coordinatorName
+            : examinerNameInput.trim() || coordinatorName,
         examinerNotes: examinerNotesInput.trim(),
         certificateNumber:
           certNumberInput.trim() ||
@@ -626,6 +800,13 @@ ${coordinatorName}`;
                     </span>
                   </div>
                   <div className="flex">
+                    <span className="w-36 font-semibold text-slate-700">Waktu Ujian</span>
+                    <span className="mr-2">:</span>
+                    <span className="font-bold text-slate-950">
+                      {submission.scheduledTime || '07.30 - 09.30 WIB'}
+                    </span>
+                  </div>
+                  <div className="flex">
                     <span className="w-36 font-semibold text-slate-700">Musyrif Pengaju</span>
                     <span className="mr-2">:</span>
                     <span className="font-bold text-slate-950">{submission.teacherName}</span>
@@ -643,7 +824,7 @@ ${coordinatorName}`;
                     <span className="w-36 font-semibold text-slate-700">Tempat Pelaksanaan</span>
                     <span className="mr-2">:</span>
                     <span className="font-bold text-slate-950">
-                      {submission.scheduledRoom || 'Masjid / Ruang Ujian SMPI Al Azhar 21'}
+                      {submission.scheduledRoom || 'Kampus SMP Islam Al Azhar 21 Solo Baru'}
                     </span>
                   </div>
                 </div>
@@ -870,6 +1051,24 @@ ${coordinatorName}`;
 
               {currentParticipant && (
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <select
+                    value={syahadahTemplateStyle}
+                    onChange={e =>
+                      setSyahadahTemplateStyle(
+                        e.target.value as 'bilingual_syahadah' | 'score_table'
+                      )
+                    }
+                    className="px-2.5 py-2 rounded-lg bg-amber-50 border border-amber-300 text-amber-950 text-xs font-bold cursor-pointer"
+                    title="Pilih Desain Format Syahadah / Sertifikat"
+                  >
+                    <option value="bilingual_syahadah">
+                      Format Syahadah 2 Bahasa (Sesuai Template Syahadah)
+                    </option>
+                    <option value="score_table">
+                      Format Sertifikat + Tabel Rincian Nilai
+                    </option>
+                  </select>
+
                   {!isWali && (
                     <button
                       type="button"
@@ -877,7 +1076,7 @@ ${coordinatorName}`;
                       className="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
-                      <span>Edit Nilai / No. Sertifikat</span>
+                      <span>Edit Nilai / No. Syahadah</span>
                     </button>
                   )}
 
@@ -887,7 +1086,7 @@ ${coordinatorName}`;
                     onClick={() =>
                       handleDownloadPdf(
                         certificateRef,
-                        `Sertifikat_${category}_${currentParticipant.studentName.replace(/\s+/g, '_')}.pdf`,
+                        `Syahadah_${category}_${currentParticipant.studentName.replace(/\s+/g, '_')}.pdf`,
                         'landscape'
                       )
                     }
@@ -898,7 +1097,7 @@ ${coordinatorName}`;
                     ) : (
                       <Download className="w-3.5 h-3.5 text-[#D4AF37]" />
                     )}
-                    <span>Download PDF Sertifikat</span>
+                    <span>Download PDF Syahadah</span>
                   </button>
 
                   <button
@@ -926,238 +1125,830 @@ ${coordinatorName}`;
             </div>
           </div>
 
-          {/* PRINTABLE A4 LANDSCAPE CERTIFICATE (SERTIFIKAT NAIK JILID / MUNAQOSYAH / JUZIYYAH) */}
+          {/* ===================================================================== */}
+          {/* PANEL UPLOAD GAMBAR SYAHADAH JUZIYYAH & PENYESUAIAN DATA              */}
+          {/* ===================================================================== */}
+          {!isWali && syahadahTemplateStyle === 'bilingual_syahadah' && (
+            <div className="bg-amber-50/70 rounded-2xl border border-amber-200/90 p-4 space-y-3.5 no-print">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div className="flex items-start gap-2.5">
+                  <ImageIcon className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-extrabold text-amber-950 uppercase tracking-wider">
+                      Template Gambar Syahadah Juziyyah Tahfizh & Penyesuaian Data
+                    </h4>
+                    <p className="text-[11px] text-amber-800">
+                      Unggah gambar desain/blangko Syahadah Juziyyah (JPG/PNG landscape), lalu sesuaikan data santri dan posisi teks di atas gambar.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer transition-all">
+                    {isUploadingSyahadahImg ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="w-3.5 h-3.5" />
+                    )}
+                    <span>
+                      {syahadahTemplateUrl
+                        ? 'Ganti Gambar Syahadah'
+                        : 'Upload Gambar Syahadah'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleUploadSyahadahTemplate}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {syahadahTemplateUrl && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveSyahadahTemplate}
+                      className="px-3 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Hapus Gambar</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowDataAdjustPanel(prev => !prev)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 cursor-pointer transition-all ${
+                      showDataAdjustPanel
+                        ? 'bg-[#1E293B] text-[#D4AF37] border-[#1E293B]'
+                        : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-300'
+                    }`}
+                  >
+                    <Sliders className="w-3.5 h-3.5" />
+                    <span>Sesuaikan Data & Posisi</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Controls when Syahadah image is uploaded or when user opens Data & Position panel */}
+              {(syahadahTemplateUrl || showDataAdjustPanel) && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 pt-2 border-t border-amber-200/80 text-xs">
+                  {/* Left box: Quick Data Customization */}
+                  <div className="bg-white rounded-xl border border-amber-200 p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-slate-800">
+                        1. Sesuaikan Data Syahadah ({currentParticipant?.studentName})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleSaveQuickSyahadahData}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Save className="w-3 h-3" />
+                        <span>Simpan Data</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                          Nama Santri di Syahadah:
+                        </label>
+                        <input
+                          type="text"
+                          value={customStudentName}
+                          onChange={e => setCustomStudentName(e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-bold text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                          Materi Juz (Otomatis Arab & Indo):
+                        </label>
+                        <input
+                          type="text"
+                          value={customJuzText}
+                          onChange={e => setCustomJuzText(e.target.value)}
+                          placeholder="Contoh: Juz 30"
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-bold text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                          Penandatangan Kiri (YKTN):
+                        </label>
+                        <input
+                          type="text"
+                          value={customLeftSignerName}
+                          onChange={e => setCustomLeftSignerName(e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-semibold text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                          Penandatangan Kanan (Direktur Al Azhar):
+                        </label>
+                        <input
+                          type="text"
+                          value={customRightSignerName}
+                          onChange={e => setCustomRightSignerName(e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-semibold text-slate-900"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right box: Template Overlay & Position Adjustment */}
+                  <div className="bg-white rounded-xl border border-amber-200 p-3.5 space-y-2.5">
+                    <span className="font-extrabold text-slate-800 block">
+                      2. Pengaturan Tampilan & Posisi Data di Atas Gambar Template
+                    </span>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleSaveOverlaySettings('full_text', syahadahTopOffset)}
+                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border cursor-pointer ${
+                          syahadahOverlayMode === 'full_text'
+                            ? 'bg-amber-600 text-white border-amber-600'
+                            : 'bg-slate-50 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        Desain Lengkap Syahadah (2 Bahasa)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveOverlaySettings('data_only', syahadahTopOffset)}
+                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border cursor-pointer ${
+                          syahadahOverlayMode === 'data_only'
+                            ? 'bg-amber-600 text-white border-amber-600'
+                            : 'bg-slate-50 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        Hanya Isi Titik-Titik Data (Jika Upload Gambar Syahadah)
+                      </button>
+                    </div>
+
+                    {syahadahTemplateUrl && syahadahOverlayMode === 'full_text' && (
+                      <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={hideBuiltInHeaderOnImage}
+                          onChange={e => setHideBuiltInHeaderOnImage(e.target.checked)}
+                          className="rounded border-slate-300"
+                        />
+                        <span>
+                          Gunakan Kop, Logo & Bingkai dari Gambar Upload (Sembunyikan Logo/Bingkai Bawaan)
+                        </span>
+                      </label>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] font-bold text-slate-600 mb-0.5">
+                          <span>Geser Posisi Data (Atas / Bawah):</span>
+                          <span className="font-mono text-amber-800">{syahadahTopOffset}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={-120}
+                          max={200}
+                          step={2}
+                          value={syahadahTopOffset}
+                          onChange={e =>
+                            handleSaveOverlaySettings(syahadahOverlayMode, Number(e.target.value))
+                          }
+                          className="w-full accent-amber-600 cursor-pointer"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] font-bold text-slate-600 mb-0.5">
+                          <span>Margin Samping Kiri–Kanan:</span>
+                          <span className="font-mono text-amber-800">{syahadahSidePadding}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={24}
+                          max={140}
+                          step={4}
+                          value={syahadahSidePadding}
+                          onChange={e => setSyahadahSidePadding(Number(e.target.value))}
+                          className="w-full accent-amber-600 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* PRINTABLE A4 LANDSCAPE CERTIFICATE (SYAHADAH JUZIYYAH 2 BAHASA / SERTIFIKAT) */}
           {currentParticipant && (
             <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-4 sm:p-8 flex justify-center overflow-x-auto print:p-0 print:border-none print:shadow-none">
-              <div
-                ref={certificateRef}
-                className="printable-report-area w-full max-w-[980px] bg-[#FFFDF7] text-slate-950 relative p-3 sm:p-4"
-                style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}
-              >
-                {/* Outer Royal Navy & Gold Double Frame */}
-                <div className="border-[6px] border-[#1E293B] p-1.5 bg-[#FFFDF7]">
-                  <div className="border-2 border-[#D4AF37] p-5 sm:p-8 relative space-y-4">
-                    {/* Corner Ornaments */}
-                    <div className="w-5 h-5 border-t-4 border-l-4 border-[#D4AF37] absolute top-2 left-2" />
-                    <div className="w-5 h-5 border-t-4 border-r-4 border-[#D4AF37] absolute top-2 right-2" />
-                    <div className="w-5 h-5 border-b-4 border-l-4 border-[#D4AF37] absolute bottom-2 left-2" />
-                    <div className="w-5 h-5 border-b-4 border-r-4 border-[#D4AF37] absolute bottom-2 right-2" />
+              {syahadahTemplateStyle === 'bilingual_syahadah' ? (
+                /* ===================================================================== */
+                /* FORMAT SYAHADAH JUZIYYAH LANDSCAPE (SESUAI GAMBAR SYAHADAH 2025 FIX)  */
+                /* ===================================================================== */
+                <div
+                  ref={certificateRef}
+                  className="printable-report-area w-full max-w-[1080px] bg-white text-slate-950 relative overflow-hidden shadow-xs"
+                  style={{
+                    fontFamily: "Arial, Helvetica, sans-serif",
+                    aspectRatio: '297 / 210'
+                  }}
+                >
+                  {/* Background Layer: Either Uploaded Image OR Exact Vector Wave Replica of Syahadah 2025 FIX */}
+                  {syahadahTemplateUrl ? (
+                    <img
+                      src={syahadahTemplateUrl}
+                      alt="Template Syahadah Juziyyah"
+                      className="absolute inset-0 w-full h-full object-fill pointer-events-none select-none z-0"
+                    />
+                  ) : (
+                    <Syahadah2025WaveBackground />
+                  )}
 
-                    {/* Top Header: Institution & Bismillah */}
-                    <div className="text-center space-y-1">
-                      <p
-                        className="text-xl sm:text-2xl font-bold text-[#1E293B]"
-                        style={{ fontFamily: "'Traditional Arabic', 'Amiri', serif" }}
+                  {(() => {
+                    const displayStudentName =
+                      customStudentName.trim() || currentParticipant.studentName;
+                    const displayJuzRaw =
+                      customJuzText.trim() || currentParticipant.jilidOrJuz || 'Juz 30';
+                    const juzFormatted = formatJuzForSyahadah(displayJuzRaw);
+                    const targetDate =
+                      currentParticipant.evaluatedAt ||
+                      submission.scheduledDate ||
+                      submission.submissionDate;
+                    const hijriArab =
+                      customHijriArab.trim() || formatHijriDateArabic(targetDate);
+                    const masehiIndo = formatIndoDate(targetDate);
+
+                    /* ================================================================= */
+                    /* MODE 1: HANYA ISI TITIK-TITIK DI ATAS GAMBAR SYAHADAH 2025 FIX    */
+                    /* ================================================================= */
+                    if (syahadahTemplateUrl && syahadahOverlayMode === 'data_only') {
+                      return (
+                        <div
+                          className="relative z-10 w-full h-full"
+                          style={{
+                            transform: syahadahTopOffset
+                              ? `translateY(${syahadahTopOffset}px)`
+                              : undefined
+                          }}
+                        >
+                          {/* 1. Left Student Name (above dotted line under "menyatakan bahwasannya murid :") */}
+                          <div
+                            className="absolute font-extrabold text-slate-950 text-sm sm:text-base md:text-[17px] tracking-wide"
+                            style={{
+                              top: '55.2%',
+                              left: '3.1%',
+                              width: '40%'
+                            }}
+                          >
+                            {displayStudentName}
+                          </div>
+
+                          {/* 2. Left Juz Number (on "Telah menghafalkan : Juz ..... dari Al Qur'anil Karim") */}
+                          <div
+                            className="absolute font-extrabold text-slate-950 text-xs sm:text-sm md:text-[15px] text-center bg-white/80 px-1 rounded-xs"
+                            style={{
+                              top: '59.8%',
+                              left: '18.6%',
+                              minWidth: '3.8%'
+                            }}
+                          >
+                            {juzFormatted.juzNumberIndo}
+                          </div>
+
+                          {/* 3. Left Date (on "Sukoharjo, ..........................") */}
+                          <div
+                            className="absolute font-semibold text-slate-950 text-[11px] sm:text-xs md:text-[13px] bg-white/80 px-1"
+                            style={{
+                              top: '76.8%',
+                              left: '9.6%'
+                            }}
+                          >
+                            {masehiIndo}
+                          </div>
+
+                          {/* 4. Right Student Name (above dotted line under "بأن الطالب/الطالبة:") */}
+                          <div
+                            className="absolute font-extrabold text-slate-950 text-sm sm:text-base md:text-[17px] text-right"
+                            style={{
+                              top: '57.6%',
+                              right: '2.6%',
+                              width: '38%'
+                            }}
+                          >
+                            {displayStudentName}
+                          </div>
+
+                          {/* 5. Right Juz Number (on "قد حفظ : الجزء ..... من القرآن الكريم") */}
+                          <div
+                            dir="rtl"
+                            className="absolute font-extrabold text-slate-950 text-sm sm:text-base md:text-[17px] text-center bg-white/80 px-1 rounded-xs"
+                            style={{
+                              top: '63.8%',
+                              right: '11.0%',
+                              minWidth: '3.8%',
+                              fontFamily: "'Traditional Arabic', 'Amiri', serif"
+                            }}
+                          >
+                            {juzFormatted.juzNumberArabic}
+                          </div>
+
+                          {/* 6. Right Date (on "سوكاهارجو, ..........................") */}
+                          <div
+                            dir="rtl"
+                            className="absolute font-bold text-slate-950 text-xs sm:text-sm md:text-[14px] bg-white/80 px-1"
+                            style={{
+                              top: '76.8%',
+                              right: '7.2%',
+                              fontFamily: "'Traditional Arabic', 'Amiri', serif"
+                            }}
+                          >
+                            {hijriArab}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    /* ================================================================= */
+                    /* MODE 2: REPLIKA LENGKAP LANDSCAPE PERSIS SYAHADAH 2025 FIX        */
+                    /* ================================================================= */
+                    const showTopHeaderAndLogos = !(
+                      syahadahTemplateUrl && hideBuiltInHeaderOnImage
+                    );
+
+                    return (
+                      <div
+                        className="relative z-10 w-full h-full flex flex-col justify-between py-4 sm:py-6"
+                        style={{
+                          paddingLeft: `${syahadahSidePadding ? Math.max(24, syahadahSidePadding - 20) : 32}px`,
+                          paddingRight: `${syahadahSidePadding ? Math.max(24, syahadahSidePadding - 20) : 32}px`,
+                          transform: syahadahTopOffset
+                            ? `translateY(${syahadahTopOffset}px)`
+                            : undefined
+                        }}
                       >
-                        بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيْمِ
-                      </p>
-                      <p className="text-[11px] sm:text-xs font-sans font-extrabold uppercase tracking-[0.2em] text-emerald-900">
-                        YAYASAN PESANTREN ISLAM AL AZHAR · PROGRAM TAHFIZH AL-QUR&apos;AN & METODE UMMI
-                      </p>
-                      <h2 className="text-base sm:text-lg font-sans font-black uppercase tracking-wider text-[#1E293B]">
-                        {settings.schoolName || 'SMP ISLAM AL AZHAR 21 SOLO BARU'}
-                      </h2>
-                    </div>
+                        {/* TOP SECTION: TWO LOGOS + شهادة + Tahfizhul Qur'an + AYAH & HADITH */}
+                        {showTopHeaderAndLogos ? (
+                          <div className="text-center space-y-1">
+                            {/* Dual Circular Logos Centered at Top */}
+                            <div className="flex items-center justify-center gap-3 sm:gap-4 pt-0.5">
+                              <YktnCircularEmblem size={88} />
+                              <DirektoratAlAzharSoloBaruEmblem
+                                customUrl={settings.customLogoUrl}
+                                size={88}
+                              />
+                            </div>
 
-                    {/* Certificate Title Block */}
-                    <div className="text-center space-y-1 pt-1">
-                      <p
-                        className="text-lg sm:text-xl font-bold text-[#8C7015]"
-                        style={{ fontFamily: "'Traditional Arabic', 'Amiri', serif" }}
-                      >
-                        {certArabicTitle}
-                      </p>
-                      <h1 className="text-xl sm:text-2xl font-black uppercase tracking-widest text-[#1E293B] border-b-2 border-[#D4AF37] inline-block pb-1 px-6">
-                        {certHeaderTitle}
-                      </h1>
-                      <p className="text-xs font-sans font-semibold text-slate-600 block pt-0.5">
-                        Nomor:{' '}
-                        {currentParticipant.certificateNumber ||
-                          buildDefaultCertificateNumber(
-                            category,
-                            selectedParticipantIndex,
-                            submission.scheduledDate || submission.submissionDate
-                          )}
-                      </p>
-                    </div>
+                            {/* Golden Arabic Title: شهادة */}
+                            <div className="pt-1">
+                              <p
+                                className="text-5xl sm:text-6xl font-bold leading-none select-none"
+                                style={{
+                                  color: '#C9A449',
+                                  fontFamily: "'Traditional Arabic', 'Amiri', 'Scheherazade New', serif",
+                                  textShadow: '0 1px 1px rgba(0,0,0,0.08)'
+                                }}
+                              >
+                                شهادة
+                              </p>
+                            </div>
 
-                    {/* Recipient Name & Achievement Statement */}
-                    <div className="text-center space-y-2 py-1">
-                      <p className="text-xs sm:text-sm italic text-slate-700">
-                        Alhamdulillahirabbil&apos;alamin, Sertifikat Kelulusan ini diberikan kepada ananda:
-                      </p>
-                      <div className="py-1">
-                        <h3 className="text-2xl sm:text-3xl font-black text-[#1E293B] tracking-wide underline decoration-[#D4AF37] decoration-2 underline-offset-8">
-                          {currentParticipant.studentName}
-                        </h3>
-                        <p className="text-xs font-sans font-bold text-slate-700 mt-2">
-                          NIS: {currentParticipant.studentNis || '-'} &nbsp;·&nbsp; Kelas:{' '}
-                          {currentParticipant.className} &nbsp;·&nbsp; Tahun Ajaran:{' '}
-                          {settings.academicYear}
+                            {/* Subtitle: Tahfizhul Qur'an */}
+                            <h1
+                              className="text-2xl sm:text-[28px] italic font-normal text-slate-950 tracking-wide pt-0.5"
+                              style={{
+                                fontFamily:
+                                  "'Lucida Calligraphy', 'Monotype Corsiva', 'Apple Chancery', 'Georgia', serif"
+                              }}
+                            >
+                              Tahfizhul Qur&apos;an
+                            </h1>
+
+                            {/* Two Lines of Arabic Qur'an Verse & Hadith */}
+                            <div
+                              dir="rtl"
+                              className="pt-1 space-y-0.5 text-slate-950"
+                              style={{ fontFamily: "'Traditional Arabic', 'Amiri', serif" }}
+                            >
+                              <p className="text-base sm:text-[19px] font-bold leading-snug">
+                                قال الله ﷻ : وَرَتِّلِ الْقُرْآنَ تَرْتِيلاً{' '}
+                                <span className="text-xs sm:text-sm font-normal">
+                                  (سورة المزّمّل: ٥)
+                                </span>
+                              </p>
+                              <p className="text-xs sm:text-[14px] font-semibold leading-snug">
+                                قال النبي ﷺ : خَيْرُكُمْ مَنْ تَعَلَّمَ الْقُرْآنَ وَعَلَّمَهُ{' '}
+                                <span className="text-[11px] font-normal">(رواه البخاري)</span>
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="h-48 sm:h-56" />
+                        )}
+
+                        {/* MIDDLE SECTION: TWO COLUMNS (LEFT INDONESIAN | RIGHT ARABIC) */}
+                        <div className="grid grid-cols-2 gap-6 sm:gap-10 items-start pt-1">
+                          {/* LEFT COLUMN: INDONESIAN (Left-Aligned) */}
+                          <div className="text-left text-[11.5px] sm:text-[13px] leading-[1.48] text-slate-950 space-y-1.5">
+                            <div className="font-bold text-[12.5px] sm:text-[14px] leading-snug">
+                              <p>Direktorat Pendidikan Sekolah Islam Al Azhar Solo Baru</p>
+                              <p>menyatakan bahwasannya murid :</p>
+                            </div>
+
+                            {/* Student Name on Dotted Line */}
+                            <div className="pt-2 pb-1">
+                              <div className="inline-block min-w-[250px] sm:min-w-[310px] border-b-2 border-dotted border-slate-900 pb-0.5">
+                                <span className="font-extrabold text-sm sm:text-[16px] text-slate-950 tracking-wide">
+                                  {displayStudentName}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Telah menghafalkan : Juz ..... dari Al Qur'anil Karim */}
+                            <p className="font-bold text-[12.5px] sm:text-[14px] pt-0.5">
+                              Telah menghafalkan : Juz{' '}
+                              <span className="inline-block border-b-2 border-dotted border-slate-900 px-2 font-black text-slate-950">
+                                {juzFormatted.juzNumberIndo}
+                              </span>{' '}
+                              dari Al Qur&apos;anil Karim
+                            </p>
+
+                            {/* Closing Indonesian Paragraph */}
+                            <div className="text-[11px] sm:text-[12.5px] leading-[1.45] text-slate-900 space-y-0.5">
+                              <p>
+                                maka Direktorat Pendidikan Sekolah Islam Al Azhar Solo Baru
+                                memutuskan
+                              </p>
+                              <p>dan menyerahkan syahadah ini kepada yang bersangkutan</p>
+                              <p>
+                                Kami berharap ananda selalu bertaqwa kepada Allah dan berkomitmen
+                                kepada
+                              </p>
+                              <p>
+                                Al Qur&apos;an untuk selalu membacanya sepanjang malam dan ujung
+                                siang
+                              </p>
+                              <p>
+                                serta mengamalkan Al Qur&apos;an dan mengajarkannya kepada yang
+                                lainnya
+                              </p>
+                              <p>
+                                hanya semata-mata mencari ridho Allah{' '}
+                                <em className="italic">Subhanahu Wa Ta&apos;ala.</em>
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* RIGHT COLUMN: ARABIC (Right-Aligned, RTL) */}
+                          <div
+                            dir="rtl"
+                            className="text-right text-slate-950 space-y-1.5"
+                            style={{
+                              fontFamily: "'Traditional Arabic', 'Amiri', 'Scheherazade New', serif"
+                            }}
+                          >
+                            <div className="leading-snug">
+                              <p className="text-lg sm:text-[22px] font-semibold">
+                                فتشهد مديرية التعليم الأزهر صولوبارو
+                              </p>
+                              <p className="text-sm sm:text-[16px] font-semibold">
+                                بأنّ الطالب/الطالبة:
+                              </p>
+                            </div>
+
+                            {/* Student Name on Dotted Line (Right-Aligned) */}
+                            <div className="pt-2 pb-1 text-right" dir="ltr">
+                              <div className="inline-block min-w-[230px] sm:min-w-[280px] border-b-2 border-dotted border-slate-900 pb-0.5 text-right">
+                                <span
+                                  className="font-extrabold text-sm sm:text-[16px] text-slate-950 tracking-wide"
+                                  style={{ fontFamily: "Arial, Helvetica, sans-serif" }}
+                                >
+                                  {displayStudentName}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* قد حفظ : الجزء ..... من القرآن الكريم */}
+                            <p className="font-bold text-base sm:text-[19px] pt-0.5">
+                              قد حفظ : الجزء{' '}
+                              <span className="inline-block border-b-2 border-dotted border-slate-900 px-2 font-extrabold text-slate-950">
+                                {juzFormatted.juzNumberArabic}
+                              </span>{' '}
+                              من القرآن الكريم
+                            </p>
+
+                            {/* Closing Arabic Paragraph */}
+                            <div className="text-sm sm:text-[16px] leading-[1.55] text-slate-900 font-medium space-y-0.5">
+                              <p>
+                                وبناءا على ذالك قررت مديرية التعليم الأزهر صولوبارو ومنحته هذه
+                                الشهادة
+                              </p>
+                              <p>
+                                و أوصته بتقوى الله عز و جل و تعاهد القرآن الكريم بتلاوته آناء الليل
+                                و أطراف النهار
+                              </p>
+                              <p>و عمله و تعليمه غيره ابتغاء وجه الله سبحانه وتعالى.</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* BOTTOM SECTION: DATES (LEFT & RIGHT) + SIGNATURES (YKTN & DIREKTORAT AL AZHAR) */}
+                        <div className="pt-1 space-y-1">
+                          {/* Date Row */}
+                          <div className="flex items-center justify-between text-xs sm:text-[13px] text-slate-950 px-2">
+                            <div>
+                              <span>Sukoharjo, </span>
+                              <span className="border-b border-dotted border-slate-800 pb-0.5 px-2 font-semibold">
+                                {masehiIndo}
+                              </span>
+                            </div>
+                            <div
+                              dir="rtl"
+                              style={{ fontFamily: "'Traditional Arabic', 'Amiri', serif" }}
+                              className="text-sm sm:text-[15px]"
+                            >
+                              <span>سوكاهارجو، </span>
+                              <span className="border-b border-dotted border-slate-800 pb-0.5 px-2 font-bold">
+                                {hijriArab}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Signatures Row */}
+                          <div className="grid grid-cols-2 gap-8 text-center pt-0.5 pb-2">
+                            {/* Left Signature: Yayasan Karantina Tahfizh Nasional */}
+                            <div className="flex flex-col items-center">
+                              <p className="font-bold text-xs sm:text-[14px] text-slate-950">
+                                Yayasan Karantina Tahfizh Nasional
+                              </p>
+                              <div className="h-12 sm:h-14 flex items-center justify-center my-0.5">
+                                <MudirYktnSignatureSvg className="h-12 sm:h-14" />
+                              </div>
+                              <p className="font-bold text-xs sm:text-[13px] underline text-slate-950 leading-tight">
+                                {customLeftSignerName}
+                              </p>
+                              <p className="font-bold text-[10px] sm:text-[11px] text-slate-900 leading-tight">
+                                {customLeftSignerRole}
+                              </p>
+                            </div>
+
+                            {/* Right Signature: Direktorat Pendidikan Al Azhar Solo Baru */}
+                            <div className="flex flex-col items-center">
+                              <p className="font-bold text-xs sm:text-[14px] text-slate-950">
+                                Direktorat Pendidikan Al Azhar Solo Baru
+                              </p>
+                              <div className="h-12 sm:h-14 flex items-center justify-center my-0.5">
+                                {settings.headmasterSignatureUrl ? (
+                                  <img
+                                    src={settings.headmasterSignatureUrl}
+                                    alt="TTD Direktur"
+                                    className="h-12 sm:h-14 object-contain"
+                                  />
+                                ) : (
+                                  <DirekturAlAzharSignatureSvg className="h-12 sm:h-14" />
+                                )}
+                              </div>
+                              <p className="font-bold text-xs sm:text-[13px] underline text-slate-950 leading-tight">
+                                {customRightSignerName}
+                              </p>
+                              <p className="font-bold text-[10px] sm:text-[11px] text-slate-900 leading-tight">
+                                {customRightSignerRole}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              ) : (
+                /* ===================================================================== */
+                /* FORMAT SERTIFIKAT + TABEL RINCIAN NILAI (KENAIKAN JILID / MUNAQOSYAH) */
+                /* ===================================================================== */
+                <div
+                  ref={certificateRef}
+                  className="printable-report-area w-full max-w-[980px] bg-[#FFFDF7] text-slate-950 relative p-3 sm:p-4"
+                  style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}
+                >
+                  {/* Outer Royal Navy & Gold Double Frame */}
+                  <div className="border-[6px] border-[#1E293B] p-1.5 bg-[#FFFDF7]">
+                    <div className="border-2 border-[#D4AF37] p-5 sm:p-8 relative space-y-4">
+                      {/* Corner Ornaments */}
+                      <div className="w-5 h-5 border-t-4 border-l-4 border-[#D4AF37] absolute top-2 left-2" />
+                      <div className="w-5 h-5 border-t-4 border-r-4 border-[#D4AF37] absolute top-2 right-2" />
+                      <div className="w-5 h-5 border-b-4 border-l-4 border-[#D4AF37] absolute bottom-2 left-2" />
+                      <div className="w-5 h-5 border-b-4 border-r-4 border-[#D4AF37] absolute bottom-2 right-2" />
+
+                      {/* Top Header: Institution & Bismillah */}
+                      <div className="text-center space-y-1">
+                        <p
+                          className="text-xl sm:text-2xl font-bold text-[#1E293B]"
+                          style={{ fontFamily: "'Traditional Arabic', 'Amiri', serif" }}
+                        >
+                          بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيْمِ
+                        </p>
+                        <p className="text-[11px] sm:text-xs font-sans font-extrabold uppercase tracking-[0.2em] text-emerald-900">
+                          YAYASAN PESANTREN ISLAM AL AZHAR · PROGRAM TAHFIZH AL-QUR&apos;AN & METODE UMMI
+                        </p>
+                        <h2 className="text-base sm:text-lg font-sans font-black uppercase tracking-wider text-[#1E293B]">
+                          {settings.schoolName || 'SMP ISLAM AL AZHAR 21 SOLO BARU'}
+                        </h2>
+                      </div>
+
+                      {/* Certificate Title Block */}
+                      <div className="text-center space-y-1 pt-1">
+                        <p
+                          className="text-lg sm:text-xl font-bold text-[#8C7015]"
+                          style={{ fontFamily: "'Traditional Arabic', 'Amiri', serif" }}
+                        >
+                          {certArabicTitle}
+                        </p>
+                        <h1 className="text-xl sm:text-2xl font-black uppercase tracking-widest text-[#1E293B] border-b-2 border-[#D4AF37] inline-block pb-1 px-6">
+                          {certHeaderTitle}
+                        </h1>
+                        <p className="text-xs font-sans font-semibold text-slate-600 block pt-0.5">
+                          Nomor:{' '}
+                          {currentParticipant.certificateNumber ||
+                            buildDefaultCertificateNumber(
+                              category,
+                              selectedParticipantIndex,
+                              submission.scheduledDate || submission.submissionDate
+                            )}
                         </p>
                       </div>
 
-                      <p className="text-xs sm:text-sm text-slate-800 max-w-2xl mx-auto leading-relaxed font-sans">
-                        Telah mengikuti dan dinyatakan{' '}
-                        <strong className="text-emerald-800 uppercase">
-                          {currentParticipant.resultStatus === 'Belum Lulus'
-                            ? 'TELAH MENGIKUTI'
-                            : 'LULUS'}
-                        </strong>{' '}
-                        dalam pelaksanaan{' '}
-                        <strong className="text-slate-950">
-                          {category === 'kenaikan_jilid'
-                            ? `Ujian Kenaikan Jilid Metode Ummi (${currentParticipant.jilidOrJuz})`
-                            : category === 'munaqosyah'
-                            ? `Ujian Munaqosyah Al-Qur'an & Metode Ummi (${currentParticipant.jilidOrJuz})`
-                            : `Ujian Tasmi' Hafalan Al-Qur'an Juziyyah (${currentParticipant.jilidOrJuz})`}
-                        </strong>
-                        {category === 'kenaikan_jilid' && (
-                          <>
-                            {' '}
-                            dan berhak naik ke tingkat{' '}
-                            <strong className="text-[#8C7015] underline">
-                              {currentParticipant.promotedToJilid ||
-                                suggestNextUmmiJilid(currentParticipant.jilidOrJuz)}
-                            </strong>
-                          </>
-                        )}{' '}
-                        dengan rincian perolehan nilai sebagai berikut:
-                      </p>
-                    </div>
+                      {/* Recipient Name & Achievement Statement */}
+                      <div className="text-center space-y-2 py-1">
+                        <p className="text-xs sm:text-sm italic text-slate-700">
+                          Alhamdulillahirabbil&apos;alamin, Sertifikat Kelulusan ini diberikan kepada ananda:
+                        </p>
+                        <div className="py-1">
+                          <h3 className="text-2xl sm:text-3xl font-black text-[#1E293B] tracking-wide underline decoration-[#D4AF37] decoration-2 underline-offset-8">
+                            {currentParticipant.studentName}
+                          </h3>
+                          <p className="text-xs font-sans font-bold text-slate-700 mt-2">
+                            NIS: {currentParticipant.studentNis || '-'} &nbsp;·&nbsp; Kelas:{' '}
+                            {currentParticipant.className} &nbsp;·&nbsp; Tahun Ajaran:{' '}
+                            {settings.academicYear}
+                          </p>
+                        </div>
 
-                    {/* Score Breakdown Table Embedded Inside Certificate */}
-                    <div className="max-w-2xl mx-auto font-sans">
-                      <table className="w-full border border-[#1E293B] border-collapse text-xs">
-                        <thead>
-                          <tr className="bg-[#1E293B] text-white font-bold text-center">
-                            {aspects.map(asp => (
-                              <th
-                                key={asp.key}
-                                className="py-1.5 px-2 border-r border-slate-600 text-[11px]"
-                              >
-                                {asp.shortLabel}
+                        <p className="text-xs sm:text-sm text-slate-800 max-w-2xl mx-auto leading-relaxed font-sans">
+                          Telah mengikuti dan dinyatakan{' '}
+                          <strong className="text-emerald-800 uppercase">
+                            {currentParticipant.resultStatus === 'Belum Lulus'
+                              ? 'TELAH MENGIKUTI'
+                              : 'LULUS'}
+                          </strong>{' '}
+                          dalam pelaksanaan{' '}
+                          <strong className="text-slate-950">
+                            {category === 'kenaikan_jilid'
+                              ? `Ujian Kenaikan Jilid Metode Ummi (${currentParticipant.jilidOrJuz})`
+                              : category === 'munaqosyah'
+                              ? `Ujian Munaqosyah Al-Qur'an & Metode Ummi (${currentParticipant.jilidOrJuz})`
+                              : `Ujian Tasmi' Hafalan Al-Qur'an Juziyyah (${currentParticipant.jilidOrJuz})`}
+                          </strong>
+                          {category === 'kenaikan_jilid' && (
+                            <>
+                              {' '}
+                              dan berhak naik ke tingkat{' '}
+                              <strong className="text-[#8C7015] underline">
+                                {currentParticipant.promotedToJilid ||
+                                  suggestNextUmmiJilid(currentParticipant.jilidOrJuz)}
+                              </strong>
+                            </>
+                          )}{' '}
+                          dengan rincian perolehan nilai sebagai berikut:
+                        </p>
+                      </div>
+
+                      {/* Score Breakdown Table Embedded Inside Certificate */}
+                      <div className="max-w-2xl mx-auto font-sans">
+                        <table className="w-full border border-[#1E293B] border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-[#1E293B] text-white font-bold text-center">
+                              {aspects.map(asp => (
+                                <th
+                                  key={asp.key}
+                                  className="py-1.5 px-2 border-r border-slate-600 text-[11px]"
+                                >
+                                  {asp.shortLabel}
+                                </th>
+                              ))}
+                              <th className="py-1.5 px-2.5 border-r border-slate-600 text-[#D4AF37]">
+                                Nilai Rata-rata
                               </th>
-                            ))}
-                            <th className="py-1.5 px-2.5 border-r border-slate-600 text-[#D4AF37]">
-                              Nilai Rata-rata
-                            </th>
-                            <th className="py-1.5 px-2.5 border-r border-slate-600">Nilai Huruf</th>
-                            <th className="py-1.5 px-3 text-[#D4AF37]">Predikat Kelulusan</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr className="bg-white text-center font-bold text-slate-900 border-t border-[#1E293B]">
-                            <td className="py-2 px-2 border-r border-slate-300 font-mono">
-                              {currentParticipant.scoreDetails?.aspect1 ?? 90}
-                            </td>
-                            <td className="py-2 px-2 border-r border-slate-300 font-mono">
-                              {currentParticipant.scoreDetails?.aspect2 ?? 90}
-                            </td>
-                            <td className="py-2 px-2 border-r border-slate-300 font-mono">
-                              {currentParticipant.scoreDetails?.aspect3 ?? 90}
-                            </td>
-                            {aspects.length === 4 && (
+                              <th className="py-1.5 px-2.5 border-r border-slate-600">Nilai Huruf</th>
+                              <th className="py-1.5 px-3 text-[#D4AF37]">Predikat Kelulusan</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr className="bg-white text-center font-bold text-slate-900 border-t border-[#1E293B]">
                               <td className="py-2 px-2 border-r border-slate-300 font-mono">
-                                {currentParticipant.scoreDetails?.aspect4 ?? 92}
+                                {currentParticipant.scoreDetails?.aspect1 ?? 90}
                               </td>
-                            )}
-                            <td className="py-2 px-2.5 border-r border-slate-300 font-mono text-sm font-black text-[#1E293B]">
-                              {currentParticipant.score ?? 90}
-                            </td>
-                            <td className="py-2 px-2.5 border-r border-slate-300 font-black text-sm">
-                              {currentParticipant.gradeLetter || 'A'}
-                            </td>
-                            <td className="py-2 px-3 text-emerald-900 font-extrabold">
-                              {currentParticipant.predicate || 'MUMTAZ (Istimewa)'}
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Prayer Quote */}
-                    <p className="text-center text-[11px] italic text-slate-600 pt-1">
-                      &ldquo;Semoga Allah Ta&apos;ala senantiasa memberkahi ananda menjadi generasi Ahlul
-                      Qur&apos;an yang berakhlak mulia.&rdquo;
-                    </p>
-
-                    {/* Three-Column Official Signature Footer */}
-                    <div className="pt-3 grid grid-cols-3 gap-4 text-center font-sans text-xs">
-                      {/* Left: Headmaster */}
-                      <div className="space-y-10">
-                        <div>
-                          <p className="text-[11px] text-slate-600">Mengetahui,</p>
-                          <p className="font-bold text-slate-900">
-                            Kepala SMPI Al Azhar 21 Solo Baru
-                          </p>
-                        </div>
-                        <div>
-                          {settings.headmasterSignatureUrl && (
-                            <img
-                              src={settings.headmasterSignatureUrl}
-                              alt="TTD Kepala Sekolah"
-                              className="h-10 object-contain mx-auto mb-1"
-                            />
-                          )}
-                          <p className="font-bold underline text-slate-950">{headmasterName}</p>
-                          <p className="text-[10px] font-mono text-slate-600">
-                            NIK. {headmasterNik}
-                          </p>
-                        </div>
+                              <td className="py-2 px-2 border-r border-slate-300 font-mono">
+                                {currentParticipant.scoreDetails?.aspect2 ?? 90}
+                              </td>
+                              <td className="py-2 px-2 border-r border-slate-300 font-mono">
+                                {currentParticipant.scoreDetails?.aspect3 ?? 90}
+                              </td>
+                              {aspects.length === 4 && (
+                                <td className="py-2 px-2 border-r border-slate-300 font-mono">
+                                  {currentParticipant.scoreDetails?.aspect4 ?? 92}
+                                </td>
+                              )}
+                              <td className="py-2 px-2.5 border-r border-slate-300 font-mono text-sm font-black text-[#1E293B]">
+                                {currentParticipant.score ?? 90}
+                              </td>
+                              <td className="py-2 px-2.5 border-r border-slate-300 font-black text-sm">
+                                {currentParticipant.gradeLetter || 'A'}
+                              </td>
+                              <td className="py-2 px-3 text-emerald-900 font-extrabold">
+                                {currentParticipant.predicate || 'MUMTAZ (Istimewa)'}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
                       </div>
 
-                      {/* Middle: Coordinator Tahfizh */}
-                      <div className="space-y-10">
-                        <div>
-                          <p className="text-[11px] text-slate-600">Mengesahkan,</p>
-                          <p className="font-bold text-slate-900">
-                            Koordinator Tahfizh & Metode Ummi
-                          </p>
-                        </div>
-                        <div>
-                          {settings.tahfizhCoordinatorSignatureUrl && (
-                            <img
-                              src={settings.tahfizhCoordinatorSignatureUrl}
-                              alt="TTD Koordinator"
-                              className="h-10 object-contain mx-auto mb-1"
-                            />
-                          )}
-                          <p className="font-bold underline text-slate-950">{coordinatorName}</p>
-                          <p className="text-[10px] font-mono text-slate-600">
-                            NIK. {coordinatorNik}
-                          </p>
-                        </div>
-                      </div>
+                      {/* Prayer Quote */}
+                      <p className="text-center text-[11px] italic text-slate-600 pt-1">
+                        &ldquo;Semoga Allah Ta&apos;ala senantiasa memberkahi ananda menjadi generasi Ahlul
+                        Qur&apos;an yang berakhlak mulia.&rdquo;
+                      </p>
 
-                      {/* Right: Penguji */}
-                      <div className="space-y-10">
-                        <div>
-                          <p className="text-[11px] text-slate-600">
-                            Sukoharjo,{' '}
-                            {formatIndoDate(
-                              currentParticipant.evaluatedAt ||
-                                submission.scheduledDate ||
-                                submission.submissionDate
+                      {/* Two-Column Proportional Official Signature Footer (Kepala Sekolah & Koordinator) */}
+                      <div className="pt-4 pb-1 max-w-3xl mx-auto grid grid-cols-2 gap-8 sm:gap-16 text-center font-sans text-xs">
+                        {/* Left: Kepala Sekolah */}
+                        <div className="flex flex-col items-center justify-between">
+                          <div className="space-y-0.5">
+                            <p className="text-[11px] text-slate-600">Mengetahui,</p>
+                            <p className="font-bold text-slate-900">
+                              Kepala SMPI Al Azhar 21 Solo Baru
+                            </p>
+                          </div>
+                          <div className="h-16 flex items-center justify-center my-1.5">
+                            {settings.headmasterSignatureUrl && (
+                              <img
+                                src={settings.headmasterSignatureUrl}
+                                alt="TTD Kepala Sekolah"
+                                className="h-14 w-auto max-w-[180px] object-contain mx-auto"
+                              />
                             )}
-                          </p>
-                          <p className="font-bold text-slate-900">Penguji Ujian</p>
+                          </div>
+                          <div>
+                            <p className="font-bold underline text-slate-950 text-xs sm:text-[13px]">
+                              {headmasterName}
+                            </p>
+                            <p className="text-[11px] font-mono text-slate-600 mt-0.5">
+                              NIK. {headmasterNik}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold underline text-slate-950">
-                            {currentParticipant.examinerName ||
-                              submission.examinerName ||
-                              coordinatorName}
-                          </p>
-                          <p className="text-[10px] text-slate-600">
-                            Penguji Tahfizh & Metode Ummi
-                          </p>
+
+                        {/* Right: Koordinator Tahfizh & Metode Ummi */}
+                        <div className="flex flex-col items-center justify-between">
+                          <div className="space-y-0.5">
+                            <p className="text-[11px] text-slate-600">
+                              Sukoharjo,{' '}
+                              {formatIndoDate(
+                                currentParticipant.evaluatedAt ||
+                                  submission.scheduledDate ||
+                                  submission.submissionDate
+                              )}
+                            </p>
+                            <p className="font-bold text-slate-900">
+                              Koordinator Tahfizh & Metode Ummi
+                            </p>
+                          </div>
+                          <div className="h-16 flex items-center justify-center my-1.5">
+                            {settings.tahfizhCoordinatorSignatureUrl && (
+                              <img
+                                src={settings.tahfizhCoordinatorSignatureUrl}
+                                alt="TTD Koordinator"
+                                className="h-14 w-auto max-w-[180px] object-contain mx-auto"
+                              />
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-bold underline text-slate-950 text-xs sm:text-[13px]">
+                              {coordinatorName}
+                            </p>
+                            <p className="text-[11px] font-mono text-slate-600 mt-0.5">
+                              NIK. {coordinatorNik}
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>
@@ -1284,20 +2075,30 @@ ${coordinatorName}`;
                   <label className="block font-bold text-slate-700 mb-1">
                     Nama Ustadz / Ustadzah Penguji:
                   </label>
-                  <input
-                    type="text"
-                    list="examiner-teacher-list"
-                    required
-                    value={examinerNameInput}
-                    onChange={e => setExaminerNameInput(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 font-semibold"
-                  />
-                  <datalist id="examiner-teacher-list">
-                    <option value={coordinatorName} />
-                    {teachers.map(t => (
-                      <option key={t.id} value={t.name} />
-                    ))}
-                  </datalist>
+                  {category === 'kenaikan_jilid' ? (
+                    <div className="w-full px-3 py-2 rounded-lg bg-slate-100 border border-slate-300 font-bold text-slate-800 flex items-center justify-between gap-2">
+                      <span className="truncate">{coordinatorName}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-extrabold shrink-0">
+                        Koordinator
+                      </span>
+                    </div>
+                  ) : (
+                    <select
+                      required
+                      value={examinerNameInput}
+                      onChange={e => setExaminerNameInput(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 font-semibold text-slate-900 cursor-pointer"
+                    >
+                      {!allExaminerTeachers.includes(examinerNameInput) && examinerNameInput && (
+                        <option value={examinerNameInput}>{examinerNameInput}</option>
+                      )}
+                      {allExaminerTeachers.map(tName => (
+                        <option key={tName} value={tName}>
+                          {tName}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 <div>

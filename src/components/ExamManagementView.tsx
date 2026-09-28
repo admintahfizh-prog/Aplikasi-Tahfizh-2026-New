@@ -24,7 +24,9 @@ import {
   UserCheck,
   AlertCircle,
   Loader2,
-  Check
+  Check,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
 import {
@@ -41,6 +43,11 @@ import {
 import { storageService } from '../services/storageService';
 import { UMMI_JILIDS } from '../data/ummiData';
 import { ExamScoringAndCertificate } from './ExamScoringAndCertificate';
+import {
+  buildDefaultParentLetterNumber,
+  compressUploadedImage,
+  formatHijriDateIndo
+} from './OfficialLetterheadEmblems';
 
 interface ExamManagementViewProps {
   activeExamCategory?: ExamCategory;
@@ -402,43 +409,161 @@ export const ExamManagementView: React.FC<ExamManagementViewProps> = ({
   };
 
   // ============================================================================
-  // MODAL 2: PENJADWALAN OLEH KOORDINATOR TAHFIZH (SET HARI & TANGGAL UJIAN)
+  // MODAL 2: KONFIRMASI UJIAN OLEH KOORDINATOR TAHFIZH (HARI, TANGGAL, WAKTU & PENGUJI)
   // ============================================================================
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [scheduleTargetSubmission, setScheduleTargetSubmission] = useState<ExamSubmission | null>(null);
   const [schedDate, setSchedDate] = useState<string>('');
   const [schedDay, setSchedDay] = useState<string>('');
   const [schedTime, setSchedTime] = useState<string>('07.30 - 09.30 WIB');
-  const [schedRoom, setSchedRoom] = useState<string>('Masjid Lt. 1 SMPI Al Azhar 21');
+  const [schedRoom, setSchedRoom] = useState<string>('Kampus SMP Islam Al Azhar 21 Solo Baru');
   const [schedExaminer, setSchedExaminer] = useState<string>(coordinatorName);
+  const [schedLetterNumber, setSchedLetterNumber] = useState<string>('');
+  const [schedHijriDate, setSchedHijriDate] = useState<string>('');
   const [schedStatus, setSchedStatus] = useState<'Diajukan Musyrif' | 'Terjadwal' | 'Selesai'>('Terjadwal');
+  const [schedParticipantOverrides, setSchedParticipantOverrides] = useState<
+    Record<string, { scheduledTime: string; examinerName: string }>
+  >({});
+  const [letterSignerRole, setLetterSignerRole] = useState<'kepsek' | 'koordinator'>('kepsek');
+  const [letterHeaderUrl, setLetterHeaderUrl] = useState<string>(settings.letterHeaderUrl || '');
+  const [letterFooterUrl, setLetterFooterUrl] = useState<string>(settings.letterFooterUrl || '');
+
+  React.useEffect(() => {
+    setLetterHeaderUrl(settings.letterHeaderUrl || '');
+    setLetterFooterUrl(settings.letterFooterUrl || '');
+  }, [settings.letterHeaderUrl, settings.letterFooterUrl]);
+
+  const handleUploadLetterHeader = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressUploadedImage(file, 1400, 420, 0.9);
+      setLetterHeaderUrl(compressed);
+      const current = storageService.getSettings();
+      storageService.saveSettings({ ...current, letterHeaderUrl: compressed });
+      onRefreshData();
+      showToast('Gambar Kop Surat (Header) berhasil diunggah & disimpan!');
+    } catch (err) {
+      console.error(err);
+      showToast('Gagal mengunggah gambar Kop Surat.');
+    }
+  };
+
+  const handleRemoveLetterHeader = () => {
+    setLetterHeaderUrl('');
+    const current = storageService.getSettings();
+    storageService.saveSettings({ ...current, letterHeaderUrl: '' });
+    onRefreshData();
+    showToast('Gambar Kop Surat (Header) dihapus.');
+  };
+
+  const handleUploadLetterFooter = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressUploadedImage(file, 1400, 240, 0.9);
+      setLetterFooterUrl(compressed);
+      const current = storageService.getSettings();
+      storageService.saveSettings({ ...current, letterFooterUrl: compressed });
+      onRefreshData();
+      showToast('Gambar Footer Surat berhasil diunggah & disimpan!');
+    } catch (err) {
+      console.error(err);
+      showToast('Gagal mengunggah gambar Footer Surat.');
+    }
+  };
+
+  const handleRemoveLetterFooter = () => {
+    setLetterFooterUrl('');
+    const current = storageService.getSettings();
+    storageService.saveSettings({ ...current, letterFooterUrl: '' });
+    onRefreshData();
+    showToast('Gambar Footer Surat dihapus.');
+  };
+
+  const headmasterName = settings.headmasterName || settings.principalName || 'Muh. Saifuddin, S.Si.';
+  const headmasterNik = settings.headmasterNik || '01.0125';
+
+  // Complete list of all Ustadz & Ustadzah for Examiner (Penguji) selection
+  const allExaminerTeachers = useMemo(() => {
+    const fromStorage = storageService.getTeachers();
+    const map = new Map<string, string>();
+    if (coordinatorName) {
+      map.set(coordinatorName.trim().toLowerCase(), coordinatorName.trim());
+    }
+    [...teachers, ...fromStorage].forEach(t => {
+      if (t.name && t.name.trim()) {
+        map.set(t.name.trim().toLowerCase(), t.name.trim());
+      }
+    });
+    return Array.from(map.values());
+  }, [teachers, coordinatorName]);
 
   const handleOpenScheduleModal = (sub: ExamSubmission) => {
     const defaultDate = sub.scheduledDate || sub.submissionDate || new Date().toISOString().split('T')[0];
+    const defaultTime = sub.scheduledTime || '07.30 - 09.30 WIB';
+    const isKenaikanJilid = sub.category === 'kenaikan_jilid';
+    const defaultExaminer = isKenaikanJilid
+      ? coordinatorName
+      : sub.examinerName || coordinatorName;
     setScheduleTargetSubmission(sub);
     setSchedDate(defaultDate);
     setSchedDay(sub.scheduledDay || getIndonesianDayName(defaultDate) || 'Kamis');
-    setSchedTime(sub.scheduledTime || '07.30 - 09.30 WIB');
-    setSchedRoom(sub.scheduledRoom || 'Masjid Lt. 1 SMPI Al Azhar 21');
-    setSchedExaminer(sub.examinerName || coordinatorName);
+    setSchedTime(defaultTime);
+    setSchedRoom(sub.scheduledRoom || 'Kampus SMP Islam Al Azhar 21 Solo Baru');
+    setSchedExaminer(defaultExaminer);
+    setSchedLetterNumber(
+      sub.letterNumber || buildDefaultParentLetterNumber(sub.category, defaultDate, 72)
+    );
+    setSchedHijriDate(sub.hijriDateText || formatHijriDateIndo(defaultDate));
     setSchedStatus(sub.status === 'Diajukan Musyrif' ? 'Terjadwal' : sub.status);
+
+    const overrides: Record<string, { scheduledTime: string; examinerName: string }> = {};
+    sub.participants.forEach(p => {
+      overrides[p.studentId] = {
+        scheduledTime: p.scheduledTime || defaultTime,
+        examinerName: isKenaikanJilid ? coordinatorName : p.examinerName || defaultExaminer
+      };
+    });
+    setSchedParticipantOverrides(overrides);
     setIsScheduleModalOpen(true);
   };
 
   const handleSaveCoordinatorSchedule = (e: React.FormEvent) => {
     e.preventDefault();
     if (!scheduleTargetSubmission || !schedDate) return;
+    const isKenaikanJilid = scheduleTargetSubmission.category === 'kenaikan_jilid';
     const computedDay = schedDay.trim() || getIndonesianDayName(schedDate) || 'Kamis';
+    const cleanTime = schedTime.trim() || '07.30 - 09.30 WIB';
+    const cleanExaminer = isKenaikanJilid
+      ? coordinatorName
+      : schedExaminer.trim() || coordinatorName;
+
+    const updatedParticipants = scheduleTargetSubmission.participants.map(p => {
+      const ov = schedParticipantOverrides[p.studentId];
+      return {
+        ...p,
+        scheduledTime: ov?.scheduledTime?.trim() || cleanTime,
+        examinerName: isKenaikanJilid
+          ? coordinatorName
+          : ov?.examinerName?.trim() || cleanExaminer
+      };
+    });
 
     const updated: ExamSubmission = {
       ...scheduleTargetSubmission,
       status: schedStatus,
       scheduledDate: schedDate,
       scheduledDay: computedDay,
-      scheduledTime: schedTime.trim(),
-      scheduledRoom: schedRoom.trim(),
-      examinerName: schedExaminer.trim() || coordinatorName,
-      coordinatorName
+      scheduledTime: cleanTime,
+      scheduledRoom: schedRoom.trim() || 'Kampus SMP Islam Al Azhar 21 Solo Baru',
+      examinerName: cleanExaminer,
+      letterNumber:
+        schedLetterNumber.trim() ||
+        buildDefaultParentLetterNumber(scheduleTargetSubmission.category, schedDate, 72),
+      hijriDateText: schedHijriDate.trim() || formatHijriDateIndo(schedDate),
+      coordinatorName,
+      participants: updatedParticipants
     };
 
     storageService.saveExamSubmission(updated);
@@ -447,7 +572,7 @@ export const ExamManagementView: React.FC<ExamManagementViewProps> = ({
     setIsScheduleModalOpen(false);
     setActiveDocTab('surat_wali');
     showToast(
-      `Jadwal ujian ditetapkan (${computedDay}, ${formatIndonesianDate(schedDate)}). Surat Undangan Pemberitahuan Wali Murid telah siap!`
+      `Konfirmasi ujian ditetapkan (${computedDay}, ${formatIndonesianDate(schedDate)} · ${cleanTime} · Penguji: ${cleanExaminer}). Surat Wali Murid siap!`
     );
   };
 
@@ -477,10 +602,18 @@ export const ExamManagementView: React.FC<ExamManagementViewProps> = ({
     try {
       const element = targetRef.current;
       const opt = {
-        margin: [10, 12, 10, 12] as [number, number, number, number],
+        margin: [8, 10, 8, 10] as [number, number, number, number],
         filename,
         image: { type: 'jpeg' as const, quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          onclone: (clonedDoc: Document) => {
+            clonedDoc.querySelectorAll('.no-print').forEach(el => {
+              (el as HTMLElement).style.display = 'none';
+            });
+          }
+        },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
       };
       await html2pdf().set(opt).from(element).save();
@@ -499,6 +632,9 @@ export const ExamManagementView: React.FC<ExamManagementViewProps> = ({
   ): string => {
     const dayStr = sub.scheduledDay || getIndonesianDayName(sub.scheduledDate || sub.submissionDate) || '-';
     const dateStr = formatIndonesianDate(sub.scheduledDate || sub.submissionDate);
+    const timeStr = participant?.scheduledTime || sub.scheduledTime || '07.30 - 09.30 WIB';
+    const roomStr = sub.scheduledRoom || 'Kampus SMP Islam Al Azhar 21 Solo Baru';
+    const examinerStr = participant?.examinerName || sub.examinerName || coordinatorName;
     const targetName = participant ? `${participant.studentName} (Kelas ${participant.className})` : 'Putra/Putri Bapak/Ibu';
     const jilidStr = participant ? participant.jilidOrJuz : sub.participants.map(p => `${p.studentName} (${p.jilidOrJuz})`).join(', ');
 
@@ -507,21 +643,24 @@ Kepada Yth. Bapak/Ibu Orang Tua / Wali Ananda *${targetName}*
 
 *Assalamu'alaikum Warahmatullahi Wabarakatuh*
 
-Kami beritahukan bahwa ananda akan melaksanakan *${config.letterExamName}* pada:
+Kami beritahukan bahwa ananda telah dikonfirmasi akan melaksanakan *${config.letterExamName}* pada:
 • *Hari* : ${dayStr}
 • *Tanggal* : ${dateStr}
+• *Waktu Ujian* : ${timeStr}
+• *Tempat* : ${roomStr}
 • *${config.columnLabel}* : ${jilidStr}
+• *Penguji* : ${examinerStr}
 
 Demikian pemberitahuan ini kami sampaikan. Kami memohon kepada Bapak/Ibu Orang Tua untuk:
 1. Mendo'akan ananda agar diberikan kemudahan, kelancaran dalam ujian, dan hasil terbaik oleh Allah Ta'ala.
 2. Mendampingi ananda muroja'ah di rumah dan memotivasinya.
 3. Mengontrol ananda untuk mengurangi penggunaan gadget.
 
-_(Surat pemberitahuan resmi terlampir dalam format PDF)_
+_(Surat pemberitahuan resmi ber-Kop Surat terlampir dalam format PDF)_
 
 Jazakumullahu Khairan Katsiran.
-*Koordinator Tahfizh SMPI Al Azhar 21 Solo Baru*
-${coordinatorName}`;
+*SMP Islam Al Azhar 21 Solo Baru*
+Koordinator Tahfizh: ${coordinatorName}`;
   };
 
   const handleCopyWaBroadcast = () => {
@@ -729,16 +868,24 @@ ${coordinatorName}`;
 
                       {/* Schedule info if set by Coordinator */}
                       {isScheduled && sub.scheduledDate && (
-                        <div className="p-2 rounded-lg bg-emerald-50/80 border border-emerald-200 text-[11px] text-emerald-950 flex items-center justify-between gap-2">
-                          <div>
-                            <span className="font-bold block">
-                              Jadwal Ujian: {sub.scheduledDay || getIndonesianDayName(sub.scheduledDate)},{' '}
+                        <div className="p-2.5 rounded-lg bg-emerald-50/90 border border-emerald-200 text-[11px] text-emerald-950 space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-extrabold text-emerald-900">
+                              ✓ Konfirmasi Ujian: {sub.scheduledDay || getIndonesianDayName(sub.scheduledDate)},{' '}
                               {formatIndonesianDate(sub.scheduledDate)}
                             </span>
-                            <span className="text-[10px] text-emerald-800">
-                              Surat Undangan Wali Murid Aktif (Siap PDF & WA)
+                          </div>
+                          <div className="text-[10.5px] text-emerald-900 flex flex-wrap gap-x-3 gap-y-0.5">
+                            <span>
+                              <strong>Waktu:</strong> {sub.scheduledTime || '07.30 - 09.30 WIB'}
+                            </span>
+                            <span>
+                              <strong>Penguji:</strong> {sub.examinerName || coordinatorName}
                             </span>
                           </div>
+                          <span className="text-[10px] text-emerald-700 block">
+                            Surat Undangan Wali Murid Aktif (Siap PDF & WA)
+                          </span>
                         </div>
                       )}
 
@@ -748,7 +895,7 @@ ${coordinatorName}`;
                           className="pt-2 border-t border-slate-200/70 flex flex-wrap items-center justify-between gap-1.5"
                           onClick={e => e.stopPropagation()}
                         >
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             <button
                               type="button"
                               onClick={() => {
@@ -756,11 +903,11 @@ ${coordinatorName}`;
                                 handleOpenScheduleModal(sub);
                               }}
                               className="px-2.5 py-1 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
-                              title="Atur Hari & Tanggal Ujian oleh Koordinator Tahfizh"
+                              title="Konfirmasi Waktu Ujian, Hari/Tanggal & Penguji oleh Koordinator Tahfizh"
                             >
                               <Calendar className="w-3 h-3 text-[#D4AF37]" />
                               <span>
-                                {isScheduled ? 'Ubah Jadwal Koordinator' : 'Atur Jadwal (Koordinator)'}
+                                {isScheduled ? 'Ubah Konfirmasi & Penguji' : 'Konfirmasi Ujian (Waktu & Penguji)'}
                               </span>
                             </button>
 
@@ -980,16 +1127,18 @@ ${coordinatorName}`;
                   {/* Banner status Koordinator */}
                   {!isWali && (
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print">
-                      <div className="text-xs text-amber-950">
+                      <div className="text-xs text-amber-950 space-y-0.5">
                         <span className="font-bold block">
-                          Alur Koordinator Tahfizh ({coordinatorName}):
+                          Konfirmasi Koordinator Tahfizh ({coordinatorName}):
                         </span>
                         <span>
                           {selectedSubmission.scheduledDate
-                            ? `Jadwal pelaksanaan telah ditentukan pada hari ${selectedSubmission.scheduledDay}, ${formatIndonesianDate(
+                            ? `Dikonfirmasi pada ${selectedSubmission.scheduledDay}, ${formatIndonesianDate(
                                 selectedSubmission.scheduledDate
-                              )}. Klik tab "2. Surat Undangan Wali Murid" untuk mengunduh PDF & kirim BC WA.`
-                            : 'Formulir pengajuan dari Musyrif ini menunggu penentuan Hari & Tanggal ujian oleh Koordinator Tahfizh.'}
+                              )} · Waktu: ${selectedSubmission.scheduledTime || '07.30 - 09.30 WIB'} · Penguji: ${
+                                selectedSubmission.examinerName || coordinatorName
+                              }.`
+                            : 'Formulir pengajuan dari Musyrif ini menunggu Konfirmasi Waktu Ujian & Penguji oleh Koordinator Tahfizh.'}
                         </span>
                       </div>
                       <button
@@ -1000,8 +1149,8 @@ ${coordinatorName}`;
                         <Calendar className="w-3.5 h-3.5 text-[#D4AF37]" />
                         <span>
                           {selectedSubmission.scheduledDate
-                            ? 'Ubah Hari / Tanggal Ujian'
-                            : 'Tentukan Hari & Tanggal Ujian'}
+                            ? 'Ubah Konfirmasi Waktu & Penguji'
+                            : 'Konfirmasi Ujian (Waktu & Penguji)'}
                         </span>
                       </button>
                     </div>
@@ -1025,14 +1174,35 @@ ${coordinatorName}`;
                         </p>
                       </div>
 
-                      {/* Hari / Tanggal line */}
-                      <div className="pt-2 text-sm sm:text-[15px] font-medium text-slate-950">
-                        <span>Hari / Tanggal : </span>
-                        <span className="border-b border-dotted border-slate-800 pb-0.5 px-2 font-semibold inline-block min-w-[280px]">
-                          {selectedSubmission.scheduledDate
-                            ? `${selectedSubmission.scheduledDay || getIndonesianDayName(selectedSubmission.scheduledDate)}, ${formatIndonesianDate(selectedSubmission.scheduledDate)}`
-                            : formatDayAndDate(selectedSubmission.submissionDate)}
-                        </span>
+                      {/* Hari / Tanggal, Waktu & Penguji line */}
+                      <div className="pt-2 text-sm sm:text-[15px] font-medium text-slate-950 space-y-1.5">
+                        <div>
+                          <span className="inline-block w-36">Hari / Tanggal</span>
+                          <span>: </span>
+                          <span className="border-b border-dotted border-slate-800 pb-0.5 px-2 font-semibold inline-block min-w-[280px]">
+                            {selectedSubmission.scheduledDate
+                              ? `${selectedSubmission.scheduledDay || getIndonesianDayName(selectedSubmission.scheduledDate)}, ${formatIndonesianDate(selectedSubmission.scheduledDate)}`
+                              : formatDayAndDate(selectedSubmission.submissionDate)}
+                          </span>
+                        </div>
+                        {selectedSubmission.scheduledDate && (
+                          <>
+                            <div>
+                              <span className="inline-block w-36">Waktu Ujian</span>
+                              <span>: </span>
+                              <span className="border-b border-dotted border-slate-800 pb-0.5 px-2 font-semibold inline-block min-w-[280px]">
+                                {selectedSubmission.scheduledTime || '07.30 - 09.30 WIB'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="inline-block w-36">Penguji Ujian</span>
+                              <span>: </span>
+                              <span className="border-b border-dotted border-slate-800 pb-0.5 px-2 font-semibold inline-block min-w-[280px]">
+                                {selectedSubmission.examinerName || coordinatorName}
+                              </span>
+                            </div>
+                          </>
+                        )}
                       </div>
 
                       {/* Table matching Image 1 (No | Nama | Kelas | Jilid) */}
@@ -1087,7 +1257,7 @@ ${coordinatorName}`;
               )}
 
               {/* ========================================================================= */}
-              {/* DOKUMEN 2: SURAT UNDANGAN PEMBERITAHUAN WALI MURID (PERSIS GAMBAR 2)      */}
+              {/* DOKUMEN 2: SURAT UNDANGAN PEMBERITAHUAN WALI MURID (KOP SURAT RESMI)      */}
               {/* ========================================================================= */}
               {activeDocTab === 'surat_wali' && (
                 <div className="space-y-4">
@@ -1095,11 +1265,11 @@ ${coordinatorName}`;
                     <div className="bg-amber-50 border border-amber-300 rounded-xl p-6 text-center space-y-3 no-print">
                       <AlertCircle className="w-8 h-8 text-amber-600 mx-auto" />
                       <h3 className="text-sm font-bold text-amber-950">
-                        Hari & Tanggal Ujian Belum Ditentukan oleh Koordinator Tahfizh
+                        Konfirmasi Jadwal, Waktu Ujian & Penguji Belum Ditentukan
                       </h3>
                       <p className="text-xs text-amber-900 max-w-lg mx-auto">
-                        Sesuai prosedur, Surat Undangan Pemberitahuan kepada Wali Murid akan muncul
-                        setelah Koordinator Tahfizh menentukan Hari & Tanggal pelaksanaan ujian.
+                        Sesuai prosedur, Surat Pemberitahuan kepada Orang Tua / Wali Murid akan muncul
+                        setelah Koordinator Tahfizh mengonfirmasi Hari, Tanggal, Waktu Ujian, dan Penguji.
                       </p>
                       {!isWali && (
                         <button
@@ -1108,14 +1278,177 @@ ${coordinatorName}`;
                           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#1E293B] text-white text-xs font-bold cursor-pointer"
                         >
                           <Calendar className="w-4 h-4 text-[#D4AF37]" />
-                          <span>Tentukan Hari & Tanggal Sekarang</span>
+                          <span>Konfirmasi Ujian (Waktu & Penguji) Sekarang</span>
                         </button>
                       )}
                     </div>
                   ) : (
                     <>
-                      {/* Student Selector & Broadcast WA Box */}
+                      {/* Student Selector, Confirmation Summary & Broadcast WA Box */}
                       <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4 no-print">
+                        {/* Confirmed Schedule & Examiner Info Bar */}
+                        <div className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                          <div className="space-y-0.5 text-emerald-950">
+                            <div className="font-extrabold flex items-center gap-1.5 text-emerald-900">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span>
+                                Konfirmasi Ujian Aktif: {selectedSubmission.scheduledDay},{' '}
+                                {formatIndonesianDate(selectedSubmission.scheduledDate)}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-emerald-800">
+                              Waktu Ujian:{' '}
+                              <strong>
+                                {currentParticipant?.scheduledTime ||
+                                  selectedSubmission.scheduledTime ||
+                                  '07.30 - 09.30 WIB'}
+                              </strong>{' '}
+                              &nbsp;·&nbsp; Penguji:{' '}
+                              <strong>
+                                {currentParticipant?.examinerName ||
+                                  selectedSubmission.examinerName ||
+                                  coordinatorName}
+                              </strong>{' '}
+                              &nbsp;·&nbsp; Tempat:{' '}
+                              <strong>
+                                {selectedSubmission.scheduledRoom ||
+                                  'Kampus SMP Islam Al Azhar 21 Solo Baru'}
+                              </strong>
+                            </p>
+                          </div>
+                          {!isWali && (
+                            <div className="flex items-center gap-2 shrink-0">
+                              <select
+                                value={letterSignerRole}
+                                onChange={e => setLetterSignerRole(e.target.value as 'kepsek' | 'koordinator')}
+                                className="px-2.5 py-1.5 rounded-lg bg-white border border-emerald-300 text-[11px] font-bold text-slate-800 cursor-pointer"
+                                title="Pilih Penandatangan Surat"
+                              >
+                                <option value="kepsek">TTD: Kepala Sekolah</option>
+                                <option value="koordinator">TTD: Koordinator Tahfizh</option>
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenScheduleModal(selectedSubmission)}
+                                className="px-3 py-1.5 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                              >
+                                <Edit3 className="w-3 h-3 text-[#D4AF37]" />
+                                <span>Ubah Waktu / Penguji</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Upload Gambar Kop Surat (Header) & Footer Surat Control Bar */}
+                        {!isWali && (
+                          <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-extrabold text-amber-950 flex items-center gap-1.5">
+                                <ImageIcon className="w-4 h-4 text-[#8C7015]" />
+                                Pengaturan Gambar Kop Surat (Header) & Footer Surat Undangan Orang Tua:
+                              </span>
+                              <span className="text-[10px] text-amber-800">
+                                Tersimpan otomatis untuk seluruh surat undangan
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {/* Upload Header Kop Surat */}
+                              <div className="flex items-center justify-between gap-2 bg-white p-2.5 rounded-lg border border-amber-200">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="w-16 h-10 rounded border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                                    {letterHeaderUrl ? (
+                                      <img
+                                        src={letterHeaderUrl}
+                                        alt="Preview Kop Header"
+                                        className="w-full h-full object-contain"
+                                      />
+                                    ) : (
+                                      <ImageIcon className="w-4 h-4 text-slate-400" />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <span className="text-xs font-bold text-slate-800 block truncate">
+                                      1. Gambar Kop Surat (Header)
+                                    </span>
+                                    <span className="text-[10px] text-slate-500 block">
+                                      {letterHeaderUrl ? 'Sudah terpasang' : 'Belum diupload'}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <label className="px-2.5 py-1.5 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer">
+                                    <Upload className="w-3 h-3 text-[#D4AF37]" />
+                                    <span>{letterHeaderUrl ? 'Ganti' : 'Upload Header'}</span>
+                                    <input
+                                      type="file"
+                                      accept="image/png,image/jpeg,image/webp"
+                                      onChange={handleUploadLetterHeader}
+                                      className="hidden"
+                                    />
+                                  </label>
+                                  {letterHeaderUrl && (
+                                    <button
+                                      type="button"
+                                      onClick={handleRemoveLetterHeader}
+                                      className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 cursor-pointer"
+                                      title="Hapus Kop Header"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Upload Footer Surat */}
+                              <div className="flex items-center justify-between gap-2 bg-white p-2.5 rounded-lg border border-amber-200">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="w-16 h-10 rounded border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                                    {letterFooterUrl ? (
+                                      <img
+                                        src={letterFooterUrl}
+                                        alt="Preview Footer"
+                                        className="w-full h-full object-contain"
+                                      />
+                                    ) : (
+                                      <ImageIcon className="w-4 h-4 text-slate-400" />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <span className="text-xs font-bold text-slate-800 block truncate">
+                                      2. Gambar Footer Surat
+                                    </span>
+                                    <span className="text-[10px] text-slate-500 block">
+                                      {letterFooterUrl ? 'Sudah terpasang' : 'Belum diupload'}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <label className="px-2.5 py-1.5 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer">
+                                    <Upload className="w-3 h-3 text-[#D4AF37]" />
+                                    <span>{letterFooterUrl ? 'Ganti' : 'Upload Footer'}</span>
+                                    <input
+                                      type="file"
+                                      accept="image/png,image/jpeg,image/webp"
+                                      onChange={handleUploadLetterFooter}
+                                      className="hidden"
+                                    />
+                                  </label>
+                                  {letterFooterUrl && (
+                                    <button
+                                      type="button"
+                                      onClick={handleRemoveLetterFooter}
+                                      className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 cursor-pointer"
+                                      title="Hapus Footer Surat"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
                           <div>
                             <label className="block text-[11px] font-bold text-slate-600 mb-1">
@@ -1192,147 +1525,296 @@ ${coordinatorName}`;
                         </div>
                       </div>
 
-                      {/* PRINTABLE / PDF SURAT UNDANGAN PEMBERITAHUAN WALI MURID (PERSIS GAMBAR 2) */}
-                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 sm:p-10 flex justify-center overflow-x-auto print:p-0 print:border-none print:shadow-none">
+                      {/* PRINTABLE / PDF SURAT PEMBERITAHUAN ORANG TUA (KOP SURAT & PENATAAN RESMI) */}
+                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-8 flex justify-center overflow-x-auto print:p-0 print:border-none print:shadow-none">
                         <div
                           ref={form2PrintRef}
-                          className="printable-report-area w-full max-w-[680px] bg-white text-slate-950 space-y-5 leading-relaxed"
+                          className="printable-report-area w-full max-w-[760px] bg-white text-slate-950 flex flex-col justify-between"
                           style={{
-                            fontFamily: "'Calibri', 'Times New Roman', serif",
-                            padding: '12px 20px'
+                            fontFamily: "'Times New Roman', Times, serif",
+                            minHeight: '980px',
+                            padding: '12px 24px 16px 24px'
                           }}
                         >
-                          {/* Bismillah Arabic centered at top (persis Gambar 2) */}
-                          <div className="text-center pt-2">
-                            <p
-                              className="text-2xl sm:text-3xl font-bold text-slate-950"
-                              style={{ fontFamily: "'Traditional Arabic', 'Amiri', serif" }}
-                            >
-                              بِسْمِ اللّٰهِ الرَّحْمٰنِ الرَّحِيْمِ
-                            </p>
-                          </div>
-
-                          {/* Kepada : Orang Tua Ananda ............ */}
-                          <div className="pt-2 text-[15px] sm:text-base text-slate-950">
-                            <span>Kepada : Orang Tua Ananda </span>
-                            <span className="font-bold border-b border-dotted border-slate-800 px-2 pb-0.5">
-                              {currentParticipant
-                                ? `${currentParticipant.studentName} (${currentParticipant.className})`
-                                : '....................................'}
-                            </span>
-                          </div>
-
-                          {/* Assalamu'alaikum Arabic centered (persis Gambar 2) */}
-                          <div className="text-center py-2">
-                            <p
-                              className="text-xl sm:text-2xl font-bold text-slate-950"
-                              style={{ fontFamily: "'Traditional Arabic', 'Amiri', serif" }}
-                            >
-                              السَّلَامُ عَلَيْكُمْ وَرَحْمَةُ اللّٰهِ وَبَرَكَاتُهُ
-                            </p>
-                          </div>
-
-                          {/* Opening notification statement */}
-                          <div className="text-[15px] sm:text-base text-slate-950 space-y-2">
-                            <p>
-                              Kami beritahukan bahwa ananda akan melakukan{' '}
-                              <span className="font-semibold">{config.letterExamName}</span> pada :
-                            </p>
-                          </div>
-
-                          {/* Hari, Tanggal, Jilid block matching Image 2 */}
-                          <div className="pl-2 sm:pl-4 py-1 text-[15px] sm:text-base text-slate-950">
-                            <table className="border-none">
-                              <tbody>
-                                <tr>
-                                  <td className="py-1.5 pr-8 font-medium w-28">Hari</td>
-                                  <td className="py-1.5 pr-3 font-medium">:</td>
-                                  <td className="py-1.5 font-bold">
-                                    {selectedSubmission.scheduledDay ||
-                                      getIndonesianDayName(selectedSubmission.scheduledDate)}
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td className="py-1.5 pr-8 font-medium">Tanggal</td>
-                                  <td className="py-1.5 pr-3 font-medium">:</td>
-                                  <td className="py-1.5 font-bold">
-                                    {formatIndonesianDate(selectedSubmission.scheduledDate)}
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td className="py-1.5 pr-8 font-medium">{config.columnLabel}</td>
-                                  <td className="py-1.5 pr-3 font-medium">:</td>
-                                  <td className="py-1.5 font-bold">
-                                    {currentParticipant?.jilidOrJuz || '-'}
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
-                          </div>
-
-                          {/* Closing paragraph & 3 bullet points matching Image 2 word-for-word */}
-                          <div className="text-[15px] sm:text-base text-slate-950 space-y-2 pt-1">
-                            <p>
-                              Demikian pemberitahuan ini kami sampaikan. Kami memohon kepada orang
-                              tua untuk :
-                            </p>
-                            <ul className="space-y-2 pl-5">
-                              <li className="flex items-start gap-3">
-                                <span className="font-bold">-</span>
-                                <span className="text-justify">
-                                  Mendo’akan ananda agar diberikan kemudahan kelancaran dalam ujian
-                                  dan hasil terbaik oleh Alloh ta’ala,
-                                </span>
-                              </li>
-                              <li className="flex items-start gap-3">
-                                <span className="font-bold">-</span>
-                                <span className="text-justify">
-                                  Mendampingi ananda muroja’ah di rumah dan memotivasinya,
-                                </span>
-                              </li>
-                              <li className="flex items-start gap-3">
-                                <span className="font-bold">-</span>
-                                <span className="text-justify">
-                                  Mengontrol ananda untuk mengurangi penggunaan gadget.
-                                </span>
-                              </li>
-                            </ul>
-                          </div>
-
-                          {/* Closing Salam & Coordinator Signature */}
-                          <div className="pt-4 text-center">
-                            <p
-                              className="text-xl font-bold text-slate-950"
-                              style={{ fontFamily: "'Traditional Arabic', 'Amiri', serif" }}
-                            >
-                              وَالسَّلَامُ عَلَيْكُمْ وَرَحْمَةُ اللّٰهِ وَبَرَكَاتُهُ
-                            </p>
-                          </div>
-
-                          <div className="pt-4 flex justify-end text-xs sm:text-sm">
-                            <div className="text-center min-w-[220px]">
-                              <p className="text-slate-700">
-                                Sukoharjo, {formatIndonesianDate(selectedSubmission.scheduledDate)}
-                              </p>
-                              <p className="font-bold text-slate-900">
-                                Koordinator Tahfizh & Metode Ummi
-                              </p>
-                              {settings.tahfizhCoordinatorSignatureUrl ? (
-                                <div className="h-14 flex items-center justify-center my-1">
-                                  <img
-                                    src={settings.tahfizhCoordinatorSignatureUrl}
-                                    alt="TTD Koordinator"
-                                    className="h-12 object-contain"
-                                  />
-                                </div>
+                          <div className="space-y-4">
+                            {/* ============================================================= */}
+                            {/* KOP SURAT HEADER (GAMBAR UPLOAD)                              */}
+                            {/* ============================================================= */}
+                            <div>
+                              {letterHeaderUrl ? (
+                                <img
+                                  src={letterHeaderUrl}
+                                  alt="Kop Surat Header"
+                                  className="w-full h-auto object-contain block select-none"
+                                />
                               ) : (
-                                <div className="h-14" />
+                                <div className="no-print border-2 border-dashed border-slate-300 rounded-xl p-5 bg-slate-50/70 text-center space-y-1.5">
+                                  <ImageIcon className="w-6 h-6 text-slate-400 mx-auto" />
+                                  <p className="text-xs font-bold text-slate-700">
+                                    Area Gambar Kop Surat (Header)
+                                  </p>
+                                  <p className="text-[11px] text-slate-500">
+                                    Silakan upload gambar Kop Surat (PNG/JPG) agar tampilan header surat sama persis
+                                  </p>
+                                  {!isWali && (
+                                    <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white text-xs font-bold cursor-pointer mt-1">
+                                      <Upload className="w-3.5 h-3.5 text-[#D4AF37]" />
+                                      <span>+ Upload Gambar Kop Surat (Header)</span>
+                                      <input
+                                        type="file"
+                                        accept="image/png,image/jpeg,image/webp"
+                                        onChange={handleUploadLetterHeader}
+                                        className="hidden"
+                                      />
+                                    </label>
+                                  )}
+                                </div>
                               )}
-                              <p className="font-bold underline text-slate-950">{coordinatorName}</p>
-                              <p className="text-[11px] font-mono text-slate-600">
-                                NIK. {coordinatorNik}
-                              </p>
                             </div>
+
+                            {/* ============================================================= */}
+                            {/* NOMOR SURAT, HAL, DAN TANGGAL HIJRIAH / MASEHI                */}
+                            {/* ============================================================= */}
+                            <div className="flex items-start justify-between gap-4 pt-1 text-[14px] leading-snug">
+                              <table className="border-none">
+                                <tbody>
+                                  <tr>
+                                    <td className="py-0.5 pr-4 w-12 align-top">No</td>
+                                    <td className="py-0.5 pr-2 align-top">:</td>
+                                    <td className="py-0.5 font-medium">
+                                      {selectedSubmission.letterNumber ||
+                                        buildDefaultParentLetterNumber(
+                                          category,
+                                          selectedSubmission.scheduledDate,
+                                          72
+                                        )}
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="py-0.5 pr-4 align-top">Hal</td>
+                                    <td className="py-0.5 pr-2 align-top">:</td>
+                                    <td className="py-0.5 font-semibold">
+                                      Pemberitahuan {config.title}
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+
+                              {/* Right Date: Hijriah underlined over Masehi */}
+                              <div className="text-right shrink-0">
+                                <div className="inline-block text-center">
+                                  <p className="border-b border-slate-900 pb-0.5 px-1">
+                                    Sukoharjo,{' '}
+                                    {selectedSubmission.hijriDateText ||
+                                      formatHijriDateIndo(selectedSubmission.scheduledDate)}
+                                  </p>
+                                  <p className="pt-0.5">
+                                    {formatIndonesianDate(selectedSubmission.scheduledDate)} M
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* ============================================================= */}
+                            {/* TUJUAN SURAT & ISI SURAT (PENATAAN SESUAI TEMPLATE SURAT)     */}
+                            {/* ============================================================= */}
+                            <div className="pl-0 sm:pl-[62px] space-y-3.5 text-[14.5px] leading-relaxed text-slate-950">
+                              {/* Kepada Yth. */}
+                              <div className="leading-snug space-y-0.5 pt-1">
+                                <p>Kepada</p>
+                                <p>Yth. Bapak/Ibu Orang Tua / Wali Murid</p>
+                                <p className="font-bold">
+                                  Ananda{' '}
+                                  {currentParticipant
+                                    ? `${currentParticipant.studentName} (${currentParticipant.className})`
+                                    : '....................................'}
+                                </p>
+                                <p>Di Tempat</p>
+                              </div>
+
+                              {/* Opening Salam */}
+                              <p className="font-bold italic pt-1">
+                                Assalamu’alaikum Warahmatullahi Wabarakatuh
+                              </p>
+
+                              {/* Opening notification statement ("isinya tetap") */}
+                              <p className="text-justify">
+                                Kami beritahukan bahwa ananda akan melakukan{' '}
+                                <span className="font-bold">{config.letterExamName}</span> pada :
+                              </p>
+
+                              {/* Details Table: Hari, Tanggal, Waktu, Tempat, Jilid/Juz, Penguji */}
+                              <div className="pl-3 sm:pl-6">
+                                <table className="border-none text-[14.5px]">
+                                  <tbody>
+                                    <tr>
+                                      <td className="py-1 pr-6 w-36 font-medium">Nama / Kelas</td>
+                                      <td className="py-1 pr-3">:</td>
+                                      <td className="py-1 font-bold">
+                                        {currentParticipant
+                                          ? `${currentParticipant.studentName} (${currentParticipant.className})`
+                                          : '-'}
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td className="py-1 pr-6 font-medium">Hari</td>
+                                      <td className="py-1 pr-3">:</td>
+                                      <td className="py-1 font-semibold">
+                                        {selectedSubmission.scheduledDay ||
+                                          getIndonesianDayName(selectedSubmission.scheduledDate)}
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td className="py-1 pr-6 font-medium">Tanggal</td>
+                                      <td className="py-1 pr-3">:</td>
+                                      <td className="py-1 font-semibold">
+                                        {formatIndonesianDate(selectedSubmission.scheduledDate)}
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td className="py-1 pr-6 font-medium">Waktu</td>
+                                      <td className="py-1 pr-3">:</td>
+                                      <td className="py-1 font-semibold">
+                                        {currentParticipant?.scheduledTime ||
+                                          selectedSubmission.scheduledTime ||
+                                          '07.30 - 09.30 WIB'}
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td className="py-1 pr-6 font-medium">Tempat</td>
+                                      <td className="py-1 pr-3">:</td>
+                                      <td className="py-1 font-semibold">
+                                        {selectedSubmission.scheduledRoom ||
+                                          'Kampus SMP Islam Al Azhar 21 Solo Baru'}
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td className="py-1 pr-6 font-medium">{config.columnLabel}</td>
+                                      <td className="py-1 pr-3">:</td>
+                                      <td className="py-1 font-bold">
+                                        {currentParticipant?.jilidOrJuz || '-'}
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td className="py-1 pr-6 font-medium">Penguji</td>
+                                      <td className="py-1 pr-3">:</td>
+                                      <td className="py-1 font-bold">
+                                        {currentParticipant?.examinerName ||
+                                          selectedSubmission.examinerName ||
+                                          coordinatorName}
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+
+                              {/* Closing paragraph & 3 bullet points ("isinya tetap") */}
+                              <div className="space-y-2 pt-1">
+                                <p>
+                                  Demikian pemberitahuan ini kami sampaikan. Kami memohon kepada
+                                  orang tua untuk :
+                                </p>
+                                <ul className="space-y-1.5 pl-4">
+                                  <li className="flex items-start gap-2.5">
+                                    <span className="font-bold">-</span>
+                                    <span className="text-justify">
+                                      Mendo’akan ananda agar diberikan kemudahan kelancaran dalam
+                                      ujian dan hasil terbaik oleh Alloh ta’ala,
+                                    </span>
+                                  </li>
+                                  <li className="flex items-start gap-2.5">
+                                    <span className="font-bold">-</span>
+                                    <span className="text-justify">
+                                      Mendampingi ananda muroja’ah di rumah dan memotivasinya,
+                                    </span>
+                                  </li>
+                                  <li className="flex items-start gap-2.5">
+                                    <span className="font-bold">-</span>
+                                    <span className="text-justify">
+                                      Mengontrol ananda untuk mengurangi penggunaan gadget.
+                                    </span>
+                                  </li>
+                                </ul>
+                              </div>
+
+                              {/* Closing Salam */}
+                              <p className="font-bold italic pt-1">
+                                Wassalamu’alaikum Warahmatullahi Wabarakatuh
+                              </p>
+
+                              {/* Signature Block on the Right (Matching Template 072) */}
+                              <div className="pt-4 flex justify-end">
+                                <div className="text-left min-w-[240px] leading-snug">
+                                  <p className="text-slate-900">
+                                    SMP Islam Al Azhar 21 Solo Baru
+                                  </p>
+                                  <p className="font-semibold text-slate-950">
+                                    {letterSignerRole === 'kepsek'
+                                      ? 'Kepala Sekolah'
+                                      : 'Koordinator Tahfizh & Metode Ummi'}
+                                  </p>
+                                  {letterSignerRole === 'kepsek' ? (
+                                    settings.headmasterSignatureUrl ? (
+                                      <div className="h-16 flex items-center justify-start my-1">
+                                        <img
+                                          src={settings.headmasterSignatureUrl}
+                                          alt="TTD Kepala Sekolah"
+                                          className="h-14 object-contain"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div className="h-16" />
+                                    )
+                                  ) : settings.tahfizhCoordinatorSignatureUrl ? (
+                                    <div className="h-16 flex items-center justify-start my-1">
+                                      <img
+                                        src={settings.tahfizhCoordinatorSignatureUrl}
+                                        alt="TTD Koordinator"
+                                        className="h-14 object-contain"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="h-16" />
+                                  )}
+                                  <p className="font-bold underline text-slate-950">
+                                    {letterSignerRole === 'kepsek'
+                                      ? headmasterName
+                                      : coordinatorName}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* ============================================================= */}
+                          {/* BOTTOM FOOTER SURAT (GAMBAR UPLOAD)                           */}
+                          {/* ============================================================= */}
+                          <div className="pt-6">
+                            {letterFooterUrl ? (
+                              <img
+                                src={letterFooterUrl}
+                                alt="Footer Surat"
+                                className="w-full h-auto object-contain block select-none"
+                              />
+                            ) : (
+                              <div className="no-print border-2 border-dashed border-slate-300 rounded-xl p-3.5 bg-slate-50/70 text-center space-y-1">
+                                <p className="text-[11px] font-bold text-slate-600">
+                                  Area Gambar Footer Surat
+                                </p>
+                                {!isWali && (
+                                  <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-bold cursor-pointer">
+                                    <Upload className="w-3 h-3 text-[#D4AF37]" />
+                                    <span>+ Upload Gambar Footer Surat</span>
+                                    <input
+                                      type="file"
+                                      accept="image/png,image/jpeg,image/webp"
+                                      onChange={handleUploadLetterFooter}
+                                      className="hidden"
+                                    />
+                                  </label>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1595,18 +2077,18 @@ ${coordinatorName}`;
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 2: PENJADWALAN HARI & TANGGAL UJIAN OLEH KOORDINATOR TAHFIZH         */}
+      {/* MODAL 2: KONFIRMASI UJIAN (HARI, TANGGAL, WAKTU UJIAN & PENGUJI)          */}
       {/* ========================================================================= */}
       {isScheduleModalOpen && scheduleTargetSubmission && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full p-6 space-y-4 my-8">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div>
                 <h3 className="text-base font-extrabold text-slate-900">
-                  Atur Jadwal Pelaksanaan Ujian (Koordinator)
+                  Konfirmasi Ujian — Jadwal, Waktu Ujian & Penguji
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Koordinator: {coordinatorName}
+                  Koordinator Tahfizh: {coordinatorName} · Pengajuan oleh {scheduleTargetSubmission.teacherName}
                 </p>
               </div>
               <button
@@ -1618,51 +2100,261 @@ ${coordinatorName}`;
               </button>
             </div>
 
-            <form onSubmit={handleSaveCoordinatorSchedule} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Tanggal Pelaksanaan Ujian:
+            <form onSubmit={handleSaveCoordinatorSchedule} className="space-y-4 text-xs">
+              {/* Row 1: Tanggal & Hari */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    1. Tanggal Pelaksanaan Ujian:
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={schedDate}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setSchedDate(val);
+                      const autoDay = getIndonesianDayName(val);
+                      if (autoDay) setSchedDay(autoDay);
+                      setSchedHijriDate(formatHijriDateIndo(val));
+                      setSchedLetterNumber(
+                        buildDefaultParentLetterNumber(scheduleTargetSubmission.category, val, 72)
+                      );
+                    }}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    2. Hari Pelaksanaan (Tertulis di Surat):
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={schedDay}
+                    onChange={e => setSchedDay(e.target.value)}
+                    placeholder="Contoh: Kamis"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 font-semibold"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Waktu Ujian & Penguji */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-amber-50/70 border border-amber-200">
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    3. Waktu Pelaksanaan Ujian:
+                  </label>
+                  <input
+                    type="text"
+                    list="exam-time-presets"
+                    required
+                    value={schedTime}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setSchedTime(val);
+                      setSchedParticipantOverrides(prev => {
+                        const next = { ...prev };
+                        Object.keys(next).forEach(sid => {
+                          next[sid] = { ...next[sid], scheduledTime: val };
+                        });
+                        return next;
+                      });
+                    }}
+                    placeholder="Contoh: 07.30 - 09.30 WIB"
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-amber-300 font-bold text-slate-900"
+                  />
+                  <datalist id="exam-time-presets">
+                    <option value="07.30 - 09.30 WIB" />
+                    <option value="07.30 - 10.00 WIB" />
+                    <option value="08.00 - 11.00 WIB" />
+                    <option value="08.00 WIB - Selesai" />
+                    <option value="09.30 - 11.30 WIB" />
+                    <option value="13.00 - 14.30 WIB" />
+                  </datalist>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    4. Ustadz / Ustadzah Penguji Ujian:
+                  </label>
+                  {scheduleTargetSubmission.category === 'kenaikan_jilid' ? (
+                    <div className="w-full px-3 py-2 rounded-lg bg-slate-100 border border-slate-300 font-bold text-slate-800 flex items-center justify-between gap-2">
+                      <span className="truncate">{coordinatorName}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-extrabold shrink-0">
+                        Koordinator Tahfizh
+                      </span>
+                    </div>
+                  ) : (
+                    <select
+                      required
+                      value={schedExaminer}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setSchedExaminer(val);
+                        setSchedParticipantOverrides(prev => {
+                          const next = { ...prev };
+                          Object.keys(next).forEach(sid => {
+                            next[sid] = { ...next[sid], examinerName: val };
+                          });
+                          return next;
+                        });
+                      }}
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-amber-300 font-bold text-slate-900 cursor-pointer"
+                    >
+                      {!allExaminerTeachers.includes(schedExaminer) && schedExaminer && (
+                        <option value={schedExaminer}>{schedExaminer}</option>
+                      )}
+                      {allExaminerTeachers.map(tName => (
+                        <option key={tName} value={tName}>
+                          {tName}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+
+              {/* Row 3: Tempat, Nomor Surat, Tanggal Hijriah */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    5. Tempat Pelaksanaan:
+                  </label>
+                  <input
+                    type="text"
+                    value={schedRoom}
+                    onChange={e => setSchedRoom(e.target.value)}
+                    placeholder="Kampus SMP Islam Al Azhar 21 Solo Baru"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    6. Nomor Surat Orang Tua:
+                  </label>
+                  <input
+                    type="text"
+                    value={schedLetterNumber}
+                    onChange={e => setSchedLetterNumber(e.target.value)}
+                    placeholder="072/X/YPIA-SMPIA21/1446.2025"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    7. Tanggal Hijriah Surat:
+                  </label>
+                  <input
+                    type="text"
+                    value={schedHijriDate}
+                    onChange={e => setSchedHijriDate(e.target.value)}
+                    placeholder="17 Rabi'ul Akhir 1446 H"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 font-semibold"
+                  />
+                </div>
+              </div>
+
+              {/* Per-Student Time & Examiner Table */}
+              <div className="space-y-1.5">
+                <label className="block font-bold text-slate-700">
+                  Rincian Waktu Ujian & Penguji per Peserta ({scheduleTargetSubmission.participants.length} Siswa):
                 </label>
-                <input
-                  type="date"
-                  required
-                  value={schedDate}
-                  onChange={e => {
-                    const val = e.target.value;
-                    setSchedDate(val);
-                    const autoDay = getIndonesianDayName(val);
-                    if (autoDay) setSchedDay(autoDay);
-                  }}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 font-semibold"
-                />
+                <div className="border border-slate-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100 border-b border-slate-200 text-slate-800 font-bold">
+                        <th className="p-2 text-center w-8">No</th>
+                        <th className="p-2 text-left">Nama Siswa</th>
+                        <th className="p-2 text-left w-32">{config.columnLabel}</th>
+                        <th className="p-2 text-left w-40">Waktu Ujian</th>
+                        <th className="p-2 text-left w-48">Penguji</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {scheduleTargetSubmission.participants.map((p, idx) => {
+                        const ov = schedParticipantOverrides[p.studentId] || {
+                          scheduledTime: schedTime,
+                          examinerName: schedExaminer
+                        };
+                        return (
+                          <tr key={p.studentId}>
+                            <td className="p-2 text-center font-mono">{idx + 1}</td>
+                            <td className="p-2 font-bold text-slate-900">
+                              {p.studentName} ({p.className})
+                            </td>
+                            <td className="p-2 text-slate-700 font-semibold">{p.jilidOrJuz}</td>
+                            <td className="p-1.5">
+                              <input
+                                type="text"
+                                list="exam-time-presets"
+                                value={ov.scheduledTime}
+                                onChange={e =>
+                                  setSchedParticipantOverrides(prev => ({
+                                    ...prev,
+                                    [p.studentId]: {
+                                      ...ov,
+                                      scheduledTime: e.target.value
+                                    }
+                                  }))
+                                }
+                                className="w-full px-2 py-1 rounded border border-slate-300 font-semibold text-[11px]"
+                              />
+                            </td>
+                            <td className="p-1.5">
+                              {scheduleTargetSubmission.category === 'kenaikan_jilid' ? (
+                                <div className="w-full px-2 py-1 rounded bg-slate-100 border border-slate-200 font-semibold text-[11px] text-slate-700 truncate">
+                                  {coordinatorName}
+                                </div>
+                              ) : (
+                                <select
+                                  value={ov.examinerName}
+                                  onChange={e =>
+                                    setSchedParticipantOverrides(prev => ({
+                                      ...prev,
+                                      [p.studentId]: {
+                                        ...ov,
+                                        examinerName: e.target.value
+                                      }
+                                    }))
+                                  }
+                                  className="w-full px-2 py-1 rounded bg-white border border-slate-300 font-semibold text-[11px] text-slate-900 cursor-pointer"
+                                >
+                                  {!allExaminerTeachers.includes(ov.examinerName) &&
+                                    ov.examinerName && (
+                                      <option value={ov.examinerName}>{ov.examinerName}</option>
+                                    )}
+                                  {allExaminerTeachers.map(tName => (
+                                    <option key={tName} value={tName}>
+                                      {tName}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  Hari Pelaksanaan (Tertulis di Surat Wali):
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={schedDay}
-                  onChange={e => setSchedDay(e.target.value)}
-                  placeholder="Contoh: Kamis"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Status Jadwal & Pengajuan:
+                  Status Konfirmasi Ujian:
                 </label>
                 <select
                   value={schedStatus}
                   onChange={e => setSchedStatus(e.target.value as any)}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 font-semibold"
                 >
-                  <option value="Terjadwal">Terjadwal (Aktifkan Surat Undangan Wali Murid)</option>
+                  <option value="Terjadwal">Dikonfirmasi / Terjadwal (Aktifkan Surat Orang Tua)</option>
                   <option value="Selesai">Selesai Diuji</option>
-                  <option value="Diajukan Musyrif">Diajukan Musyrif (Menunggu)</option>
+                  <option value="Diajukan Musyrif">Diajukan Musyrif (Menunggu Konfirmasi)</option>
                 </select>
               </div>
 
@@ -1678,7 +2370,7 @@ ${coordinatorName}`;
                   type="submit"
                   className="px-5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold shadow-xs cursor-pointer"
                 >
-                  Simpan Jadwal & Buat Surat Wali
+                  Simpan Konfirmasi Waktu & Penguji
                 </button>
               </div>
             </form>
