@@ -1,4 +1,5 @@
-import { TermName, Student } from '../types';
+import { TermName, Student, ClassItem } from '../types';
+import { isClass7Bto7E } from '../utils/gradeHelper';
 
 export interface TermDefinition {
   term: TermName;
@@ -73,9 +74,9 @@ export const HAFALAN_TERM_STANDARDS: TermCurriculumStandard[] = [
     terms: [
       {
         term: 'Term 1',
-        targetValue: '0.5 Juz',
+        targetValue: 'Kelas 7B-7E: Al-Kautsar : 3 | 0.5 Juz',
         targetNumber: 0.5,
-        materialSummary: 'An-Nas s/d Al-A\'la (atau 10 lembar awal juz berjalan)',
+        materialSummary: 'Kelas 7B-7E: Al-Kautsar : 3 (An-Nas s/d Al-Kautsar : 3) | Reguler: An-Nas s/d Al-A\'la',
         competencyIndicator: 'Mampu melafalkan surat pendek dengan makhraj fasih, tajwid dasar tepat, dan hafal lancar tanpa terputus.'
       },
       {
@@ -255,7 +256,8 @@ export const UMMI_TERM_STANDARDS: TermCurriculumStandard[] = [
 export function getStudentStandardTermTarget(
   student: Student,
   term: TermName,
-  category: 'Hafalan' | 'Ummi'
+  category: 'Hafalan' | 'Ummi',
+  classes?: ClassItem[]
 ): {
   targetValue: string;
   targetNumber: number;
@@ -274,6 +276,14 @@ export function getStudentStandardTermTarget(
     
     // Pecah target tahunan ke dalam 4 term kumulatif
     const targetNumber = Number(((annualTarget / 4) * qIndex).toFixed(1));
+    if (term === 'Term 1' && isClass7Bto7E(student, classes)) {
+      return {
+        targetValue: 'Al-Kautsar : 3',
+        targetNumber,
+        deadline: termDef.defaultDeadline,
+        notes: 'Target Term 1 Kelas 7B-7E: Al-Kautsar : 3'
+      };
+    }
     return {
       targetValue: `${targetNumber} Juz`,
       targetNumber,

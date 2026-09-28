@@ -29,7 +29,7 @@ import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, AppSetting
 import { storageService } from '../services/storageService';
 import { LogoAlAzhar } from './LogoAlAzhar';
 import html2pdf from 'html2pdf.js';
-import { isGrade8or9Student } from '../utils/gradeHelper';
+import { isGrade8or9Student, isClass7Bto7E, resolveRaportTargetHafalan } from '../utils/gradeHelper';
 import { getGradeFromScore, GRADE_CONVERSION_TABLE, GradeLetter } from '../utils/gradeConversion';
 
 interface StudentRaportCardProps {
@@ -111,7 +111,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
     student.lastHafalan && student.lastHafalan !== '-' ? student.lastHafalan : 'Al-Muzzammil : 9'
   );
   const [targetSuratAyat, setTargetSuratAyat] = useState<string>(
-    student.raportTargetHafalan || student.targetSuratAyat || (student.targetJuz ? `Target ${student.targetJuz} Juz` : 'Al-A\'raf : 2')
+    resolveRaportTargetHafalan(student, classes, studentClass, 'TENGAH SEMESTER 1')
   );
   const [keteranganTahfizh, setKeteranganTahfizh] = useState<string>('Tercapai / Sesuai Target');
 
@@ -324,7 +324,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
     
     // 2. Hafalan & Target
     setSuratAyatCapaian(student.lastHafalan && student.lastHafalan !== '-' ? student.lastHafalan : 'Al-Muzzammil : 9');
-    setTargetSuratAyat(student.raportTargetHafalan || student.targetSuratAyat || (student.targetJuz ? `Target ${student.targetJuz} Juz` : 'Al-A\'raf : 2'));
+    setTargetSuratAyat(resolveRaportTargetHafalan(student, classes, studentClass, periodTitle));
     setHalaqahType(student.raportHalaqahType || normalizeHalaqah(student.program));
 
     // 3. Nama di catatan raport disesuaikan dengan nama lengkap santri
@@ -335,7 +335,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
     setSakitCount(student.raportSakit !== undefined ? student.raportSakit : attCounts.sakit);
     setIzinCount(student.raportIzin !== undefined ? student.raportIzin : attCounts.izin);
     setAlphaCount(student.raportAlpha !== undefined ? student.raportAlpha : attCounts.alfa);
-  }, [student.id, student.name, student.currentUmmiJilid, student.currentUmmiPage, student.raportUmmiCapaian, student.raportUmmiNilai, latestUmmiRecord?.id, latestUmmiRecord?.jilid, latestUmmiRecord?.page, latestUmmiRecord?.score]);
+  }, [student.id, student.name, student.classId, student.raportTargetHafalan, student.targetSuratAyat, student.currentUmmiJilid, student.currentUmmiPage, student.raportUmmiCapaian, student.raportUmmiNilai, studentClass?.id, studentClass?.name, periodTitle, latestUmmiRecord?.id, latestUmmiRecord?.jilid, latestUmmiRecord?.page, latestUmmiRecord?.score]);
 
   // Quick-save helper for immediate Ummi Jilid / Page / Nilai persistence
   const persistUmmiQuickChange = (newDesc: string, newNilai: string) => {
@@ -1143,16 +1143,16 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             </div>
 
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Periode Semester:</label>
+              <label className="block font-bold text-slate-700 mb-1">Periode Semester / Term:</label>
               <select
                 value={periodTitle}
                 onChange={(e) => setPeriodTitle(e.target.value)}
                 className="w-full p-2 bg-white border border-slate-300 rounded-lg font-semibold"
               >
-                <option value="TENGAH SEMESTER 1">TENGAH SEMESTER 1 (PTS 1)</option>
-                <option value="AKHIR SEMESTER 1">AKHIR SEMESTER 1 (PAS 1)</option>
-                <option value="TENGAH SEMESTER 2">TENGAH SEMESTER 2 (PTS 2)</option>
-                <option value="AKHIR SEMESTER 2">AKHIR SEMESTER 2 (PAS 2)</option>
+                <option value="TENGAH SEMESTER 1">TENGAH SEMESTER 1 (Term 1 / PTS 1)</option>
+                <option value="AKHIR SEMESTER 1">AKHIR SEMESTER 1 (Term 2 / PAS 1)</option>
+                <option value="TENGAH SEMESTER 2">TENGAH SEMESTER 2 (Term 3 / PTS 2)</option>
+                <option value="AKHIR SEMESTER 2">AKHIR SEMESTER 2 (Term 4 / PAS 2)</option>
               </select>
             </div>
 
@@ -1231,7 +1231,14 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
           {/* Row 2: Target & Ketidakhadiran */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Target Hafalan:</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block font-bold text-slate-700">Target Hafalan:</label>
+                {isClass7Bto7E(student, classes, studentClass) && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    Term 1 Kelas 7B–7E: Al-Kautsar : 3
+                  </span>
+                )}
+              </div>
               <input
                 type="text"
                 value={targetSuratAyat}
@@ -1254,9 +1261,57 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
                   storageService.saveStudent(updatedStudent);
                   onUpdateStudent?.(updatedStudent);
                 }}
-                placeholder="Contoh: Al-A'raf : 2"
+                placeholder="Contoh: Al-Kautsar : 3"
                 className="w-full p-2 bg-white border border-slate-300 rounded-lg font-semibold focus:ring-2 focus:ring-emerald-500"
               />
+              <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextTarget = 'Al-Kautsar : 3';
+                    setTargetSuratAyat(nextTarget);
+                    const updatedStudent: Student = {
+                      ...student,
+                      program: halaqahType,
+                      raportHalaqahType: halaqahType,
+                      targetSuratAyat: nextTarget,
+                      raportTargetHafalan: nextTarget,
+                      lastHafalan: suratAyatCapaian.trim(),
+                      raportNotes: teacherNotes.trim(),
+                      raportUmmiCapaian: ummiCapaianDescription.trim(),
+                      raportUmmiNilai: ummiNilaiScore.trim(),
+                      raportAlpha: alphaCount,
+                      raportIzin: izinCount,
+                      raportSakit: sakitCount
+                    };
+                    storageService.saveStudent(updatedStudent);
+                    onUpdateStudent?.(updatedStudent);
+                  }}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 transition cursor-pointer"
+                >
+                  Set Al-Kautsar : 3
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const count = storageService.applyTargetHafalan7Bto7E('Al-Kautsar : 3');
+                    if (isClass7Bto7E(student, classes, studentClass)) {
+                      setTargetSuratAyat('Al-Kautsar : 3');
+                      onUpdateStudent?.({
+                        ...student,
+                        targetSuratAyat: 'Al-Kautsar : 3',
+                        raportTargetHafalan: 'Al-Kautsar : 3'
+                      });
+                    }
+                    setSaveSuccessMessage(`Target Hafalan Term 1 "Al-Kautsar : 3" diterapkan untuk ${count} santri Kelas 7B–7E!`);
+                    setTimeout(() => setSaveSuccessMessage(''), 4000);
+                  }}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition cursor-pointer"
+                  title="Terapkan target hafalan Term 1 Al-Kautsar : 3 ke seluruh santri Kelas 7B s/d 7E"
+                >
+                  Terapkan ke Semua 7B–7E
+                </button>
+              </div>
             </div>
 
             <div>

@@ -13,10 +13,20 @@ import {
   onSnapshot,
   query,
   orderBy,
-  getDocFromServer
+  getDocFromServer,
+  setLogLevel,
+  disableNetwork,
+  enableNetwork
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 export { firebaseConfig };
+
+// Silence internal @firebase/firestore SDK backoff/quota console.error spam
+try {
+  setLogLevel('silent');
+} catch {
+  // Ignore if not supported in environment
+}
 
 // Initialize Firebase App
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -25,18 +35,50 @@ export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getA
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 
+let networkDisabled = false;
+
+export function isFirestoreQuotaError(err: unknown): boolean {
+  if (!err) return false;
+  const code = (err as any)?.code || '';
+  const msg = String((err as any)?.message || err || '').toLowerCase();
+  return (
+    code === 'resource-exhausted' ||
+    msg.includes('resource-exhausted') ||
+    msg.includes('quota limit exceeded') ||
+    msg.includes('quota exceeded') ||
+    msg.includes('free daily write units')
+  );
+}
+
+export async function disableFirestoreNetwork(): Promise<void> {
+  if (networkDisabled) return;
+  networkDisabled = true;
+  try {
+    await disableNetwork(db);
+  } catch {
+    // Ignore errors when disabling network
+  }
+}
+
+export async function enableFirestoreNetwork(): Promise<void> {
+  if (!networkDisabled) return;
+  networkDisabled = false;
+  try {
+    await enableNetwork(db);
+  } catch {
+    // Ignore errors when enabling network
+  }
+}
+
 // Validate Connection to Firestore
 export async function testFirestoreConnection(): Promise<boolean> {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
     return true;
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.message.includes('the client is offline')) {
-        console.warn('Please check your Firebase configuration or network connection.');
-      } else if (error.message.includes('Quota exceeded') || error.message.includes('Quota limit exceeded')) {
-        console.warn('Firestore daily read quota limit reached. Using local cache.');
-      }
+    if (isFirestoreQuotaError(error)) {
+      await disableFirestoreNetwork();
+      return false;
     }
     return true;
   }

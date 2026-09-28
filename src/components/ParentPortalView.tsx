@@ -293,11 +293,11 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   {TERM_DEFINITIONS.map(td => {
-                    const hafalanStd = getStudentStandardTermTarget(student, td.term, 'Hafalan');
+                    const hafalanStd = getStudentStandardTermTarget(student, td.term, 'Hafalan', classes);
                     const evalHafalan = evaluateHafalanTerm(student.totalJuzHafal || 0, hafalanStd.targetNumber);
                     
                     const isGrade7 = !isGrade8or9Student(student, classes);
-                    const ummiStd = isGrade7 ? getStudentStandardTermTarget(student, td.term, 'Ummi') : null;
+                    const ummiStd = isGrade7 ? getStudentStandardTermTarget(student, td.term, 'Ummi', classes) : null;
                     const evalUmmi = isGrade7 && ummiStd ? evaluateUmmiTerm(
                       student.currentUmmiJilid || 'Jilid 1',
                       student.currentUmmiPage || 1,
@@ -318,7 +318,7 @@ export const ParentPortalView: React.FC<ParentPortalViewProps> = ({
                           <div className="flex justify-between text-[10px]">
                             <span className="text-slate-500">Hafalan:</span>
                             <span className={`font-black ${evalHafalan.status === 'on-track' ? 'text-emerald-700' : 'text-amber-700'}`}>
-                              {hafalanStd.targetNumber} Juz
+                              {hafalanStd.targetValue || `${hafalanStd.targetNumber} Juz`}
                             </span>
                           </div>
                           <div className="w-full bg-slate-100 rounded-full h-1 mt-1 overflow-hidden">

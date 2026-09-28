@@ -33,7 +33,7 @@ import {
 import { INITIAL_MATERIALS } from '../data/ummiData';
 import { calculateCategory } from '../data/quranData';
 import { INITIAL_MATRIKULASI_STUDENTS, INITIAL_MATRIKULASI_RECORDS } from '../data/iqroData';
-import { isGrade8or9Student, isUmmiEnrolledStudent } from '../utils/gradeHelper';
+import { isGrade8or9Student, isUmmiEnrolledStudent, isClass7Bto7E, isLegacyDefaultRaportTarget } from '../utils/gradeHelper';
 import { getGradeFromScore } from '../utils/gradeConversion';
 import { TermName } from '../types';
 import { getStudentStandardTermTarget, evaluateHafalanTerm, evaluateUmmiTerm } from '../data/targetTermData';
@@ -47,7 +47,10 @@ import {
   updateDoc, 
   deleteDoc, 
   writeBatch,
-  onSnapshot 
+  onSnapshot,
+  isFirestoreQuotaError,
+  disableFirestoreNetwork,
+  enableFirestoreNetwork
 } from './firebase';
 
 const STORAGE_KEYS = {
@@ -70,8 +73,85 @@ const STORAGE_KEYS = {
   EXAM_SUBMISSIONS: 'tahfizh_smpia21_exam_submissions',
   CLOUD_SYNCED: 'tahfizh_smpia21_cloud_synced',
   QUOTA_EXCEEDED: 'tahfizh_smpia21_quota_exceeded',
+  QUOTA_EXCEEDED_DATE: 'tahfizh_smpia21_quota_exceeded_date',
   DELETED_IDS: 'tahfizh_smpia21_deleted_ids'
 };
+
+let activeSnapshotUnsubscribers: Array<() => void> = [];
+
+function getTodayUtcDateStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function checkQuotaExceeded(): boolean {
+  try {
+    const flag = localStorage.getItem(STORAGE_KEYS.QUOTA_EXCEEDED) === 'true';
+    if (!flag) return false;
+    const savedDate = localStorage.getItem(STORAGE_KEYS.QUOTA_EXCEEDED_DATE);
+    const today = getTodayUtcDateStr();
+    // If a new UTC day has started, automatically reset the daily quota flag
+    if (savedDate && savedDate !== today) {
+      localStorage.removeItem(STORAGE_KEYS.QUOTA_EXCEEDED);
+      localStorage.removeItem(STORAGE_KEYS.QUOTA_EXCEEDED_DATE);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function stopRealtimeListeners(): void {
+  if (activeSnapshotUnsubscribers.length > 0) {
+    activeSnapshotUnsubscribers.forEach(unsub => {
+      try {
+        unsub();
+      } catch {
+        // Ignore unsubscribe error
+      }
+    });
+    activeSnapshotUnsubscribers = [];
+  }
+  isCloudListenerAttached = false;
+}
+
+function markQuotaExceeded(exceeded: boolean): void {
+  try {
+    if (exceeded) {
+      localStorage.setItem(STORAGE_KEYS.QUOTA_EXCEEDED, 'true');
+      localStorage.setItem(STORAGE_KEYS.QUOTA_EXCEEDED_DATE, getTodayUtcDateStr());
+      stopRealtimeListeners();
+      disableFirestoreNetwork();
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.QUOTA_EXCEEDED);
+      localStorage.removeItem(STORAGE_KEYS.QUOTA_EXCEEDED_DATE);
+    }
+  } catch {
+    // Ignore storage error
+  }
+}
+
+// Immediately disable Firestore network on startup if daily quota was already marked exceeded today
+if (checkQuotaExceeded()) {
+  disableFirestoreNetwork();
+}
+
+function withWriteTimeout<T>(promise: Promise<T>, ms = 3500): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('resource-exhausted: Firestore write stream timeout'));
+    }, ms);
+    promise
+      .then(val => {
+        clearTimeout(timer);
+        resolve(val);
+      })
+      .catch(err => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
 
 function getDeletedIdsSet(): Set<string> {
   try {
@@ -125,9 +205,10 @@ function rEndSurah(r: MemorizationRecord): string {
 // Background Cloud Sync Helpers
 async function syncCollectionToCloud(collectionName: string, items: any[]): Promise<void> {
   try {
-    if (!items || items.length === 0) return;
+    if (!items || items.length === 0 || checkQuotaExceeded()) return;
     // Chunk items into batches of 300 (Firestore limit is 500)
     for (let i = 0; i < items.length; i += 300) {
+      if (checkQuotaExceeded()) return;
       const chunk = items.slice(i, i + 300);
       const batch = writeBatch(db);
       for (const item of chunk) {
@@ -136,35 +217,46 @@ async function syncCollectionToCloud(collectionName: string, items: any[]): Prom
         const sanitized = JSON.parse(JSON.stringify(item));
         batch.set(ref, sanitized, { merge: true });
       }
-      await batch.commit();
+      await withWriteTimeout(batch.commit(), 4000);
     }
     console.log(`[Cloud Sync] Synced ${items.length} docs to collection '${collectionName}'`);
   } catch (err) {
-    console.error(`[Cloud Sync] Batch write error for ${collectionName}:`, err);
-    throw err;
+    if (isFirestoreQuotaError(err)) {
+      markQuotaExceeded(true);
+      return;
+    }
+    console.warn(`[Cloud Sync] Batch write warning for ${collectionName}:`, err);
   }
 }
 
 async function syncDocToCloud(collectionName: string, id: string, data: any): Promise<void> {
   try {
-    if (!id || !data) return;
+    if (!id || !data || checkQuotaExceeded()) return;
     const ref = doc(db, collectionName, String(id));
     const sanitized = JSON.parse(JSON.stringify(data));
-    await setDoc(ref, sanitized, { merge: true });
+    await withWriteTimeout(setDoc(ref, sanitized, { merge: true }), 3500);
     console.log(`[Cloud Sync] Synced doc '${collectionName}/${id}'`);
   } catch (err) {
-    console.error(`[Cloud Sync] Doc write error for ${collectionName}/${id}:`, err);
+    if (isFirestoreQuotaError(err)) {
+      markQuotaExceeded(true);
+      return;
+    }
+    console.warn(`[Cloud Sync] Doc write warning for ${collectionName}/${id}:`, err);
   }
 }
 
 async function deleteDocFromCloud(collectionName: string, id: string): Promise<void> {
   try {
-    if (!id) return;
+    if (!id || checkQuotaExceeded()) return;
     const ref = doc(db, collectionName, String(id));
-    await deleteDoc(ref);
+    await withWriteTimeout(deleteDoc(ref), 3500);
     console.log(`[Cloud Sync] Deleted doc '${collectionName}/${id}'`);
   } catch (err) {
-    console.error(`[Cloud Sync] Delete error for ${collectionName}/${id}:`, err);
+    if (isFirestoreQuotaError(err)) {
+      markQuotaExceeded(true);
+      return;
+    }
+    console.warn(`[Cloud Sync] Delete warning for ${collectionName}/${id}:`, err);
   }
 }
 
@@ -187,11 +279,11 @@ function compareRecordsDesc(
   return String(b?.id || '').localeCompare(String(a?.id || ''), undefined, { numeric: true });
 }
 
-// Safe merge helper: ensures incoming cloud snapshots NEVER wipe out local items that haven't synced yet, and NEVER resurrect deleted items
+// Safe merge helper: merges incoming cloud snapshots into local storage WITHOUT triggering write-backs inside onSnapshot
 function mergeCloudSnapshotWithLocal<T extends { id: string }>(
   key: string,
   cloudList: T[],
-  collectionName: string,
+  _collectionName: string,
   sortCompare?: (a: T, b: T) => number
 ): T[] {
   const deletedSet = getDeletedIdsSet();
@@ -202,7 +294,6 @@ function mergeCloudSnapshotWithLocal<T extends { id: string }>(
     if (item && item.id) {
       const idStr = String(item.id);
       if (deletedSet.has(idStr)) {
-        deleteDocFromCloud(collectionName, idStr);
         return;
       }
       const existing = cloudMap.get(idStr);
@@ -212,7 +303,6 @@ function mergeCloudSnapshotWithLocal<T extends { id: string }>(
     }
   });
 
-  const missingInCloud: T[] = [];
   localList.forEach(localItem => {
     if (localItem && localItem.id) {
       const idStr = String(localItem.id);
@@ -220,32 +310,22 @@ function mergeCloudSnapshotWithLocal<T extends { id: string }>(
       if (!cloudItem) {
         // Keep local item that hasn't arrived in cloud yet
         cloudMap.set(idStr, localItem);
-        missingInCloud.push(localItem);
       } else {
         const localUpdated = (localItem as any)._updatedAt || 0;
         const cloudUpdated = (cloudItem as any)._updatedAt || 0;
         if (localUpdated > cloudUpdated) {
           cloudMap.set(idStr, localItem);
-          missingInCloud.push(localItem);
         }
       }
     }
   });
 
-  let merged = Array.from(cloudMap.values());
+  const merged = Array.from(cloudMap.values());
   if (sortCompare) {
     merged.sort(sortCompare);
   }
 
   setItem(key, merged);
-
-  // If there were local items not yet in Cloud, auto-push to Cloud in background
-  if (missingInCloud.length > 0) {
-    syncCollectionToCloud(collectionName, missingInCloud).catch(e =>
-      console.warn(`[Cloud Sync] Auto-syncing missing ${collectionName} to cloud:`, e)
-    );
-  }
-
   return merged;
 }
 
@@ -267,226 +347,265 @@ export const storageService = {
 
   // Attach Realtime Multi-Device Listeners
   startRealtimeSync() {
-    if (isCloudListenerAttached) return;
+    if (isCloudListenerAttached || checkQuotaExceeded()) return;
     isCloudListenerAttached = true;
     console.log('[Cloud Sync] Starting realtime multi-device listeners...');
 
+    const onListenerError = (label: string) => (err: unknown) => {
+      if (isFirestoreQuotaError(err)) {
+        markQuotaExceeded(true);
+        this.notifyListeners();
+        return;
+      }
+      console.warn(`[Cloud Sync] ${label} listener warning:`, err);
+    };
+
     try {
       // 1. Memorization Records
-      onSnapshot(collection(db, 'memorization_records'), (snap) => {
-        const list: MemorizationRecord[] = [];
-        snap.forEach(d => {
-          const item = d.data() as MemorizationRecord;
-          if (item) list.push({ ...item, id: item.id || d.id });
-        });
-        mergeCloudSnapshotWithLocal(
-          STORAGE_KEYS.MEMORIZATION,
-          list,
-          'memorization_records',
-          compareRecordsDesc
-        );
-        this.notifyListeners();
-      }, (err) => console.warn('[Cloud Sync] Memorization listener warning:', err));
+      activeSnapshotUnsubscribers.push(
+        onSnapshot(collection(db, 'memorization_records'), (snap) => {
+          const list: MemorizationRecord[] = [];
+          snap.forEach(d => {
+            const item = d.data() as MemorizationRecord;
+            if (item) list.push({ ...item, id: item.id || d.id });
+          });
+          mergeCloudSnapshotWithLocal(
+            STORAGE_KEYS.MEMORIZATION,
+            list,
+            'memorization_records',
+            compareRecordsDesc
+          );
+          this.notifyListeners();
+        }, onListenerError('Memorization'))
+      );
 
       // 2. Ummi Records
-      onSnapshot(collection(db, 'ummi_records'), (snap) => {
-        const list: UmmiRecord[] = [];
-        snap.forEach(d => {
-          const item = d.data() as UmmiRecord;
-          if (item) list.push({ ...item, id: item.id || d.id });
-        });
-        mergeCloudSnapshotWithLocal(
-          STORAGE_KEYS.UMMI,
-          list,
-          'ummi_records',
-          compareRecordsDesc
-        );
-        this.notifyListeners();
-      }, (err) => console.warn('[Cloud Sync] Ummi listener warning:', err));
+      activeSnapshotUnsubscribers.push(
+        onSnapshot(collection(db, 'ummi_records'), (snap) => {
+          const list: UmmiRecord[] = [];
+          snap.forEach(d => {
+            const item = d.data() as UmmiRecord;
+            if (item) list.push({ ...item, id: item.id || d.id });
+          });
+          mergeCloudSnapshotWithLocal(
+            STORAGE_KEYS.UMMI,
+            list,
+            'ummi_records',
+            compareRecordsDesc
+          );
+          this.notifyListeners();
+        }, onListenerError('Ummi'))
+      );
 
       // 3. Students
-      onSnapshot(collection(db, 'students'), (snap) => {
-        const list: Student[] = [];
-        snap.forEach(d => {
-          const item = d.data() as Student;
-          if (item) list.push({ ...item, id: item.id || d.id });
-        });
-        mergeCloudSnapshotWithLocal(STORAGE_KEYS.STUDENTS, list, 'students');
-        this.notifyListeners();
-      }, (err) => console.warn('[Cloud Sync] Students listener warning:', err));
+      activeSnapshotUnsubscribers.push(
+        onSnapshot(collection(db, 'students'), (snap) => {
+          const list: Student[] = [];
+          snap.forEach(d => {
+            const item = d.data() as Student;
+            if (item) list.push({ ...item, id: item.id || d.id });
+          });
+          mergeCloudSnapshotWithLocal(STORAGE_KEYS.STUDENTS, list, 'students');
+          this.notifyListeners();
+        }, onListenerError('Students'))
+      );
 
       // 4. Teachers
-      onSnapshot(collection(db, 'teachers'), (snap) => {
-        const list: Teacher[] = [];
-        snap.forEach(d => {
-          const item = d.data() as Teacher;
-          if (item) list.push({ ...item, id: item.id || d.id });
-        });
-        mergeCloudSnapshotWithLocal(STORAGE_KEYS.TEACHERS, list, 'teachers');
-        this.notifyListeners();
-      }, (err) => console.warn('[Cloud Sync] Teachers listener warning:', err));
+      activeSnapshotUnsubscribers.push(
+        onSnapshot(collection(db, 'teachers'), (snap) => {
+          const list: Teacher[] = [];
+          snap.forEach(d => {
+            const item = d.data() as Teacher;
+            if (item) list.push({ ...item, id: item.id || d.id });
+          });
+          mergeCloudSnapshotWithLocal(STORAGE_KEYS.TEACHERS, list, 'teachers');
+          this.notifyListeners();
+        }, onListenerError('Teachers'))
+      );
 
       // 5. Classes
-      onSnapshot(collection(db, 'classes'), (snap) => {
-        const list: ClassItem[] = [];
-        snap.forEach(d => {
-          const item = d.data() as ClassItem;
-          if (item) list.push({ ...item, id: item.id || d.id });
-        });
-        mergeCloudSnapshotWithLocal(STORAGE_KEYS.CLASSES, list, 'classes');
-        this.notifyListeners();
-      }, (err) => console.warn('[Cloud Sync] Classes listener warning:', err));
+      activeSnapshotUnsubscribers.push(
+        onSnapshot(collection(db, 'classes'), (snap) => {
+          const list: ClassItem[] = [];
+          snap.forEach(d => {
+            const item = d.data() as ClassItem;
+            if (item) list.push({ ...item, id: item.id || d.id });
+          });
+          mergeCloudSnapshotWithLocal(STORAGE_KEYS.CLASSES, list, 'classes');
+          this.notifyListeners();
+        }, onListenerError('Classes'))
+      );
 
       // 5b. Halaqah Groups (Intelligent Realtime Sync)
-      onSnapshot(collection(db, 'halaqah_groups'), (snap) => {
-        const list: HalaqahGroup[] = [];
-        snap.forEach(d => {
-          const item = d.data() as HalaqahGroup;
-          if (item) list.push({ ...item, id: item.id || d.id });
-        });
-        mergeCloudSnapshotWithLocal(
-          STORAGE_KEYS.HALAQAH_GROUPS,
-          list,
-          'halaqah_groups',
-          (a, b) => (a.name || '').localeCompare(b.name || '', 'id', { numeric: true, sensitivity: 'base' })
-        );
-        this.notifyListeners();
-      }, (err) => console.warn('[Cloud Sync] Halaqah Groups listener warning:', err));
+      activeSnapshotUnsubscribers.push(
+        onSnapshot(collection(db, 'halaqah_groups'), (snap) => {
+          const list: HalaqahGroup[] = [];
+          snap.forEach(d => {
+            const item = d.data() as HalaqahGroup;
+            if (item) list.push({ ...item, id: item.id || d.id });
+          });
+          mergeCloudSnapshotWithLocal(
+            STORAGE_KEYS.HALAQAH_GROUPS,
+            list,
+            'halaqah_groups',
+            (a, b) => (a.name || '').localeCompare(b.name || '', 'id', { numeric: true, sensitivity: 'base' })
+          );
+          this.notifyListeners();
+        }, onListenerError('Halaqah Groups'))
+      );
 
       // 6. Targets
-      onSnapshot(collection(db, 'targets'), (snap) => {
-        const list: TargetProgress[] = [];
-        snap.forEach(d => {
-          const item = d.data() as TargetProgress;
-          if (item) list.push({ ...item, id: item.id || d.id });
-        });
-        mergeCloudSnapshotWithLocal(STORAGE_KEYS.TARGETS, list, 'targets');
-        this.notifyListeners();
-      }, (err) => console.warn('[Cloud Sync] Targets listener warning:', err));
+      activeSnapshotUnsubscribers.push(
+        onSnapshot(collection(db, 'targets'), (snap) => {
+          const list: TargetProgress[] = [];
+          snap.forEach(d => {
+            const item = d.data() as TargetProgress;
+            if (item) list.push({ ...item, id: item.id || d.id });
+          });
+          mergeCloudSnapshotWithLocal(STORAGE_KEYS.TARGETS, list, 'targets');
+          this.notifyListeners();
+        }, onListenerError('Targets'))
+      );
 
       // 7. Materials
-      onSnapshot(collection(db, 'materials'), (snap) => {
-        const list: LearningMaterial[] = [];
-        snap.forEach(d => {
-          const item = d.data() as LearningMaterial;
-          if (item) list.push({ ...item, id: item.id || d.id });
-        });
-        mergeCloudSnapshotWithLocal(STORAGE_KEYS.MATERIALS, list, 'materials');
-        this.notifyListeners();
-      }, (err) => console.warn('[Cloud Sync] Materials listener warning:', err));
+      activeSnapshotUnsubscribers.push(
+        onSnapshot(collection(db, 'materials'), (snap) => {
+          const list: LearningMaterial[] = [];
+          snap.forEach(d => {
+            const item = d.data() as LearningMaterial;
+            if (item) list.push({ ...item, id: item.id || d.id });
+          });
+          mergeCloudSnapshotWithLocal(STORAGE_KEYS.MATERIALS, list, 'materials');
+          this.notifyListeners();
+        }, onListenerError('Materials'))
+      );
 
       // 8. Violations
-      onSnapshot(collection(db, 'violations'), (snap) => {
-        const list: TahfizhViolation[] = [];
-        snap.forEach(d => {
-          const item = d.data() as TahfizhViolation;
-          if (item) list.push({ ...item, id: item.id || d.id });
-        });
-        mergeCloudSnapshotWithLocal(
-          STORAGE_KEYS.VIOLATIONS,
-          list,
-          'violations',
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
-        this.notifyListeners();
-      }, (err) => console.warn('[Cloud Sync] Violations listener warning:', err));
+      activeSnapshotUnsubscribers.push(
+        onSnapshot(collection(db, 'violations'), (snap) => {
+          const list: TahfizhViolation[] = [];
+          snap.forEach(d => {
+            const item = d.data() as TahfizhViolation;
+            if (item) list.push({ ...item, id: item.id || d.id });
+          });
+          mergeCloudSnapshotWithLocal(
+            STORAGE_KEYS.VIOLATIONS,
+            list,
+            'violations',
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+          this.notifyListeners();
+        }, onListenerError('Violations'))
+      );
 
       // 9. Matrikulasi Students
-      onSnapshot(collection(db, 'matrikulasi_students'), (snap) => {
-        const list: MatrikulasiStudent[] = [];
-        snap.forEach(d => {
-          const item = d.data() as MatrikulasiStudent;
-          if (item) list.push({ ...item, id: item.id || d.id });
-        });
-        mergeCloudSnapshotWithLocal(STORAGE_KEYS.MATRIKULASI_STUDENTS, list, 'matrikulasi_students');
-        this.notifyListeners();
-      }, (err) => console.warn('[Cloud Sync] Matrikulasi students listener warning:', err));
+      activeSnapshotUnsubscribers.push(
+        onSnapshot(collection(db, 'matrikulasi_students'), (snap) => {
+          const list: MatrikulasiStudent[] = [];
+          snap.forEach(d => {
+            const item = d.data() as MatrikulasiStudent;
+            if (item) list.push({ ...item, id: item.id || d.id });
+          });
+          mergeCloudSnapshotWithLocal(STORAGE_KEYS.MATRIKULASI_STUDENTS, list, 'matrikulasi_students');
+          this.notifyListeners();
+        }, onListenerError('Matrikulasi students'))
+      );
 
       // 10. Matrikulasi Records
-      onSnapshot(collection(db, 'matrikulasi_records'), (snap) => {
-        const list: MatrikulasiRecord[] = [];
-        snap.forEach(d => {
-          const item = d.data() as MatrikulasiRecord;
-          if (item) list.push({ ...item, id: item.id || d.id });
-        });
-        mergeCloudSnapshotWithLocal(
-          STORAGE_KEYS.MATRIKULASI_RECORDS, 
-          list, 
-          'matrikulasi_records',
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
-        this.notifyListeners();
-      }, (err) => console.warn('[Cloud Sync] Matrikulasi records listener warning:', err));
+      activeSnapshotUnsubscribers.push(
+        onSnapshot(collection(db, 'matrikulasi_records'), (snap) => {
+          const list: MatrikulasiRecord[] = [];
+          snap.forEach(d => {
+            const item = d.data() as MatrikulasiRecord;
+            if (item) list.push({ ...item, id: item.id || d.id });
+          });
+          mergeCloudSnapshotWithLocal(
+            STORAGE_KEYS.MATRIKULASI_RECORDS, 
+            list, 
+            'matrikulasi_records',
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+          this.notifyListeners();
+        }, onListenerError('Matrikulasi records'))
+      );
 
       // 10b. Attendance Records
-      onSnapshot(collection(db, 'attendance_records'), (snap) => {
-        const list: AttendanceRecord[] = [];
-        snap.forEach(d => {
-          const item = d.data() as AttendanceRecord;
-          if (item) list.push({ ...item, id: item.id || d.id });
-        });
-        mergeCloudSnapshotWithLocal(
-          STORAGE_KEYS.ATTENDANCE,
-          list,
-          'attendance_records',
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
-        this.notifyListeners();
-      }, (err) => console.warn('[Cloud Sync] Attendance records listener warning:', err));
+      activeSnapshotUnsubscribers.push(
+        onSnapshot(collection(db, 'attendance_records'), (snap) => {
+          const list: AttendanceRecord[] = [];
+          snap.forEach(d => {
+            const item = d.data() as AttendanceRecord;
+            if (item) list.push({ ...item, id: item.id || d.id });
+          });
+          mergeCloudSnapshotWithLocal(
+            STORAGE_KEYS.ATTENDANCE,
+            list,
+            'attendance_records',
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+          this.notifyListeners();
+        }, onListenerError('Attendance records'))
+      );
 
       // 10c. Exam Submissions (Ujian Kenaikan Jilid, Munaqosyah, Juziyyah)
-      onSnapshot(collection(db, 'exam_submissions'), (snap) => {
-        const list: ExamSubmission[] = [];
-        snap.forEach(d => {
-          const item = d.data() as ExamSubmission;
-          if (item) list.push({ ...item, id: item.id || d.id });
-        });
-        mergeCloudSnapshotWithLocal(
-          STORAGE_KEYS.EXAM_SUBMISSIONS,
-          list,
-          'exam_submissions',
-          (a, b) => new Date(b.submissionDate || b.createdAt).getTime() - new Date(a.submissionDate || a.createdAt).getTime()
-        );
-        this.notifyListeners();
-      }, (err) => console.warn('[Cloud Sync] Exam submissions listener warning:', err));
+      activeSnapshotUnsubscribers.push(
+        onSnapshot(collection(db, 'exam_submissions'), (snap) => {
+          const list: ExamSubmission[] = [];
+          snap.forEach(d => {
+            const item = d.data() as ExamSubmission;
+            if (item) list.push({ ...item, id: item.id || d.id });
+          });
+          mergeCloudSnapshotWithLocal(
+            STORAGE_KEYS.EXAM_SUBMISSIONS,
+            list,
+            'exam_submissions',
+            (a, b) => new Date(b.submissionDate || b.createdAt).getTime() - new Date(a.submissionDate || a.createdAt).getTime()
+          );
+          this.notifyListeners();
+        }, onListenerError('Exam submissions'))
+      );
 
       // 11. Users
-      onSnapshot(collection(db, 'users'), (snap) => {
-        const list: User[] = [];
-        snap.forEach(d => list.push(d.data() as User));
-        if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.USERS)) {
-          setItem(STORAGE_KEYS.USERS, list);
-          this.notifyListeners();
-        }
-      }, (err) => console.warn('[Cloud Sync] Users listener warning:', err));
+      activeSnapshotUnsubscribers.push(
+        onSnapshot(collection(db, 'users'), (snap) => {
+          const list: User[] = [];
+          snap.forEach(d => list.push(d.data() as User));
+          if (list.length > 0 || !localStorage.getItem(STORAGE_KEYS.USERS)) {
+            setItem(STORAGE_KEYS.USERS, list);
+            this.notifyListeners();
+          }
+        }, onListenerError('Users'))
+      );
 
       // 12. App Settings
-      onSnapshot(doc(db, 'app_settings', 'config'), (snap) => {
-        if (snap.exists()) {
-          setItem(STORAGE_KEYS.SETTINGS, snap.data() as AppSettings);
-          this.notifyListeners();
-        }
-      }, (err) => console.warn('[Cloud Sync] Settings listener warning:', err));
+      activeSnapshotUnsubscribers.push(
+        onSnapshot(doc(db, 'app_settings', 'config'), (snap) => {
+          if (snap.exists()) {
+            setItem(STORAGE_KEYS.SETTINGS, snap.data() as AppSettings);
+            this.notifyListeners();
+          }
+        }, onListenerError('Settings'))
+      );
     } catch (err) {
+      if (isFirestoreQuotaError(err)) {
+        markQuotaExceeded(true);
+      }
       console.warn('[Cloud Sync] Realtime listener error:', err);
     }
   },
 
   // Quota Management for Firebase Spark Tier
   isQuotaExceeded(): boolean {
-    return localStorage.getItem(STORAGE_KEYS.QUOTA_EXCEEDED) === 'true';
+    return checkQuotaExceeded();
   },
 
   setQuotaExceeded(exceeded: boolean): void {
-    if (exceeded) {
-      localStorage.setItem(STORAGE_KEYS.QUOTA_EXCEEDED, 'true');
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.QUOTA_EXCEEDED);
-    }
+    markQuotaExceeded(exceeded);
   },
 
   clearQuotaStatus(): void {
-    localStorage.removeItem(STORAGE_KEYS.QUOTA_EXCEEDED);
+    markQuotaExceeded(false);
+    enableFirestoreNetwork();
   },
 
   getQuotaInfo(): { exceeded: boolean; message: string; upgradeUrl: string } {
@@ -503,27 +622,35 @@ export const storageService = {
   // Initialize Realtime Cloud Sync & Download / Seed to Firebase
   async initCloudSync(force: boolean = false): Promise<{ success: boolean; message: string; isQuotaExceeded?: boolean }> {
     try {
+      if (force) {
+        this.clearQuotaStatus();
+      } else if (this.isQuotaExceeded()) {
+        await disableFirestoreNetwork();
+        return {
+          success: false,
+          isQuotaExceeded: true,
+          message: 'Batas kuota harian Firebase Firestore telah tercapai. Aplikasi beroperasi normal dalam Mode Penyimpanan Lokal (Offline).'
+        };
+      }
+
       console.log('[Cloud Sync] Initializing Firestore Sync across devices...', { force });
 
-      // Start Real-time snapshot listeners immediately
-      this.startRealtimeSync();
-
-      // Helper for intelligent 2-way sync: merge cloud items + local un-synced items
+      const isAlreadySeeded = localStorage.getItem(STORAGE_KEYS.CLOUD_SYNCED) === 'true';
       const deletedSet = getDeletedIdsSet();
+
+      // Helper for intelligent 2-way sync without burning write quota on every reload
       const mergeTwoWay = async <T extends { id: string }>(col: string, local: T[], cloud: T[]): Promise<T[]> => {
         const cleanLocal = local.filter(item => item && item.id && !deletedSet.has(String(item.id)));
         const cleanCloud: T[] = [];
         cloud.forEach(c => {
           if (!c || !c.id) return;
-          if (deletedSet.has(String(c.id))) {
-            deleteDocFromCloud(col, String(c.id));
-          } else {
+          if (!deletedSet.has(String(c.id))) {
             cleanCloud.push(c);
           }
         });
 
         if (cleanCloud.length === 0) {
-          if (cleanLocal.length > 0) {
+          if (cleanLocal.length > 0 && (!isAlreadySeeded || force) && !checkQuotaExceeded()) {
             await syncCollectionToCloud(col, cleanLocal);
           }
           return cleanLocal;
@@ -545,7 +672,7 @@ export const storageService = {
             }
           }
         });
-        if (missingInCloud.length > 0) {
+        if (force && missingInCloud.length > 0 && !checkQuotaExceeded()) {
           await syncCollectionToCloud(col, missingInCloud);
         }
         return Array.from(map.values());
@@ -615,12 +742,10 @@ export const storageService = {
       mergedUmmi.sort(compareRecordsDesc);
       setItem(STORAGE_KEYS.UMMI, mergedUmmi);
 
-      // Sinkronisasi otomatis data santri dengan setoran evaluasi Ummi & Hafalan terkini
+      // Sinkronisasi otomatis data santri dengan setoran evaluasi Ummi & Hafalan terkini (secara lokal)
       try {
         let studentsChanged = false;
         let ummiChanged = false;
-        const studentsToSync: Student[] = [];
-        const ummiToSync: UmmiRecord[] = [];
 
         const latestUmmiMap = new Map<string, UmmiRecord>();
         mergedUmmi.forEach(u => {
@@ -643,7 +768,7 @@ export const storageService = {
           let newRaportCapaian = s.raportUmmiCapaian;
           let newLastHafalan = s.lastHafalan;
           let newLastHafalanDate = s.lastHafalanDate;
-          let newAvgScore = s.avgScore;
+          const newAvgScore = s.avgScore;
 
           const isGrade89 = isGrade8or9Student(s, mergedClasses);
           if (isGrade89) {
@@ -653,7 +778,6 @@ export const storageService = {
               updated = true;
             }
           } else {
-            // Normalisasi ejaan jilid jika ada variasi penamaan lama tanpa menimpa pilihan manual user
             if (s.currentUmmiJilid === 'Munaqasyah') {
               newJilid = 'Munaqosyah';
               updated = true;
@@ -662,7 +786,6 @@ export const storageService = {
               updated = true;
             }
 
-            // Cari rekor Ummi terbaru milik santri (berdasarkan id, nis, atau nama)
             const latestUmmi = latestUmmiMap.get(s.id) || mergedUmmi.find(u => 
               u.studentId === s.id ||
               (s.nis && u.studentId === s.nis) || 
@@ -687,20 +810,17 @@ export const storageService = {
                   updated = true;
                 }
               } else if (studentUpdatedAt > ummiUpdatedAt && newJilid && newJilid !== '-') {
-                // Jika data santri lebih baru daripada rekor Ummi, sinkronkan ke rekor Ummi
                 if (latestUmmi.jilid !== newJilid || latestUmmi.page !== (newPage || 1) || latestUmmi.studentId !== s.id) {
                   const uIdx = mergedUmmi.findIndex(u => u.id === latestUmmi.id);
                   if (uIdx >= 0) {
-                    const updatedUmmi = {
+                    mergedUmmi[uIdx] = {
                       ...mergedUmmi[uIdx],
                       studentId: s.id,
                       jilid: newJilid,
                       page: newPage || 1,
                       _updatedAt: studentUpdatedAt
                     };
-                    mergedUmmi[uIdx] = updatedUmmi;
                     ummiChanged = true;
-                    ummiToSync.push(updatedUmmi);
                   }
                 }
               }
@@ -720,34 +840,43 @@ export const storageService = {
             }
           }
 
+          let newRaportTarget = s.raportTargetHafalan;
+          let newTargetSuratAyat = s.targetSuratAyat;
+          if (isClass7Bto7E(s, mergedClasses)) {
+            const curTarget = (s.raportTargetHafalan || s.targetSuratAyat || '').trim();
+            if (!curTarget || isLegacyDefaultRaportTarget(curTarget)) {
+              newRaportTarget = 'Al-Kautsar : 3';
+              newTargetSuratAyat = 'Al-Kautsar : 3';
+              updated = true;
+            }
+          }
+
           if (updated) {
             studentsChanged = true;
-            const updatedStd: Student = {
+            return {
               ...s,
               currentUmmiJilid: newJilid,
               currentUmmiPage: newPage,
               raportUmmiCapaian: newRaportCapaian,
+              raportTargetHafalan: newRaportTarget,
+              targetSuratAyat: newTargetSuratAyat,
               lastHafalan: newLastHafalan,
               lastHafalanDate: newLastHafalanDate,
               avgScore: newAvgScore
             };
-            studentsToSync.push(updatedStd);
-            return updatedStd;
           }
           return s;
         });
 
         if (ummiChanged) {
           setItem(STORAGE_KEYS.UMMI, mergedUmmi);
-          ummiToSync.forEach(u => syncDocToCloud('ummi_records', u.id, u));
         }
 
         if (studentsChanged) {
           setItem(STORAGE_KEYS.STUDENTS, synchronizedStudents);
-          studentsToSync.forEach(std => syncDocToCloud('students', std.id, std));
         }
       } catch (err) {
-        console.warn('[Cloud Sync] Student progress auto-sync error:', err);
+        console.warn('[Cloud Sync] Student progress auto-sync warning:', err);
       }
 
       // 6. Fetch & Merge Targets
@@ -807,7 +936,7 @@ export const storageService = {
       const setDocSnap = await getDoc(doc(db, 'app_settings', 'config'));
       if (setDocSnap.exists()) {
         setItem(STORAGE_KEYS.SETTINGS, setDocSnap.data() as AppSettings);
-      } else {
+      } else if (!isAlreadySeeded || force) {
         const localSet = this.getSettings();
         await syncDocToCloud('app_settings', 'config', localSet);
       }
@@ -821,13 +950,14 @@ export const storageService = {
 
       localStorage.setItem(STORAGE_KEYS.CLOUD_SYNCED, 'true');
       this.setQuotaExceeded(false);
+
+      // Attach Real-time snapshot listeners after initial sync succeeds
+      this.startRealtimeSync();
+
       this.notifyListeners();
       return { success: true, message: 'Database Firebase Firestore aktif & tersinkronisasi realtime!', isQuotaExceeded: false };
     } catch (e: any) {
-      console.error('[Cloud Sync] Failed to initialize cloud storage:', e);
-      const isQuota = e?.code === 'resource-exhausted' ||
-        String(e?.message || '').toLowerCase().includes('quota') ||
-        String(e?.message || '').toLowerCase().includes('resource-exhausted');
+      const isQuota = isFirestoreQuotaError(e);
 
       if (isQuota) {
         this.setQuotaExceeded(true);
@@ -835,9 +965,10 @@ export const storageService = {
         return {
           success: false,
           isQuotaExceeded: true,
-          message: 'Batas kuota baca Firebase Firestore harian telah tercapai. Aplikasi beroperasi normal dalam Mode Penyimpanan Lokal (Offline).'
+          message: 'Batas kuota harian Firebase Firestore telah tercapai. Aplikasi beroperasi normal dalam Mode Penyimpanan Lokal (Offline).'
         };
       }
+      console.warn('[Cloud Sync] Cloud storage init warning:', e);
       return { success: false, message: e?.message || 'Gagal menyambung ke database Firestore.', isQuotaExceeded: false };
     }
   },
@@ -1552,14 +1683,37 @@ export const storageService = {
   getStudents(): Student[] {
     const list = getItem(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
     const classes = getItem(STORAGE_KEYS.CLASSES, INITIAL_CLASSES);
+    const MIGRATION_KEY_7B_7E = 'tahfizh_smpia21_migrated_7b_7e_alkautsar3_v1';
+    let needsInitial7Bto7EMigration = false;
+    try {
+      needsInitial7Bto7EMigration = localStorage.getItem(MIGRATION_KEY_7B_7E) !== 'true';
+    } catch {
+      needsInitial7Bto7EMigration = false;
+    }
+
     let modified = false;
     const sanitized = list.map(s => {
       let updatedJilid = s.currentUmmiJilid;
       let updatedPage = s.currentUmmiPage;
       let updatedPhoto = s.photo;
+      let updatedRaportTarget = s.raportTargetHafalan;
+      let updatedTargetSuratAyat = s.targetSuratAyat;
+
       if (updatedPhoto && updatedPhoto.includes('unsplash')) {
         updatedPhoto = '';
         modified = true;
+      }
+
+      // Target Hafalan Term 1 Kelas 7B-7E = "Al-Kautsar : 3"
+      if (isClass7Bto7E(s, classes)) {
+        const currentTarget = (s.raportTargetHafalan || s.targetSuratAyat || '').trim();
+        if (needsInitial7Bto7EMigration || !currentTarget || isLegacyDefaultRaportTarget(currentTarget)) {
+          if (updatedRaportTarget !== 'Al-Kautsar : 3' || updatedTargetSuratAyat !== 'Al-Kautsar : 3') {
+            updatedRaportTarget = 'Al-Kautsar : 3';
+            updatedTargetSuratAyat = 'Al-Kautsar : 3';
+            modified = true;
+          }
+        }
       }
 
       // Kebijakan Tahun Ajaran Ini:
@@ -1588,23 +1742,40 @@ export const storageService = {
             ...s,
             currentUmmiJilid: updatedJilid,
             currentUmmiPage: updatedPage,
+            raportTargetHafalan: updatedRaportTarget,
+            targetSuratAyat: updatedTargetSuratAyat,
             parentPhone: phone,
             photo: updatedPhoto || ''
           };
         }
       }
 
-      if (updatedJilid !== s.currentUmmiJilid || updatedPage !== s.currentUmmiPage || updatedPhoto !== s.photo) {
+      if (
+        updatedJilid !== s.currentUmmiJilid ||
+        updatedPage !== s.currentUmmiPage ||
+        updatedPhoto !== s.photo ||
+        updatedRaportTarget !== s.raportTargetHafalan ||
+        updatedTargetSuratAyat !== s.targetSuratAyat
+      ) {
         modified = true;
         return { 
           ...s, 
           currentUmmiJilid: updatedJilid, 
           currentUmmiPage: updatedPage !== undefined ? updatedPage : (isGrade89 ? 0 : 1), 
+          raportTargetHafalan: updatedRaportTarget,
+          targetSuratAyat: updatedTargetSuratAyat,
           photo: updatedPhoto || '' 
         };
       }
       return s;
     });
+    if (needsInitial7Bto7EMigration) {
+      try {
+        localStorage.setItem(MIGRATION_KEY_7B_7E, 'true');
+      } catch {
+        // Ignore storage error
+      }
+    }
     if (modified) {
       setItem(STORAGE_KEYS.STUDENTS, sanitized);
     }
@@ -1612,6 +1783,29 @@ export const storageService = {
     return [...sanitized].sort((a, b) =>
       a.name.localeCompare(b.name, 'id', { sensitivity: 'base' })
     );
+  },
+  applyTargetHafalan7Bto7E(targetText: string = 'Al-Kautsar : 3'): number {
+    const classes = this.getClasses();
+    const list = this.getStudents();
+    let count = 0;
+    const updated = list.map(s => {
+      if (isClass7Bto7E(s, classes)) {
+        count++;
+        return {
+          ...s,
+          raportTargetHafalan: targetText,
+          targetSuratAyat: targetText,
+          _updatedAt: Date.now()
+        };
+      }
+      return s;
+    });
+    if (count > 0) {
+      setItem(STORAGE_KEYS.STUDENTS, updated);
+      syncCollectionToCloud('students', updated.filter(s => isClass7Bto7E(s, classes))).catch(() => {});
+      this.notifyListeners();
+    }
+    return count;
   },
   getStudentById(id: string): Student | undefined {
     return this.getStudents().find(s => s.id === id);

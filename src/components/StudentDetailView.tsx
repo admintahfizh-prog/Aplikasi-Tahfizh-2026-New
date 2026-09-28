@@ -379,11 +379,11 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           {TERM_DEFINITIONS.map(td => {
-            const hafalanStd = getStudentStandardTermTarget(student, td.term, 'Hafalan');
+            const hafalanStd = getStudentStandardTermTarget(student, td.term, 'Hafalan', classes);
             const evalHafalan = evaluateHafalanTerm(student.totalJuzHafal || 0, hafalanStd.targetNumber);
             
             const isGrade7 = !isGrade8or9Student(student, classes);
-            const ummiStd = isGrade7 ? getStudentStandardTermTarget(student, td.term, 'Ummi') : null;
+            const ummiStd = isGrade7 ? getStudentStandardTermTarget(student, td.term, 'Ummi', classes) : null;
             const evalUmmi = isGrade7 && ummiStd ? evaluateUmmiTerm(
               student.currentUmmiJilid || 'Jilid 1',
               student.currentUmmiPage || 1,
@@ -415,7 +415,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
                     </span>
                   </div>
                   <div className="text-xs font-black text-slate-900">
-                    Target: {hafalanStd.targetNumber} Juz
+                    Target: {hafalanStd.targetValue || `${hafalanStd.targetNumber} Juz`}
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
                     <div 

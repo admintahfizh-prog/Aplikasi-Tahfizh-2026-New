@@ -18,7 +18,7 @@ import {
 import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, AppSettings, Role, User, TermName, TargetProgress } from '../types';
 import { storageService } from '../services/storageService';
 import { StudentRaportCard } from './StudentRaportCard';
-import { isGrade8or9Student } from '../utils/gradeHelper';
+import { isGrade8or9Student, isClass7Bto7E, resolveRaportTargetHafalan } from '../utils/gradeHelper';
 import { getGradeFromScore } from '../utils/gradeConversion';
 import { getStudentStandardTermTarget, evaluateUmmiTerm, TERM_DEFINITIONS } from '../data/targetTermData';
 
@@ -512,7 +512,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
                       {reportType === 'hafalan' && (
                         <>
-                          <td className="p-2 text-center border-r border-slate-200">{std.targetJuz} Juz</td>
+                          <td className="p-2 text-center border-r border-slate-200 font-semibold text-slate-800">
+                            {isClass7Bto7E(std, classes, cls)
+                              ? resolveRaportTargetHafalan(std, classes, cls, 'TENGAH SEMESTER 1')
+                              : `${std.targetJuz} Juz`}
+                          </td>
                           <td className="p-2 text-center border-r border-slate-200 font-bold text-[#8C7015]">{std.totalJuzHafal} Juz</td>
                           <td className="p-2 text-center border-r border-slate-200 font-bold text-emerald-700">{percent}%</td>
                           <td className="p-2 border-r border-slate-200">{std.lastHafalan}</td>

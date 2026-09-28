@@ -34,7 +34,7 @@ import {
   evaluateHafalanTerm,
   evaluateUmmiTerm
 } from '../data/targetTermData';
-import { isGrade7Class, isUmmiEnrolledStudent } from '../utils/gradeHelper';
+import { isGrade7Class, isUmmiEnrolledStudent, isClass7Bto7E } from '../utils/gradeHelper';
 import { HalaqahFilterBar } from './HalaqahFilterBar';
 import { resolveCurrentTeacher, filterStudentsByHalaqah, groupStudentsByHalaqah, getStudentHalaqahInfo } from '../utils/halaqahHelper';
 
@@ -567,7 +567,9 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
                     ) : (
                       <div className="space-y-0.5">
                         <span className="text-slate-900 font-black">
-                          {target.targetJuz} Juz
+                          {isClass7Bto7E(student, classes) && (target.term === 'Term 1' || selectedTerm === 'Term 1')
+                            ? 'Al-Kautsar : 3'
+                            : `${target.targetJuz} Juz`}
                         </span>
                         <div className="text-[10px] text-slate-500 font-normal">
                           {target.term || selectedTerm} • DL: {target.deadline || '30 Sep 2026'}
