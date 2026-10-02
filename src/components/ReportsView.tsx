@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import * as XLSX from 'xlsx';
 import { 
   FileSpreadsheet, 
   Printer, 
@@ -13,7 +14,9 @@ import {
   Layers,
   Sparkles,
   UserCheck,
-  FileCheck2
+  FileCheck2,
+  Check,
+  X
 } from 'lucide-react';
 import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, AppSettings, Role, User, TermName, TargetProgress } from '../types';
 import { storageService } from '../services/storageService';
@@ -208,16 +211,321 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     document.body.removeChild(link);
   };
 
-  const handleExportStudentsCSV = () => {
-    const csv = storageService.exportStudentsToCSV();
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  // Export Modal & Feedback State
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportDataset, setExportDataset] = useState<
+    'active_view' | 'rekap_hafalan' | 'rekap_ummi' | 'gabungan_lengkap' | 'log_hafalan' | 'log_ummi'
+  >('gabungan_lengkap');
+  const [exportClassId, setExportClassId] = useState<string>('');
+  const [exportFormat, setExportFormat] = useState<'xlsx' | 'csv'>('xlsx');
+  const [exportFeedback, setExportFeedback] = useState<string | null>(null);
+
+  // Build structured rows for Rekap Hafalan Santri
+  const buildRekapHafalanRows = (studentList: Student[]) => {
+    return studentList.map((std, idx) => {
+      const cls = classes.find(c => c.id === std.classId);
+      const teacher = teachers.find(t => t.id === std.teacherId);
+      const percent = Math.min(100, Math.round(((std.totalJuzHafal || 0) / (std.targetJuz || 1)) * 100));
+      const targetText = isClass7Bto7E(std, classes, cls)
+        ? resolveRaportTargetHafalan(std, classes, cls, 'TENGAH SEMESTER 1')
+        : `${std.targetJuz} Juz`;
+      const statusText =
+        percent >= 70 ? 'Sesuai Target' : percent >= 40 ? 'Perlu Ditingkatkan' : 'Tertinggal';
+      const predikat =
+        std.avgScore >= 90 ? 'MUMTAZ' : std.avgScore >= 80 ? 'JAYYID JIDDAN' : 'JAYYID';
+
+      return {
+        No: idx + 1,
+        NIS: std.nis || '-',
+        NISN: std.nisn || '-',
+        'Nama Lengkap Santri': std.name,
+        'L/P': std.gender || 'L',
+        Kelas: cls?.name || '-',
+        'Guru Pembimbing': teacher?.name || '-',
+        Program: std.program || 'Reguler Tahfizh',
+        'Target Hafalan': targetText,
+        'Target Tahunan (Juz)': std.targetJuz || 1,
+        'Capaian Riil (Juz)': std.totalJuzHafal || 0,
+        'Total Surah Hafal': std.totalSurahHafal || 0,
+        'Total Ayat Hafal': std.totalAyahHafal || 0,
+        'Persentase Capaian (%)': `${percent}%`,
+        'Hafalan Terakhir': std.lastHafalan || '-',
+        'Tgl Setoran Terakhir': std.lastHafalanDate || '-',
+        'Nilai Rata-rata': std.avgScore || 0,
+        Predikat: predikat,
+        'Status Evaluasi': statusText
+      };
+    });
+  };
+
+  // Build structured rows for Rekap Metode Ummi
+  const buildRekapUmmiRows = (studentList: Student[], termKey: TermName = selectedUmmiTerm) => {
+    const ummiStudents = studentList.filter(std => !isGrade8or9Student(std, classes));
+    return ummiStudents.map((std, idx) => {
+      const cls = classes.find(c => c.id === std.classId);
+      const teacher = teachers.find(t => t.id === std.teacherId);
+      const ummiInfo = getStudentUmmiTargetInfo(std, termKey);
+      const gradeLetter = std.raportUmmiNilai || getGradeFromScore(std.avgScore || 85).letter;
+      const statusText =
+        ummiInfo.status === 'on-track'
+          ? 'Sesuai Target'
+          : ummiInfo.status === 'needs-attention'
+          ? 'Perlu Ditingkatkan'
+          : 'Tertinggal';
+
+      return {
+        No: idx + 1,
+        NIS: std.nis || '-',
+        'Nama Lengkap Santri': std.name,
+        'L/P': std.gender || 'L',
+        Kelas: cls?.name || '-',
+        'Guru Pembimbing': teacher?.name || '-',
+        'Periode Evaluasi': termKey,
+        'Target Jilid Ummi': ummiInfo.targetJilid,
+        'Target Halaman': ummiInfo.targetPage,
+        'Capaian Jilid Saat Ini': ummiInfo.curJilid,
+        'Capaian Halaman Saat Ini': ummiInfo.curPage,
+        'Persentase Capaian (%)': `${ummiInfo.percentage}%`,
+        'Nilai Rata-rata': std.avgScore || 85,
+        'Grade Ummi': `Grade ${gradeLetter}`,
+        'Status Evaluasi': statusText,
+        'Ringkasan Evaluasi': ummiInfo.summary || '-'
+      };
+    });
+  };
+
+  // Build structured rows for Log Setoran Hafalan
+  const buildLogHafalanRows = (studentIdsSet: Set<string>) => {
+    const filteredRecs = records.filter(r => studentIdsSet.has(r.studentId));
+    return filteredRecs.map((r, idx) => {
+      const std = students.find(s => s.id === r.studentId);
+      const cls = classes.find(c => c.id === std?.classId);
+      const tch = teachers.find(t => t.id === r.teacherId);
+      return {
+        No: idx + 1,
+        Tanggal: r.date || '-',
+        NIS: std?.nis || '-',
+        'Nama Santri': std?.name || '-',
+        Kelas: cls?.name || '-',
+        'Guru Pengampu': tch?.name || '-',
+        'Jenis Setoran': r.type || 'Hafalan Baru',
+        Juz: r.juz || 30,
+        Surah: r.surahName || '-',
+        'Ayat Mulai': r.startAyah || 1,
+        'Ayat Selesai': r.endAyah || 1,
+        'Total Ayat': r.totalAyah || 1,
+        'Nilai Kelancaran': r.scores?.kelancaran ?? r.finalScore ?? 0,
+        'Nilai Tajwid': r.scores?.tajwid ?? r.finalScore ?? 0,
+        'Nilai Makhraj': r.scores?.makhraj ?? r.finalScore ?? 0,
+        'Nilai Fashahah': r.scores?.fashahah ?? r.finalScore ?? 0,
+        'Nilai Adab': r.scores?.adab ?? r.finalScore ?? 0,
+        'Nilai Akhir': r.finalScore ?? 0,
+        Kategori: r.category || '-',
+        Catatan: r.notes || '-'
+      };
+    });
+  };
+
+  // Build structured rows for Log Setoran Ummi
+  const buildLogUmmiRows = (studentIdsSet: Set<string>) => {
+    const filteredRecs = ummiRecords.filter(r => studentIdsSet.has(r.studentId));
+    return filteredRecs.map((r, idx) => {
+      const std = students.find(s => s.id === r.studentId);
+      const cls = classes.find(c => c.id === std?.classId);
+      const tch = teachers.find(t => t.id === r.teacherId);
+      const gradeLetter = getGradeFromScore(r.score || 85).letter;
+      return {
+        No: idx + 1,
+        Tanggal: r.date || '-',
+        NIS: std?.nis || '-',
+        'Nama Santri': std?.name || '-',
+        Kelas: cls?.name || '-',
+        'Guru Pengampu': tch?.name || '-',
+        'Jilid Ummi': r.jilid || '-',
+        Halaman: r.page || 1,
+        'Materi Pokok': r.materialName || '-',
+        'Nilai Angka': r.score || 0,
+        'Grade Huruf': gradeLetter,
+        'Status Kelulusan': r.status || 'Lulus',
+        Catatan: r.notes || '-'
+      };
+    });
+  };
+
+  // Convert array of objects to CSV string with UTF-8 BOM
+  const convertObjectsToCSV = (rows: Record<string, any>[]): string => {
+    if (!rows || rows.length === 0) {
+      return '\uFEFFTidak ada data untuk diekspor';
+    }
+    const headers = Object.keys(rows[0]);
+    const csvLines = rows.map(row =>
+      headers
+        .map(h => {
+          const val = row[h] === null || row[h] === undefined ? '' : String(row[h]);
+          return `"${val.replace(/"/g, '""')}"`;
+        })
+        .join(',')
+    );
+    return '\uFEFF' + [headers.map(h => `"${h}"`).join(','), ...csvLines].join('\n');
+  };
+
+  // Helper to auto-fit column widths on an XLSX worksheet
+  const applyAutoColumnWidths = (ws: XLSX.WorkSheet, rows: Record<string, any>[]) => {
+    if (!rows || rows.length === 0) return;
+    const headers = Object.keys(rows[0]);
+    ws['!cols'] = headers.map(h => {
+      const maxCellLen = rows.reduce((max, row) => {
+        const len = String(row[h] ?? '').length;
+        return len > max ? len : max;
+      }, h.length);
+      return { wch: Math.min(42, Math.max(10, maxCellLen + 3)) };
+    });
+  };
+
+  // Trigger CSV file download
+  const downloadCSVFile = (rows: Record<string, any>[], filenameBase: string) => {
+    const csvContent = convertObjectsToCSV(rows);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `rekap_capaian_santri_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `${filenameBase}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Main unified export executor (Quick buttons + Modal)
+  const executeReportExport = (
+    datasetType: 'active_view' | 'rekap_hafalan' | 'rekap_ummi' | 'gabungan_lengkap' | 'log_hafalan' | 'log_ummi',
+    format: 'xlsx' | 'csv',
+    customClassId?: string
+  ) => {
+    const dateStamp = new Date().toISOString().split('T')[0];
+    const effectiveClassId = customClassId !== undefined ? customClassId : selectedClass;
+    const classObj = classes.find(c => c.id === effectiveClassId);
+    const classSlug = classObj ? `kelas_${classObj.name.toLowerCase()}` : 'semua_kelas';
+
+    const targetStudents = sortedStudents.filter(s => !effectiveClassId || s.classId === effectiveClassId);
+    const targetStudentIds = new Set(targetStudents.map(s => s.id));
+
+    const resolvedDataset =
+      datasetType === 'active_view'
+        ? reportType === 'ummi'
+          ? 'rekap_ummi'
+          : reportType === 'hafalan'
+          ? 'rekap_hafalan'
+          : 'gabungan_lengkap'
+        : datasetType;
+
+    if (format === 'csv') {
+      if (resolvedDataset === 'rekap_ummi') {
+        const rows = buildRekapUmmiRows(targetStudents, selectedUmmiTerm);
+        downloadCSVFile(rows, `rekap_metode_ummi_${selectedUmmiTerm.toLowerCase().replace(' ', '')}_${classSlug}_${dateStamp}`);
+      } else if (resolvedDataset === 'log_hafalan') {
+        const rows = buildLogHafalanRows(targetStudentIds);
+        downloadCSVFile(rows, `riwayat_setoran_hafalan_${classSlug}_${dateStamp}`);
+      } else if (resolvedDataset === 'log_ummi') {
+        const rows = buildLogUmmiRows(targetStudentIds);
+        downloadCSVFile(rows, `riwayat_setoran_ummi_${classSlug}_${dateStamp}`);
+      } else if (resolvedDataset === 'gabungan_lengkap') {
+        // Combined Hafalan + Ummi summary in a single comprehensive CSV table
+        const combinedRows = targetStudents.map((std, idx) => {
+          const cls = classes.find(c => c.id === std.classId);
+          const teacher = teachers.find(t => t.id === std.teacherId);
+          const isGrade89 = isGrade8or9Student(std, classes);
+          const hflPercent = Math.min(100, Math.round(((std.totalJuzHafal || 0) / (std.targetJuz || 1)) * 100));
+          const ummiInfo = !isGrade89 ? getStudentUmmiTargetInfo(std, selectedUmmiTerm) : null;
+          const targetHafalan = isClass7Bto7E(std, classes, cls)
+            ? resolveRaportTargetHafalan(std, classes, cls, 'TENGAH SEMESTER 1')
+            : `${std.targetJuz} Juz`;
+
+          return {
+            No: idx + 1,
+            NIS: std.nis || '-',
+            'Nama Lengkap Santri': std.name,
+            'L/P': std.gender || 'L',
+            Kelas: cls?.name || '-',
+            'Guru Pembimbing': teacher?.name || '-',
+            Program: std.program || 'Reguler Tahfizh',
+            'Target Hafalan': targetHafalan,
+            'Capaian Hafalan (Juz)': std.totalJuzHafal || 0,
+            '% Capaian Hafalan': `${hflPercent}%`,
+            'Hafalan Terakhir': std.lastHafalan || '-',
+            'Target Ummi': ummiInfo ? `${ummiInfo.targetJilid} Hal ${ummiInfo.targetPage}` : '- (Non-Ummi)',
+            'Capaian Ummi Saat Ini': ummiInfo ? `${ummiInfo.curJilid} Hal ${ummiInfo.curPage}` : '- (Non-Ummi)',
+            '% Capaian Ummi': ummiInfo ? `${ummiInfo.percentage}%` : '-',
+            'Nilai Rata-rata': std.avgScore || 0
+          };
+        });
+        downloadCSVFile(combinedRows, `laporan_tahfizh_dan_ummi_${classSlug}_${dateStamp}`);
+      } else {
+        const rows = buildRekapHafalanRows(targetStudents);
+        downloadCSVFile(rows, `rekap_capaian_hafalan_${classSlug}_${dateStamp}`);
+      }
+
+      setExportFeedback(`Berhasil mengekspor laporan ke format CSV (${classObj ? `Kelas ${classObj.name}` : 'Semua Kelas'})!`);
+      setTimeout(() => setExportFeedback(null), 5000);
+      setShowExportModal(false);
+      return;
+    }
+
+    // Format === 'xlsx' (Multi-sheet or single-sheet Excel Workbook)
+    const wb = XLSX.utils.book_new();
+
+    if (resolvedDataset === 'rekap_hafalan') {
+      const hflRows = buildRekapHafalanRows(targetStudents);
+      const ws = XLSX.utils.json_to_sheet(hflRows.length > 0 ? hflRows : [{ Info: 'Tidak ada data santri' }]);
+      applyAutoColumnWidths(ws, hflRows);
+      XLSX.utils.book_append_sheet(wb, ws, 'Rekap Hafalan');
+      XLSX.writeFile(wb, `Rekap_Hafalan_${classSlug}_${dateStamp}.xlsx`);
+    } else if (resolvedDataset === 'rekap_ummi') {
+      const ummiRows = buildRekapUmmiRows(targetStudents, selectedUmmiTerm);
+      const ws = XLSX.utils.json_to_sheet(ummiRows.length > 0 ? ummiRows : [{ Info: 'Tidak ada data Ummi Kelas 7' }]);
+      applyAutoColumnWidths(ws, ummiRows);
+      XLSX.utils.book_append_sheet(wb, ws, `Rekap Ummi ${selectedUmmiTerm}`);
+      XLSX.writeFile(wb, `Rekap_Metode_Ummi_${selectedUmmiTerm.replace(' ', '_')}_${classSlug}_${dateStamp}.xlsx`);
+    } else if (resolvedDataset === 'log_hafalan') {
+      const logHfl = buildLogHafalanRows(targetStudentIds);
+      const ws = XLSX.utils.json_to_sheet(logHfl.length > 0 ? logHfl : [{ Info: 'Belum ada riwayat setoran hafalan' }]);
+      applyAutoColumnWidths(ws, logHfl);
+      XLSX.utils.book_append_sheet(wb, ws, 'Riwayat Setoran Hafalan');
+      XLSX.writeFile(wb, `Riwayat_Setoran_Hafalan_${classSlug}_${dateStamp}.xlsx`);
+    } else if (resolvedDataset === 'log_ummi') {
+      const logUmmi = buildLogUmmiRows(targetStudentIds);
+      const ws = XLSX.utils.json_to_sheet(logUmmi.length > 0 ? logUmmi : [{ Info: 'Belum ada riwayat setoran Ummi' }]);
+      applyAutoColumnWidths(ws, logUmmi);
+      XLSX.utils.book_append_sheet(wb, ws, 'Riwayat Setoran Ummi');
+      XLSX.writeFile(wb, `Riwayat_Setoran_Ummi_${classSlug}_${dateStamp}.xlsx`);
+    } else {
+      // Multi-sheet Workbook: Sheet 1 Rekap Hafalan, Sheet 2 Rekap Ummi, Sheet 3 Log Setoran Hafalan, Sheet 4 Log Setoran Ummi
+      const hflRows = buildRekapHafalanRows(targetStudents);
+      const wsHfl = XLSX.utils.json_to_sheet(hflRows.length > 0 ? hflRows : [{ Info: 'Tidak ada data santri' }]);
+      applyAutoColumnWidths(wsHfl, hflRows);
+      XLSX.utils.book_append_sheet(wb, wsHfl, 'Rekap Hafalan Santri');
+
+      const ummiRows = buildRekapUmmiRows(targetStudents, selectedUmmiTerm);
+      const wsUmmi = XLSX.utils.json_to_sheet(ummiRows.length > 0 ? ummiRows : [{ Info: 'Tidak ada data santri Kelas 7 Ummi' }]);
+      applyAutoColumnWidths(wsUmmi, ummiRows);
+      XLSX.utils.book_append_sheet(wb, wsUmmi, `Rekap Ummi (${selectedUmmiTerm})`);
+
+      const logHfl = buildLogHafalanRows(targetStudentIds);
+      const wsLogHfl = XLSX.utils.json_to_sheet(logHfl.length > 0 ? logHfl : [{ Info: 'Belum ada riwayat setoran hafalan' }]);
+      applyAutoColumnWidths(wsLogHfl, logHfl);
+      XLSX.utils.book_append_sheet(wb, wsLogHfl, 'Log Setoran Hafalan');
+
+      const logUmmi = buildLogUmmiRows(targetStudentIds);
+      const wsLogUmmi = XLSX.utils.json_to_sheet(logUmmi.length > 0 ? logUmmi : [{ Info: 'Belum ada riwayat setoran Ummi' }]);
+      applyAutoColumnWidths(wsLogUmmi, logUmmi);
+      XLSX.utils.book_append_sheet(wb, wsLogUmmi, 'Log Setoran Ummi');
+
+      XLSX.writeFile(wb, `Laporan_Lengkap_Tahfizh_Ummi_${classSlug}_${dateStamp}.xlsx`);
+    }
+
+    setExportFeedback(`Berhasil mengunduh file Excel (.xlsx) Laporan Tahfizh & Ummi (${classObj ? `Kelas ${classObj.name}` : 'Semua Kelas'})!`);
+    setTimeout(() => setExportFeedback(null), 5000);
+    setShowExportModal(false);
   };
 
   return (
@@ -236,13 +544,49 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={handleExportHafalanCSV}
-            className="px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs border border-slate-300 transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <Download className="w-4 h-4 text-slate-600" />
-            <span>Ekspor CSV</span>
-          </button>
+          {!isWali && (
+            <>
+              <button
+                type="button"
+                onClick={() => executeReportExport('active_view', 'csv')}
+                className="px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs border border-slate-300 transition flex items-center gap-1.5 cursor-pointer"
+                title="Unduh langsung laporan sesuai tampilan/filter saat ini ke file CSV"
+              >
+                <Download className="w-4 h-4 text-slate-600" />
+                <span>Ekspor CSV</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => executeReportExport('gabungan_lengkap', 'xlsx')}
+                className="px-3.5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                title="Unduh buku kerja Excel (.xlsx) lengkap berisi Rekap Hafalan, Rekap Metode Ummi, dan Riwayat Setoran"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
+                <span>Ekspor Excel (.xlsx)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setExportClassId(selectedClass);
+                  setExportDataset(
+                    reportType === 'ummi'
+                      ? 'rekap_ummi'
+                      : reportType === 'hafalan'
+                      ? 'rekap_hafalan'
+                      : 'gabungan_lengkap'
+                  );
+                  setShowExportModal(true);
+                }}
+                className="px-3.5 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-950 font-bold text-xs border border-[#D4AF37] transition flex items-center gap-1.5 cursor-pointer"
+                title="Buka pengaturan lanjutan untuk memilih jenis laporan, kelas, dan format file (Excel / CSV)"
+              >
+                <Filter className="w-3.5 h-3.5 text-[#8C7015]" />
+                <span>Opsi Ekspor</span>
+              </button>
+            </>
+          )}
 
           <button
             onClick={handlePrint}
@@ -253,6 +597,19 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Export Feedback Banner */}
+      {exportFeedback && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs font-bold flex items-center justify-between shadow-xs animate-in fade-in no-print">
+          <div className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{exportFeedback}</span>
+          </div>
+          <button onClick={() => setExportFeedback(null)} className="text-emerald-700 hover:text-emerald-950 cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Filter Selection Tabs */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3 no-print">
@@ -641,6 +998,162 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* MODAL OPSI EKSPOR LAPORAN TAHFIZH & UMMI (CSV / EXCEL) */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in no-print">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-xl bg-emerald-100 text-emerald-800">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base">
+                    Ekspor Laporan Tahfizh &amp; Metode Ummi
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Unduh rekapitulasi capaian santri &amp; riwayat setoran ke Excel (.xlsx) atau CSV (.csv)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              {/* Pilihan Jenis Data Laporan */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">1. Pilih Jenis Data Laporan:</label>
+                <div className="space-y-1.5">
+                  {[
+                    {
+                      id: 'gabungan_lengkap',
+                      title: 'Paket Lengkap: Rekap Hafalan + Rekap Ummi + Log Setoran',
+                      desc: 'Excel berisi 4 sheet sekaligus (Rekap Hafalan, Rekap Ummi, Log Setoran Hafalan & Log Ummi)'
+                    },
+                    {
+                      id: 'rekap_hafalan',
+                      title: 'Rekap Capaian Hafalan Al-Qur\'an Santri',
+                      desc: 'Data NIS, Nama, Kelas, Program, Target Hafalan, Total Juz/Surah/Ayat, % Capaian, & Status'
+                    },
+                    {
+                      id: 'rekap_ummi',
+                      title: `Rekap Pembelajaran & Target Metode UMMI (Kelas 7 - ${selectedUmmiTerm})`,
+                      desc: 'Data Target Jilid/Halaman, Capaian Riil Ummi, % Ketercapaian, Grade Nilai, & Evaluasi'
+                    },
+                    {
+                      id: 'log_hafalan',
+                      title: 'Riwayat Detail Setoran Hafalan Harian (Ziyadah / Murojaah / Tasmi\')',
+                      desc: 'Catatan lengkap per tanggal setoran beserta rincian nilai kelancaran, tajwid, makhraj, & adab'
+                    },
+                    {
+                      id: 'log_ummi',
+                      title: 'Riwayat Detail Setoran Metode UMMI Harian',
+                      desc: 'Catatan lengkap perkembangan jilid, halaman, materi pokok, nilai angka/huruf, & status'
+                    }
+                  ].map(opt => (
+                    <label
+                      key={opt.id}
+                      className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer transition ${
+                        exportDataset === opt.id
+                          ? 'bg-amber-50/80 border-[#D4AF37] ring-1 ring-[#D4AF37]'
+                          : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100/70'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="exportDataset"
+                        checked={exportDataset === opt.id}
+                        onChange={() => setExportDataset(opt.id as any)}
+                        className="mt-0.5 accent-slate-900 cursor-pointer"
+                      />
+                      <div>
+                        <div className="font-extrabold text-slate-900">{opt.title}</div>
+                        <div className="text-[11px] text-slate-500 leading-snug mt-0.5">{opt.desc}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Filter Kelas & Format File */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">2. Filter Rombel Kelas:</label>
+                  <select
+                    value={exportClassId}
+                    onChange={(e) => setExportClassId(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                  >
+                    <option value="">Semua Kelas ({students.length} Santri)</option>
+                    {classes.map(c => (
+                      <option key={c.id} value={c.id}>
+                        Kelas {c.name} ({students.filter(s => s.classId === c.id).length} Santri)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">3. Format File Unduhan:</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setExportFormat('xlsx')}
+                      className={`py-2.5 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border transition cursor-pointer ${
+                        exportFormat === 'xlsx'
+                          ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <FileSpreadsheet className="w-4 h-4" />
+                      <span>Excel (.xlsx)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setExportFormat('csv')}
+                      className={`py-2.5 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border transition cursor-pointer ${
+                        exportFormat === 'csv'
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>CSV (.csv)</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowExportModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => executeReportExport(exportDataset, exportFormat, exportClassId)}
+                className="px-5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-4 h-4 text-emerald-200" />
+                <span>
+                  Unduh {exportFormat === 'xlsx' ? 'Excel (.xlsx)' : 'File CSV (.csv)'}
+                </span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

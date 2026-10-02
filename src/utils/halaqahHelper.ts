@@ -218,15 +218,26 @@ export function groupStudentsByHalaqah(
   const result: GroupedHalaqahData[] = [];
   const assignedStudentIds = new Set<string>();
 
-  // 2. Buat grup untuk setiap Halaqah
+  // 2. Buat grup untuk setiap Halaqah (Pastikan setiap santri HANYA masuk ke 1 halaqah)
   for (const group of relevantGroups) {
     const teacher = teachers.find(t => t.id === group.teacherId);
-    // Cari santri yang termasuk di halaqah ini
+    // Cari santri yang termasuk di halaqah ini (Deduplikasi ketat)
     const memberStudents = students.filter(s => {
-      const isMember = (group.studentIds && group.studentIds.includes(s.id)) ||
-        s.halaqahGroupId === group.id ||
-        (s.teacherId === group.teacherId && (!s.halaqahGroupId || s.halaqahGroupId === group.id));
-      return isMember;
+      // Jika santri sudah dialokasikan ke kelompok sebelumnya, jangan masukkan lagi
+      if (assignedStudentIds.has(s.id)) return false;
+
+      // 1. Explicit membership by ID atau halaqahGroupId
+      if (group.studentIds && group.studentIds.includes(s.id)) return true;
+      if (s.halaqahGroupId && s.halaqahGroupId === group.id) return true;
+
+      // 2. Match by halaqahGroupName
+      if (s.halaqahGroupName && s.halaqahGroupName.toLowerCase().trim() === group.name.toLowerCase().trim()) return true;
+
+      // 3. Fallback: match by getStudentHalaqahInfo
+      const info = getStudentHalaqahInfo(s, halaqahGroups, teachers);
+      if (info.groupId === group.id) return true;
+
+      return false;
     });
 
     memberStudents.forEach(s => assignedStudentIds.add(s.id));

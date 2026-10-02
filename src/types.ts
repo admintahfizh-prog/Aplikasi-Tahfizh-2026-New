@@ -231,6 +231,7 @@ export interface TargetProgress {
   
   // Spesifikasi Hafalan Al-Qur'an
   targetJuz: number;
+  targetSuratAyat?: string; // e.g. 'Al-Kautsar : 3' or 'An-Naba : 1-40'
   achievedJuz?: number;
   currentAchievement?: number;
   remainingJuz: number;
@@ -306,7 +307,7 @@ export interface AppSettings {
   letterHeaderUrl?: string;
   letterFooterUrl?: string;
   syahadahTemplateUrl?: string;
-  syahadahOverlayMode?: 'full_content' | 'no_kop' | 'data_only';
+  syahadahOverlayMode?: 'full_content' | 'no_kop' | 'data_only' | 'full_text';
   syahadahTopOffset?: number;
 }
 

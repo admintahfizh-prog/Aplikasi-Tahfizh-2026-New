@@ -321,7 +321,7 @@ export const ExamScoringAndCertificate: React.FC<ExamScoringAndCertificateProps>
     if (!file) return;
     setIsUploadingSyahadahImg(true);
     try {
-      const dataUrl = await compressUploadedImage(file, 2000, 1414, 'image/jpeg', 0.88);
+      const dataUrl = await compressUploadedImage(file, 2000, 1414, 0.88);
       setSyahadahTemplateUrl(dataUrl);
       const currentSettings = storageService.getSettings();
       await storageService.saveSettings({
@@ -503,7 +503,7 @@ export const ExamScoringAndCertificate: React.FC<ExamScoringAndCertificateProps>
     ) {
       const std = students.find(s => s.id === targetPart.studentId);
       if (std) {
-        storageService.updateStudent({
+        storageService.saveStudent({
           ...std,
           currentUmmiJilid: promotedToJilid,
           currentUmmiPage: 1,

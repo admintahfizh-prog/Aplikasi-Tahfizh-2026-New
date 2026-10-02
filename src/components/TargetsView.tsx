@@ -21,7 +21,10 @@ import {
   ChevronRight,
   ShieldCheck,
   FileSpreadsheet,
-  Users
+  Users,
+  CheckSquare,
+  Square,
+  ListChecks
 } from 'lucide-react';
 import { TargetProgress, Student, ClassItem, Role, TermName, TargetCategory, Teacher, User, HalaqahGroup } from '../types';
 import { storageService } from '../services/storageService';
@@ -92,7 +95,7 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Modal for editing/adding target
+  // Modal for editing/adding individual target
   const [showTargetModal, setShowTargetModal] = useState(false);
   const [modalCategory, setModalCategory] = useState<TargetCategory>('Hafalan');
   const [targetFormData, setTargetFormData] = useState<{
@@ -102,6 +105,7 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
     term: TermName;
     targetType: 'Term' | 'Tahunan';
     targetJuz: number;
+    targetSuratAyat: string;
     targetUmmiJilid: string;
     targetUmmiPage: number;
     deadline: string;
@@ -112,6 +116,37 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
     term: 'Term 1',
     targetType: 'Term',
     targetJuz: 0.5,
+    targetSuratAyat: '',
+    targetUmmiJilid: 'Jilid 1',
+    targetUmmiPage: 40,
+    deadline: '2026-09-30',
+    notes: ''
+  });
+
+  // Bulk Target Update State (Checkbox Selection per Class)
+  const [selectedTableStudentIds, setSelectedTableStudentIds] = useState<string[]>([]);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkClassId, setBulkClassId] = useState<string>('');
+  const [bulkSearchQuery, setBulkSearchQuery] = useState<string>('');
+  const [bulkSelectedStudentIds, setBulkSelectedStudentIds] = useState<string[]>([]);
+  const [bulkFormData, setBulkFormData] = useState<{
+    category: TargetCategory;
+    term: TermName;
+    targetType: 'Term' | 'Tahunan';
+    targetJuz: number;
+    targetSuratAyat: string;
+    syncToRaport: boolean;
+    targetUmmiJilid: string;
+    targetUmmiPage: number;
+    deadline: string;
+    notes: string;
+  }>({
+    category: 'Hafalan',
+    term: 'Term 1',
+    targetType: 'Term',
+    targetJuz: 0.5,
+    targetSuratAyat: '',
+    syncToRaport: true,
     targetUmmiJilid: 'Jilid 1',
     targetUmmiPage: 40,
     deadline: '2026-09-30',
@@ -143,7 +178,8 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
       (t.term === term || (t.targetType === 'Term' && t.period?.includes(term)))
     );
 
-    const stdStandard = std ? getStudentStandardTermTarget(std, term, category) : null;
+    const stdStandard = std ? getStudentStandardTermTarget(std, term, category, classes) : null;
+    const defaultSurat = std && isClass7Bto7E(std, classes) && term === 'Term 1' ? 'Al-Kautsar : 3' : '';
 
     setModalCategory(category);
     setTargetFormData({
@@ -153,6 +189,7 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
       term,
       targetType: 'Term',
       targetJuz: existing?.targetJuz ?? (stdStandard?.targetNumber || 0.5),
+      targetSuratAyat: existing?.targetSuratAyat ?? defaultSurat,
       targetUmmiJilid: existing?.targetUmmiJilid || stdStandard?.targetJilid || 'Jilid 1',
       targetUmmiPage: existing?.targetUmmiPage || stdStandard?.targetPage || 40,
       deadline: existing?.deadline || stdStandard?.deadline || '2026-09-30',
@@ -169,6 +206,7 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
     if (targetFormData.category === 'Hafalan') {
       const achievedJuz = std.totalJuzHafal || 0;
       const evalRes = evaluateHafalanTerm(achievedJuz, targetFormData.targetJuz);
+      const cleanSuratAyat = (targetFormData.targetSuratAyat || '').trim();
       
       const item: TargetProgress = {
         id: targetFormData.id || `tgt-hfl-${std.id}-${targetFormData.term.toLowerCase().replace(' ', '')}`,
@@ -179,6 +217,7 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
         academicYear: '2026/2027',
         period: `${targetFormData.term} (${targetFormData.term === 'Term 1' ? 'Juli - Sep' : targetFormData.term === 'Term 2' ? 'Okt - Des' : targetFormData.term === 'Term 3' ? 'Jan - Mar' : 'Apr - Jun'} 2026/2027)`,
         targetJuz: Number(targetFormData.targetJuz),
+        targetSuratAyat: cleanSuratAyat || undefined,
         achievedJuz,
         currentAchievement: achievedJuz,
         remainingJuz: evalRes.remainingJuz,
@@ -188,6 +227,14 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
         notes: targetFormData.notes
       };
       storageService.saveTarget(item);
+
+      if (cleanSuratAyat && targetFormData.term === 'Term 1') {
+        storageService.saveStudentsBulk([{
+          ...std,
+          raportTargetHafalan: cleanSuratAyat,
+          targetSuratAyat: cleanSuratAyat
+        }]);
+      }
     } else {
       // Ummi target
       const currentJilid = std.currentUmmiJilid || 'Jilid 1';
@@ -463,17 +510,32 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
 
   // Global KPI Calculations (calculated before statusFilter so numbers stay stable when clicking badges)
   const allTabStudents = useMemo(() => {
-    if (viewGroupingMode === 'halaqah') {
-      return enrichedHalaqahList.flatMap(g => g.allStudentsInGroup || g.studentsWithTarget);
-    }
-    return enrichedClassList.flatMap(c => c.allStudentsInClass || c.studentsWithTarget);
+    const rawList = viewGroupingMode === 'halaqah'
+      ? enrichedHalaqahList.flatMap(g => g.allStudentsInGroup || g.studentsWithTarget)
+      : enrichedClassList.flatMap(c => c.allStudentsInClass || c.studentsWithTarget);
+
+    // Pastikan setiap santri dihitung tepat 1 kali (deduplikasi ketat)
+    const uniqueMap = new Map<string, typeof rawList[0]>();
+    rawList.forEach(item => {
+      if (item && item.student && !uniqueMap.has(item.student.id)) {
+        uniqueMap.set(item.student.id, item);
+      }
+    });
+    return Array.from(uniqueMap.values());
   }, [viewGroupingMode, enrichedHalaqahList, enrichedClassList]);
 
   const allFilteredStudents = useMemo(() => {
-    if (viewGroupingMode === 'halaqah') {
-      return enrichedHalaqahList.flatMap(g => g.studentsWithTarget);
-    }
-    return enrichedClassList.flatMap(c => c.studentsWithTarget);
+    const rawList = viewGroupingMode === 'halaqah'
+      ? enrichedHalaqahList.flatMap(g => g.studentsWithTarget)
+      : enrichedClassList.flatMap(c => c.studentsWithTarget);
+
+    const uniqueMap = new Map<string, typeof rawList[0]>();
+    rawList.forEach(item => {
+      if (item && item.student && !uniqueMap.has(item.student.id)) {
+        uniqueMap.set(item.student.id, item);
+      }
+    });
+    return Array.from(uniqueMap.values());
   }, [viewGroupingMode, enrichedHalaqahList, enrichedClassList]);
 
   const globalStats = useMemo(() => {
@@ -485,190 +547,478 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
     return { total, onTrack, needsAttention, behind, avgPct };
   }, [allTabStudents]);
 
-  const renderStudentTable = (studentsWithTarget: any[]) => (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left text-xs border-collapse">
-        <thead>
-          <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold">
-            <th className="py-3 px-3.5 w-10 text-center">No</th>
-            <th className="py-3 px-3.5">Santri</th>
-            <th className="py-3 px-3.5">Program / Jenjang</th>
-            <th className="py-3 px-3.5">
-              {activeTab === 'ummi' ? 'Target Ummi Term' : 'Target Hafalan Term'}
-            </th>
-            <th className="py-3 px-3.5">Capaian Riil Saat Ini</th>
-            <th className="py-3 px-3.5 w-52">Progress Ketercapaian</th>
-            <th className="py-3 px-3.5 text-center">Status</th>
-            {userRole !== 'wali' && <th className="py-3 px-3.5 text-center">Aksi</th>}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {studentsWithTarget.length === 0 ? (
-            <tr>
-              <td colSpan={8} className="py-8 text-center text-slate-400">
-                Tidak ada data santri yang cocok dengan filter di kelompok ini.
-              </td>
+  // Students belonging to the currently selected class inside the Bulk Update Modal
+  const bulkClassStudentsWithTarget = useMemo(() => {
+    const activeTermKey = bulkFormData.term || (selectedTerm === 'all' ? 'Term 1' : selectedTerm);
+    const targetClsId = bulkClassId || (selectedClassFilter !== 'all' ? selectedClassFilter : (availableClassesForTab[0]?.id || classes[0]?.id || ''));
+    const eligible = students
+      .filter(s => !targetClsId || s.classId === targetClsId)
+      .filter(s => {
+        if (bulkFormData.category === 'Ummi') {
+          return isUmmiEnrolledStudent(s, classes);
+        }
+        return true;
+      });
+
+    return eligible.map(std => {
+      const storedHfl = hafalanTargetMap.get(`${std.id}_${activeTermKey}`);
+      const storedUmmi = ummiTargetMap.get(`${std.id}_${activeTermKey}`);
+      const stdStandard = getStudentStandardTermTarget(std, activeTermKey, bulkFormData.category, classes);
+      const currentTargetJuz = storedHfl?.targetJuz ?? stdStandard.targetNumber;
+      const currentTargetSurat = storedHfl?.targetSuratAyat || (isClass7Bto7E(std, classes) && activeTermKey === 'Term 1' ? 'Al-Kautsar : 3' : '');
+      const evalHfl = evaluateHafalanTerm(std.totalJuzHafal || 0, currentTargetJuz);
+
+      return {
+        student: std,
+        currentTargetJuz,
+        currentTargetSurat,
+        currentUmmiTarget: storedUmmi?.targetUmmiJilid
+          ? `${storedUmmi.targetUmmiJilid} (Hal ${storedUmmi.targetUmmiPage || 40})`
+          : `${stdStandard.targetJilid || 'Jilid 1'} (Hal ${stdStandard.targetPage || 40})`,
+        status: bulkFormData.category === 'Ummi' ? (storedUmmi?.status || 'on-track') : (storedHfl?.status || evalHfl.status)
+      };
+    });
+  }, [bulkClassId, selectedClassFilter, availableClassesForTab, classes, students, bulkFormData.category, bulkFormData.term, selectedTerm, hafalanTargetMap, ummiTargetMap]);
+
+  const filteredBulkClassStudents = useMemo(() => {
+    if (!bulkSearchQuery.trim()) return bulkClassStudentsWithTarget;
+    const q = bulkSearchQuery.toLowerCase().trim();
+    return bulkClassStudentsWithTarget.filter(item =>
+      item.student.name.toLowerCase().includes(q) ||
+      (item.student.nis || '').toLowerCase().includes(q) ||
+      (item.student.program || '').toLowerCase().includes(q)
+    );
+  }, [bulkClassStudentsWithTarget, bulkSearchQuery]);
+
+  // Open Bulk Target Modal (optionally pre-selecting a class or specific checked students)
+  const handleOpenBulkModal = (classIdOption?: string, preselectedIds?: string[]) => {
+    const activeTermKey: TermName = selectedTerm === 'all' ? 'Term 1' : selectedTerm;
+    const cat: TargetCategory = activeTab === 'ummi' ? 'Ummi' : 'Hafalan';
+    const defaultClsId =
+      classIdOption ||
+      (preselectedIds && preselectedIds.length > 0
+        ? students.find(s => s.id === preselectedIds[0])?.classId
+        : undefined) ||
+      (selectedClassFilter !== 'all' ? selectedClassFilter : undefined) ||
+      availableClassesForTab[0]?.id ||
+      classes[0]?.id ||
+      '';
+
+    const clsObj = classes.find(c => c.id === defaultClsId);
+    const is7Bto7EClass = clsObj ? ['7b', '7c', '7d', '7e'].includes(clsObj.name.toLowerCase().trim()) : false;
+    const termDef = TERM_DEFINITIONS.find(t => t.term === activeTermKey) || TERM_DEFINITIONS[0];
+
+    const classStudents = students
+      .filter(s => s.classId === defaultClsId)
+      .filter(s => (cat === 'Ummi' ? isUmmiEnrolledStudent(s, classes) : true));
+
+    const initialCheckedIds =
+      preselectedIds && preselectedIds.length > 0
+        ? preselectedIds
+        : classStudents.map(s => s.id);
+
+    setBulkClassId(defaultClsId);
+    setBulkSearchQuery('');
+    setBulkSelectedStudentIds(initialCheckedIds);
+    setBulkFormData({
+      category: cat,
+      term: activeTermKey,
+      targetType: 'Term',
+      targetJuz: 0.5,
+      targetSuratAyat: is7Bto7EClass && activeTermKey === 'Term 1' ? 'Al-Kautsar : 3' : '',
+      syncToRaport: true,
+      targetUmmiJilid: 'Jilid 1',
+      targetUmmiPage: 40,
+      deadline: termDef.defaultDeadline,
+      notes: ''
+    });
+    setShowBulkModal(true);
+  };
+
+  // Handle changing class inside the Bulk Modal
+  const handleBulkClassChange = (newClassId: string) => {
+    setBulkClassId(newClassId);
+    setBulkSearchQuery('');
+    const clsObj = classes.find(c => c.id === newClassId);
+    const is7Bto7EClass = clsObj ? ['7b', '7c', '7d', '7e'].includes(clsObj.name.toLowerCase().trim()) : false;
+    const classStudents = students
+      .filter(s => s.classId === newClassId)
+      .filter(s => (bulkFormData.category === 'Ummi' ? isUmmiEnrolledStudent(s, classes) : true));
+
+    setBulkSelectedStudentIds(classStudents.map(s => s.id));
+    setBulkFormData(prev => ({
+      ...prev,
+      targetSuratAyat: is7Bto7EClass && prev.term === 'Term 1' ? 'Al-Kautsar : 3' : prev.targetSuratAyat
+    }));
+  };
+
+  // Toggle single student checkbox inside Bulk Modal
+  const toggleBulkStudentSelection = (studentId: string) => {
+    setBulkSelectedStudentIds(prev =>
+      prev.includes(studentId) ? prev.filter(id => id !== studentId) : [...prev, studentId]
+    );
+  };
+
+  // Toggle single student checkbox inside main table
+  const toggleTableStudentSelection = (studentId: string) => {
+    setSelectedTableStudentIds(prev =>
+      prev.includes(studentId) ? prev.filter(id => id !== studentId) : [...prev, studentId]
+    );
+  };
+
+  // Save Bulk Target Update for all selected students
+  const handleSaveBulkTargets = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (bulkSelectedStudentIds.length === 0) return;
+
+    const selectedStudentsList = students.filter(s => bulkSelectedStudentIds.includes(s.id));
+    if (selectedStudentsList.length === 0) return;
+
+    const bulkTargetsToSave: TargetProgress[] = [];
+    const studentsToUpdateRaport: Student[] = [];
+    const cleanSuratAyat = (bulkFormData.targetSuratAyat || '').trim();
+    const periodLabel = `${bulkFormData.term} (${
+      bulkFormData.term === 'Term 1'
+        ? 'Juli - Sep'
+        : bulkFormData.term === 'Term 2'
+        ? 'Okt - Des'
+        : bulkFormData.term === 'Term 3'
+        ? 'Jan - Mar'
+        : 'Apr - Jun'
+    } 2026/2027)`;
+
+    for (const std of selectedStudentsList) {
+      if (bulkFormData.category === 'Hafalan') {
+        const achievedJuz = std.totalJuzHafal || 0;
+        const evalRes = evaluateHafalanTerm(achievedJuz, Number(bulkFormData.targetJuz));
+        const existing = hafalanTargetMap.get(`${std.id}_${bulkFormData.term}`);
+
+        bulkTargetsToSave.push({
+          id: existing?.id || `tgt-hfl-${std.id}-${bulkFormData.term.toLowerCase().replace(' ', '')}`,
+          studentId: std.id,
+          category: 'Hafalan',
+          targetType: bulkFormData.targetType,
+          term: bulkFormData.term,
+          academicYear: '2026/2027',
+          period: periodLabel,
+          targetJuz: Number(bulkFormData.targetJuz),
+          targetSuratAyat: cleanSuratAyat || undefined,
+          achievedJuz,
+          currentAchievement: achievedJuz,
+          remainingJuz: evalRes.remainingJuz,
+          percentage: evalRes.percentage,
+          status: evalRes.status,
+          deadline: bulkFormData.deadline,
+          notes:
+            bulkFormData.notes ||
+            (cleanSuratAyat
+              ? `Target ${bulkFormData.term}: ${cleanSuratAyat} (${bulkFormData.targetJuz} Juz)`
+              : `Target ${bulkFormData.term}: ${bulkFormData.targetJuz} Juz`)
+        });
+
+        if (bulkFormData.syncToRaport && cleanSuratAyat) {
+          studentsToUpdateRaport.push({
+            ...std,
+            raportTargetHafalan: cleanSuratAyat,
+            targetSuratAyat: cleanSuratAyat
+          });
+        }
+      } else {
+        const currentJilid = std.currentUmmiJilid || 'Jilid 1';
+        const currentPage = std.currentUmmiPage || 1;
+        const evalRes = evaluateUmmiTerm(
+          currentJilid,
+          currentPage,
+          bulkFormData.targetUmmiJilid,
+          Number(bulkFormData.targetUmmiPage)
+        );
+        const existing = ummiTargetMap.get(`${std.id}_${bulkFormData.term}`);
+
+        bulkTargetsToSave.push({
+          id: existing?.id || `tgt-ummi-${std.id}-${bulkFormData.term.toLowerCase().replace(' ', '')}`,
+          studentId: std.id,
+          category: 'Ummi',
+          targetType: bulkFormData.targetType,
+          term: bulkFormData.term,
+          academicYear: '2026/2027',
+          period: periodLabel,
+          targetJuz: 0,
+          targetUmmiJilid: bulkFormData.targetUmmiJilid,
+          targetUmmiPage: Number(bulkFormData.targetUmmiPage),
+          achievedUmmiJilid: currentJilid,
+          achievedUmmiPage: currentPage,
+          remainingJuz: 0,
+          percentage: evalRes.percentage,
+          status: evalRes.status,
+          ummiStatus: evalRes.status,
+          ummiPercentage: evalRes.percentage,
+          deadline: bulkFormData.deadline,
+          notes:
+            bulkFormData.notes ||
+            `Target ${bulkFormData.term}: ${bulkFormData.targetUmmiJilid} Hal ${bulkFormData.targetUmmiPage}`
+        });
+      }
+    }
+
+    storageService.saveTargetsBulk(bulkTargetsToSave);
+    if (studentsToUpdateRaport.length > 0) {
+      storageService.saveStudentsBulk(studentsToUpdateRaport);
+    }
+
+    const selectedClassObj = classes.find(c => c.id === bulkClassId);
+    const classLabel = selectedClassObj ? `Kelas ${selectedClassObj.name}` : 'terpilih';
+    const targetDesc =
+      bulkFormData.category === 'Hafalan'
+        ? cleanSuratAyat
+          ? `${cleanSuratAyat} (${bulkFormData.targetJuz} Juz)`
+          : `${bulkFormData.targetJuz} Juz`
+        : `${bulkFormData.targetUmmiJilid} Hal ${bulkFormData.targetUmmiPage}`;
+
+    setSyncFeedback(
+      `Berhasil memperbarui target ${bulkFormData.category} (${bulkFormData.term}: ${targetDesc}) secara massal untuk ${bulkTargetsToSave.length} santri ${classLabel}!`
+    );
+    setTimeout(() => setSyncFeedback(null), 6000);
+    setShowBulkModal(false);
+    setSelectedTableStudentIds([]);
+    onRefreshData();
+  };
+
+  const renderStudentTable = (studentsWithTarget: any[], contextClassId?: string) => {
+    const tableStudentIds = studentsWithTarget.map(item => item.student.id);
+    const allSelectedInTable =
+      tableStudentIds.length > 0 && tableStudentIds.every(id => selectedTableStudentIds.includes(id));
+    const someSelectedInTable =
+      tableStudentIds.some(id => selectedTableStudentIds.includes(id)) && !allSelectedInTable;
+
+    const handleToggleAllInTable = () => {
+      if (allSelectedInTable) {
+        setSelectedTableStudentIds(prev => prev.filter(id => !tableStudentIds.includes(id)));
+      } else {
+        setSelectedTableStudentIds(prev => Array.from(new Set([...prev, ...tableStudentIds])));
+      }
+    };
+
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold">
+              {userRole !== 'wali' && (
+                <th className="py-3 px-3 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={allSelectedInTable}
+                    ref={el => {
+                      if (el) el.indeterminate = someSelectedInTable;
+                    }}
+                    onChange={handleToggleAllInTable}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-[#D4AF37] focus:ring-[#D4AF37] cursor-pointer accent-slate-900"
+                    title="Pilih semua santri di tabel ini"
+                  />
+                </th>
+              )}
+              <th className="py-3 px-3.5 w-10 text-center">No</th>
+              <th className="py-3 px-3.5">Santri</th>
+              <th className="py-3 px-3.5">Program / Jenjang</th>
+              <th className="py-3 px-3.5">
+                {activeTab === 'ummi' ? 'Target Ummi Term' : 'Target Hafalan Term'}
+              </th>
+              <th className="py-3 px-3.5">Capaian Riil Saat Ini</th>
+              <th className="py-3 px-3.5 w-52">Progress Ketercapaian</th>
+              <th className="py-3 px-3.5 text-center">Status</th>
+              {userRole !== 'wali' && <th className="py-3 px-3.5 text-center">Aksi</th>}
             </tr>
-          ) : (
-            studentsWithTarget.map((item, idx) => {
-              const { student, target } = item;
-              const isUmmi = activeTab === 'ummi';
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {studentsWithTarget.length === 0 ? (
+              <tr>
+                <td colSpan={userRole !== 'wali' ? 9 : 7} className="py-8 text-center text-slate-400">
+                  Tidak ada data santri yang cocok dengan filter di kelompok ini.
+                </td>
+              </tr>
+            ) : (
+              studentsWithTarget.map((item, idx) => {
+                const { student, target } = item;
+                const isUmmi = activeTab === 'ummi';
+                const isRowSelected = selectedTableStudentIds.includes(student.id);
 
-              return (
-                <tr key={student.id} className="hover:bg-slate-50/90 transition">
-                  {/* No */}
-                  <td className="py-3 px-3.5 text-center text-slate-400 font-mono font-medium">
-                    {idx + 1}
-                  </td>
-
-                  {/* Santri */}
-                  <td className="py-3 px-3.5">
-                    <div 
-                      onClick={() => onOpenStudentDetail(student.id)}
-                      className="flex items-center gap-2.5 cursor-pointer hover:text-[#D4AF37] transition group"
-                    >
-                      <AvatarBadge
-                        name={student.name}
-                        photoUrl={student.photo}
-                        gender={student.gender}
-                        role="santri"
-                        size="sm"
-                        className="shrink-0"
-                      />
-                      <div>
-                        <span className="font-bold text-slate-900 group-hover:text-[#D4AF37] block">
-                          {student.name}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          NIS: {student.nis || '-'}
-                        </span>
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Program */}
-                  <td className="py-3 px-3.5">
-                    <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold">
-                      {student.program || 'Reguler Tahfizh'}
-                    </span>
-                  </td>
-
-                  {/* Target Term */}
-                  <td className="py-3 px-3.5 font-bold">
-                    {isUmmi ? (
-                      <div className="space-y-0.5">
-                        <span className="text-emerald-800 font-black">
-                          {target.targetUmmiJilid || 'Jilid 1'} {target.targetUmmiPage ? `(Hal ${target.targetUmmiPage})` : ''}
-                        </span>
-                        <div className="text-[10px] text-slate-500 font-normal">
-                          {target.term || selectedTerm} • DL: {target.deadline || '30 Sep 2026'}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-0.5">
-                        <span className="text-slate-900 font-black">
-                          {isClass7Bto7E(student, classes) && (target.term === 'Term 1' || selectedTerm === 'Term 1')
-                            ? 'Al-Kautsar : 3'
-                            : `${target.targetJuz} Juz`}
-                        </span>
-                        <div className="text-[10px] text-slate-500 font-normal">
-                          {target.term || selectedTerm} • DL: {target.deadline || '30 Sep 2026'}
-                        </div>
-                      </div>
-                    )}
-                  </td>
-
-                  {/* Capaian Riil */}
-                  <td className="py-3 px-3.5">
-                    {isUmmi ? (
-                      <div>
-                        <span className="font-extrabold text-slate-800">
-                          {student.currentUmmiJilid || 'Jilid 1'}
-                        </span>
-                        <span className="text-slate-500 text-[11px] ml-1">
-                          Hal {student.currentUmmiPage || 1}
-                        </span>
-                      </div>
-                    ) : (
-                      <div>
-                        <span className="font-extrabold text-slate-800">
-                          {student.totalJuzHafal || 0} Juz
-                        </span>
-                        <span className="text-[10px] text-slate-400 block font-normal">
-                          Sisa: {target.remainingJuz} Juz
-                        </span>
-                      </div>
-                    )}
-                  </td>
-
-                  {/* Progress Ketercapaian */}
-                  <td className="py-3 px-3.5">
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[11px] font-bold">
-                        <span className="text-slate-600">
-                          {target.percentage}%
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-normal">
-                          {isUmmi ? (target.percentage >= 100 ? 'Tuntas Target' : `${target.percentage}% tuntas`) : `${student.totalJuzHafal || 0}/${target.targetJuz} Juz`}
-                        </span>
-                      </div>
-                      <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            target.percentage >= 100 ? 'bg-emerald-500' :
-                            target.percentage >= 70 ? 'bg-emerald-400' :
-                            target.percentage >= 40 ? 'bg-[#D4AF37]' : 'bg-rose-500'
-                          }`}
-                          style={{ width: `${Math.min(100, target.percentage)}%` }}
+                return (
+                  <tr
+                    key={student.id}
+                    className={`transition ${
+                      isRowSelected ? 'bg-amber-50/60 hover:bg-amber-50/90' : 'hover:bg-slate-50/90'
+                    }`}
+                  >
+                    {/* Checkbox */}
+                    {userRole !== 'wali' && (
+                      <td className="py-3 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isRowSelected}
+                          onChange={() => toggleTableStudentSelection(student.id)}
+                          className="w-3.5 h-3.5 rounded border-slate-300 text-[#D4AF37] focus:ring-[#D4AF37] cursor-pointer accent-slate-900"
                         />
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Status */}
-                  <td className="py-3 px-3.5 text-center">
-                    {target.status === 'on-track' ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        Sesuai Target
-                      </span>
-                    ) : target.status === 'needs-attention' ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-900">
-                        <TrendingUp className="w-3 h-3 text-[#D4AF37]" />
-                        Perlu Dorongan
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-100 text-rose-800">
-                        <AlertTriangle className="w-3 h-3 text-rose-600" />
-                        Tertinggal
-                      </span>
+                      </td>
                     )}
-                  </td>
 
-                  {/* Aksi */}
-                  {userRole !== 'wali' && (
-                    <td className="py-3 px-3.5 text-center">
-                      <button
-                        onClick={() => handleOpenEditTarget(
-                          student.id, 
-                          isUmmi ? 'Ummi' : 'Hafalan', 
-                          (selectedTerm === 'all' ? 'Term 1' : selectedTerm)
-                        )}
-                        className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition cursor-pointer"
-                        title="Atur target individual santri ini"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
+                    {/* No */}
+                    <td className="py-3 px-3.5 text-center text-slate-400 font-mono font-medium">
+                      {idx + 1}
                     </td>
-                  )}
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
+
+                    {/* Santri */}
+                    <td className="py-3 px-3.5">
+                      <div 
+                        onClick={() => onOpenStudentDetail(student.id)}
+                        className="flex items-center gap-2.5 cursor-pointer hover:text-[#D4AF37] transition group"
+                      >
+                        <AvatarBadge
+                          name={student.name}
+                          photoUrl={student.photo}
+                          gender={student.gender}
+                          role="santri"
+                          size="sm"
+                          className="shrink-0"
+                        />
+                        <div>
+                          <span className="font-bold text-slate-900 group-hover:text-[#D4AF37] block">
+                            {student.name}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            NIS: {student.nis || '-'}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Program */}
+                    <td className="py-3 px-3.5">
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold">
+                        {student.program || 'Reguler Tahfizh'}
+                      </span>
+                    </td>
+
+                    {/* Target Term */}
+                    <td className="py-3 px-3.5 font-bold">
+                      {isUmmi ? (
+                        <div className="space-y-0.5">
+                          <span className="text-emerald-800 font-black">
+                            {target.targetUmmiJilid || 'Jilid 1'} {target.targetUmmiPage ? `(Hal ${target.targetUmmiPage})` : ''}
+                          </span>
+                          <div className="text-[10px] text-slate-500 font-normal">
+                            {target.term || selectedTerm} • DL: {target.deadline || '30 Sep 2026'}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-0.5">
+                          <span className="text-slate-900 font-black">
+                            {target.targetSuratAyat
+                              ? `${target.targetSuratAyat} (${target.targetJuz} Juz)`
+                              : isClass7Bto7E(student, classes) &&
+                                (target.term === 'Term 1' || selectedTerm === 'Term 1') &&
+                                (!target.id || target.id.startsWith('temp-') || target.targetJuz === 0.5)
+                              ? 'Al-Kautsar : 3'
+                              : `${target.targetJuz} Juz`}
+                          </span>
+                          <div className="text-[10px] text-slate-500 font-normal">
+                            {target.term || selectedTerm} • DL: {target.deadline || '30 Sep 2026'}
+                          </div>
+                        </div>
+                      )}
+                    </td>
+
+                    {/* Capaian Riil */}
+                    <td className="py-3 px-3.5">
+                      {isUmmi ? (
+                        <div>
+                          <span className="font-extrabold text-slate-800">
+                            {student.currentUmmiJilid || 'Jilid 1'}
+                          </span>
+                          <span className="text-slate-500 text-[11px] ml-1">
+                            Hal {student.currentUmmiPage || 1}
+                          </span>
+                        </div>
+                      ) : (
+                        <div>
+                          <span className="font-extrabold text-slate-800">
+                            {student.totalJuzHafal || 0} Juz
+                          </span>
+                          <span className="text-[10px] text-slate-400 block font-normal">
+                            Sisa: {target.remainingJuz} Juz
+                          </span>
+                        </div>
+                      )}
+                    </td>
+
+                    {/* Progress Ketercapaian */}
+                    <td className="py-3 px-3.5">
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[11px] font-bold">
+                          <span className="text-slate-600">
+                            {target.percentage}%
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-normal">
+                            {isUmmi ? (target.percentage >= 100 ? 'Tuntas Target' : `${target.percentage}% tuntas`) : `${student.totalJuzHafal || 0}/${target.targetJuz} Juz`}
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              target.percentage >= 100 ? 'bg-emerald-500' :
+                              target.percentage >= 70 ? 'bg-emerald-400' :
+                              target.percentage >= 40 ? 'bg-[#D4AF37]' : 'bg-rose-500'
+                            }`}
+                            style={{ width: `${Math.min(100, target.percentage)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Status */}
+                    <td className="py-3 px-3.5 text-center">
+                      {target.status === 'on-track' ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          Sesuai Target
+                        </span>
+                      ) : target.status === 'needs-attention' ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-900">
+                          <TrendingUp className="w-3 h-3 text-[#D4AF37]" />
+                          Perlu Dorongan
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-100 text-rose-800">
+                          <AlertTriangle className="w-3 h-3 text-rose-600" />
+                          Tertinggal
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Aksi */}
+                    {userRole !== 'wali' && (
+                      <td className="py-3 px-3.5 text-center">
+                        <button
+                          onClick={() => handleOpenEditTarget(
+                            student.id, 
+                            isUmmi ? 'Ummi' : 'Hafalan', 
+                            (selectedTerm === 'all' ? 'Term 1' : selectedTerm)
+                          )}
+                          className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition cursor-pointer"
+                          title="Atur target individual santri ini"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in pb-10">
@@ -694,28 +1044,40 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
         {/* Action Buttons */}
         <div className="flex items-center gap-2 flex-wrap">
           {userRole !== 'wali' && (
-            <button
-              onClick={handleGenerateDefaultTargets}
-              disabled={isSyncing}
-              className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs transition flex items-center gap-2 cursor-pointer shadow-2xs disabled:opacity-50"
-              title="Membuat dan menyinkronkan target standar 4 Term untuk seluruh santri sesuai program dan jenjangnya"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>{isSyncing ? 'Menyinkronkan...' : 'Sinkronkan Target Standar Term (Semua Santri)'}</span>
-            </button>
-          )}
+            <>
+              <button
+                onClick={handleGenerateDefaultTargets}
+                disabled={isSyncing}
+                className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs transition flex items-center gap-2 cursor-pointer shadow-2xs disabled:opacity-50"
+                title="Membuat dan menyinkronkan target standar 4 Term untuk seluruh santri sesuai program dan jenjangnya"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${isSyncing ? 'animate-spin' : ''}`} />
+                <span>{isSyncing ? 'Menyinkronkan...' : 'Sinkronkan Target Standar Term'}</span>
+              </button>
 
-          {userRole === 'admin' && (
-            <button
-              onClick={() => {
-                setModalCategory(activeTab === 'ummi' ? 'Ummi' : 'Hafalan');
-                setShowTargetModal(true);
-              }}
-              className="px-3.5 py-2 rounded-xl bg-[#1E293B] hover:bg-slate-800 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus className="w-4 h-4 text-[#D4AF37]" />
-              <span>+ Atur Target Manual</span>
-            </button>
+              <button
+                onClick={() => handleOpenBulkModal(selectedClassFilter !== 'all' ? selectedClassFilter : undefined, selectedTableStudentIds)}
+                className="px-3.5 py-2 rounded-xl bg-[#D4AF37] hover:bg-amber-500 text-slate-950 font-black text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                title="Atur target hafalan untuk banyak santri sekaligus dalam satu kelas menggunakan daftar centang (checkbox)"
+              >
+                <ListChecks className="w-4 h-4 text-slate-950" />
+                <span>
+                  Atur Target Massal per Kelas
+                  {selectedTableStudentIds.length > 0 ? ` (${selectedTableStudentIds.length} Dipilih)` : ''}
+                </span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setModalCategory(activeTab === 'ummi' ? 'Ummi' : 'Hafalan');
+                  setShowTargetModal(true);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-[#1E293B] hover:bg-slate-800 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4 text-[#D4AF37]" />
+                <span>+ Atur Target Individual</span>
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -1129,6 +1491,47 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
 
           </div>
 
+          {/* Active Checkbox Selection Action Banner */}
+          {userRole !== 'wali' && selectedTableStudentIds.length > 0 && (
+            <div className="p-3.5 bg-slate-900 text-white rounded-2xl border border-[#D4AF37] shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-xl bg-[#D4AF37] text-slate-950 flex items-center justify-center font-black text-xs">
+                  {selectedTableStudentIds.length}
+                </span>
+                <div>
+                  <div className="text-xs font-extrabold text-white">
+                    {selectedTableStudentIds.length} Santri Dipilih dari Tabel
+                  </div>
+                  <div className="text-[11px] text-slate-300">
+                    Klik tombol di samping untuk mengatur target hafalan / Ummi secara massal.
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTableStudentIds([])}
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition cursor-pointer"
+                >
+                  Reset Pilihan
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleOpenBulkModal(
+                      selectedClassFilter !== 'all' ? selectedClassFilter : undefined,
+                      selectedTableStudentIds
+                    )
+                  }
+                  className="px-4 py-1.5 rounded-xl bg-[#D4AF37] hover:bg-amber-400 text-slate-950 text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                >
+                  <ListChecks className="w-4 h-4" />
+                  <span>Atur Target Massal ({selectedTableStudentIds.length} Santri)</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Render Santri Tables */}
           <div className="space-y-6">
             {allFilteredStudents.length === 0 ? (
@@ -1256,11 +1659,27 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
                         <span className="px-2.5 py-1 rounded-md bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/40 text-xs font-extrabold">
                           Avg: {cls.stats.avgPercentage}%
                         </span>
+                        {userRole !== 'wali' && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleOpenBulkModal(
+                                cls.id,
+                                cls.studentsWithTarget.map((item: any) => item.student.id)
+                              )
+                            }
+                            className="px-3 py-1 rounded-lg bg-[#D4AF37] hover:bg-amber-400 text-slate-950 font-black text-xs transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                            title={`Atur target massal untuk santri Kelas ${cls.name}`}
+                          >
+                            <ListChecks className="w-3.5 h-3.5" />
+                            <span>Target Massal {cls.name}</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 
                     {/* Table Santri Kelas */}
-                    {renderStudentTable(cls.studentsWithTarget)}
+                    {renderStudentTable(cls.studentsWithTarget, cls.id)}
                   </div>
                 );
               })
@@ -1408,20 +1827,34 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
 
               {/* Form Input Spesifik Kategori */}
               {targetFormData.category === 'Hafalan' ? (
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">Target Jumlah Juz Term Ini:</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0.1"
-                    max="30"
-                    value={targetFormData.targetJuz}
-                    onChange={(e) => setTargetFormData({ ...targetFormData, targetJuz: parseFloat(e.target.value) || 0.5 })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-bold focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
-                  />
-                  <span className="text-[10px] text-slate-500 mt-1 block">
-                    Standar acuan Term 1: 0.5 Juz (Reguler) / 1.0 Juz (Unggulan).
-                  </span>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Target Jumlah Juz Term Ini:</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      max="30"
+                      value={targetFormData.targetJuz}
+                      onChange={(e) => setTargetFormData({ ...targetFormData, targetJuz: parseFloat(e.target.value) || 0.5 })}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-bold focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                    />
+                    <span className="text-[10px] text-slate-500 mt-1 block">
+                      Standar acuan Term 1: 0.5 Juz (Reguler) / 1.0 Juz (Unggulan).
+                    </span>
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">
+                      Target Surat / Ayat Spesifik (Opsional):
+                    </label>
+                    <input
+                      type="text"
+                      value={targetFormData.targetSuratAyat}
+                      onChange={(e) => setTargetFormData({ ...targetFormData, targetSuratAyat: e.target.value })}
+                      placeholder="Contoh: Al-Kautsar : 3 atau An-Naba : 1-40"
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-bold focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3">
@@ -1483,6 +1916,419 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
                   <Target className="w-3.5 h-3.5 text-[#D4AF37]" />
                   <span>Simpan Target Term</span>
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ATUR TARGET MASSAL PER KELAS (BULK UPDATE DENGAN CHECKBOX SANTRI) */}
+      {showBulkModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 border border-slate-200 max-h-[92vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center pb-3 border-b border-slate-200 shrink-0">
+              <div>
+                <h3 className="font-black text-slate-900 text-base flex items-center gap-2">
+                  <ListChecks className="w-5 h-5 text-[#D4AF37]" />
+                  <span>Atur Target Hafalan Massal per Kelas</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Pilih kelas, centang daftar santri yang diinginkan, lalu tetapkan target hafalan sekaligus.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowBulkModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBulkTargets} className="space-y-4 text-xs overflow-y-auto pr-1 flex-1">
+              {/* Top Controls: Pilih Kelas, Jenis Target, & Periode Term */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                {/* Pilih Kelas */}
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">1. Pilih Kelas:</label>
+                  <select
+                    value={bulkClassId}
+                    onChange={(e) => handleBulkClassChange(e.target.value)}
+                    className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-extrabold focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                  >
+                    {classes.map(c => {
+                      const countInClass = students.filter(s => s.classId === c.id).length;
+                      return (
+                        <option key={c.id} value={c.id}>
+                          Kelas {c.name} ({countInClass} Santri)
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {/* Jenis Target */}
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">2. Kategori Target:</label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setBulkFormData(prev => ({ ...prev, category: 'Hafalan' }))}
+                      className={`py-2 px-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition cursor-pointer border ${
+                        bulkFormData.category === 'Hafalan'
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <BookOpen className="w-3.5 h-3.5 text-[#D4AF37]" />
+                      <span>Hafalan</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBulkFormData(prev => ({ ...prev, category: 'Ummi' }))}
+                      className={`py-2 px-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition cursor-pointer border ${
+                        bulkFormData.category === 'Ummi'
+                          ? 'bg-emerald-800 text-white border-emerald-800'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <BookMarked className="w-3.5 h-3.5 text-emerald-300" />
+                      <span>Ummi</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Periode Term */}
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">3. Periode Term:</label>
+                  <select
+                    value={bulkFormData.term}
+                    onChange={(e) => {
+                      const newTerm = e.target.value as TermName;
+                      const termDef = TERM_DEFINITIONS.find(t => t.term === newTerm) || TERM_DEFINITIONS[0];
+                      const clsObj = classes.find(c => c.id === bulkClassId);
+                      const is7Bto7EClass = clsObj ? ['7b', '7c', '7d', '7e'].includes(clsObj.name.toLowerCase().trim()) : false;
+                      setBulkFormData(prev => ({
+                        ...prev,
+                        term: newTerm,
+                        deadline: termDef.defaultDeadline,
+                        targetSuratAyat: is7Bto7EClass && newTerm === 'Term 1' ? 'Al-Kautsar : 3' : prev.targetSuratAyat
+                      }));
+                    }}
+                    className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-bold focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                  >
+                    <option value="Term 1">Term 1 (Jul - Sep)</option>
+                    <option value="Term 2">Term 2 (Okt - Des)</option>
+                    <option value="Term 3">Term 3 (Jan - Mar)</option>
+                    <option value="Term 4">Term 4 (Apr - Jun)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Daftar Pilihan Santri (Checkbox Selection List) */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                <div className="p-3 bg-slate-100 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={
+                        filteredBulkClassStudents.length > 0 &&
+                        filteredBulkClassStudents.every(item => bulkSelectedStudentIds.includes(item.student.id))
+                      }
+                      onChange={() => {
+                        const visibleIds = filteredBulkClassStudents.map(item => item.student.id);
+                        const allChecked =
+                          visibleIds.length > 0 &&
+                          visibleIds.every(id => bulkSelectedStudentIds.includes(id));
+                        if (allChecked) {
+                          setBulkSelectedStudentIds(prev => prev.filter(id => !visibleIds.includes(id)));
+                        } else {
+                          setBulkSelectedStudentIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-[#D4AF37] cursor-pointer accent-slate-900"
+                    />
+                    <span className="font-extrabold text-slate-800">
+                      Pilih Santri ({bulkSelectedStudentIds.length} dari {bulkClassStudentsWithTarget.length} dipilih)
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setBulkSelectedStudentIds(bulkClassStudentsWithTarget.map(item => item.student.id))
+                      }
+                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-200 text-slate-700 border border-slate-300 font-bold text-[11px] cursor-pointer transition"
+                    >
+                      Pilih Semua Kelas
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setBulkSelectedStudentIds(
+                          bulkClassStudentsWithTarget
+                            .filter(item => item.status !== 'on-track')
+                            .map(item => item.student.id)
+                        )
+                      }
+                      className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[11px] cursor-pointer transition"
+                    >
+                      Hanya yang Belum Tuntas
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBulkSelectedStudentIds([])}
+                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-rose-50 text-rose-700 border border-slate-200 font-bold text-[11px] cursor-pointer transition"
+                    >
+                      Kosongkan
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search inside Class Checkbox List */}
+                <div className="p-2.5 border-b border-slate-100 bg-slate-50/60">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      value={bulkSearchQuery}
+                      onChange={(e) => setBulkSearchQuery(e.target.value)}
+                      placeholder="Cari nama santri atau NIS di kelas ini..."
+                      className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Scrollable Checkbox List */}
+                <div className="max-h-56 overflow-y-auto divide-y divide-slate-100">
+                  {filteredBulkClassStudents.length === 0 ? (
+                    <div className="py-6 text-center text-slate-400 text-xs">
+                      Tidak ada santri yang ditemukan di kelas ini.
+                    </div>
+                  ) : (
+                    filteredBulkClassStudents.map((item, idx) => {
+                      const { student, currentTargetJuz, currentTargetSurat, currentUmmiTarget } = item;
+                      const isChecked = bulkSelectedStudentIds.includes(student.id);
+                      return (
+                        <label
+                          key={student.id}
+                          className={`flex items-center justify-between px-3.5 py-2.5 cursor-pointer transition select-none ${
+                            isChecked ? 'bg-amber-50/70 hover:bg-amber-50' : 'hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleBulkStudentSelection(student.id)}
+                              className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-[#D4AF37] cursor-pointer accent-slate-900 shrink-0"
+                            />
+                            <span className="text-[11px] text-slate-400 font-mono w-5">{idx + 1}.</span>
+                            <div className="min-w-0">
+                              <div className="font-bold text-slate-900 truncate">{student.name}</div>
+                              <div className="text-[10px] text-slate-500 flex items-center gap-2">
+                                <span>NIS: {student.nis || '-'}</span>
+                                <span>•</span>
+                                <span>{student.program || 'Reguler Tahfizh'}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0 ml-2">
+                            {bulkFormData.category === 'Hafalan' ? (
+                              <>
+                                <div className="text-[11px] font-extrabold text-slate-800">
+                                  Target Saat Ini: {currentTargetSurat ? `${currentTargetSurat} (${currentTargetJuz} Juz)` : `${currentTargetJuz} Juz`}
+                                </div>
+                                <div className="text-[10px] text-slate-500">
+                                  Capaian: {student.totalJuzHafal || 0} Juz
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="text-[11px] font-extrabold text-emerald-800">
+                                  Target: {currentUmmiTarget}
+                                </div>
+                                <div className="text-[10px] text-slate-500">
+                                  Capaian: {student.currentUmmiJilid || 'Jilid 1'} Hal {student.currentUmmiPage || 1}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Detail Target yang Akan Diterapkan */}
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                <div className="font-extrabold text-slate-800 text-xs flex items-center gap-1.5">
+                  <Target className="w-4 h-4 text-[#D4AF37]" />
+                  <span>Parameter Target Baru untuk {bulkSelectedStudentIds.length} Santri Terpilih:</span>
+                </div>
+
+                {bulkFormData.category === 'Hafalan' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1">
+                        Target Jumlah Juz ({bulkFormData.term}):
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0.1"
+                        max="30"
+                        value={bulkFormData.targetJuz}
+                        onChange={(e) =>
+                          setBulkFormData({ ...bulkFormData, targetJuz: parseFloat(e.target.value) || 0.5 })
+                        }
+                        className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-black focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                      />
+                      <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                        {[0.5, 1.0, 1.5, 2.0, 3.0, 4.0].map(preset => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => setBulkFormData(prev => ({ ...prev, targetJuz: preset }))}
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition cursor-pointer ${
+                              bulkFormData.targetJuz === preset
+                                ? 'bg-slate-900 text-[#D4AF37] border-slate-900'
+                                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {preset} Juz
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1">
+                        Target Surat / Ayat Spesifik (Opsional):
+                      </label>
+                      <input
+                        type="text"
+                        value={bulkFormData.targetSuratAyat}
+                        onChange={(e) =>
+                          setBulkFormData({ ...bulkFormData, targetSuratAyat: e.target.value })
+                        }
+                        placeholder="Contoh: Al-Kautsar : 3 atau An-Naba : 40"
+                        className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-bold focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                      />
+                      <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                        {['Al-Kautsar : 3', "Al-A'la : 19", "An-Naba' : 40", 'Al-Mulk : 30'].map(preset => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => setBulkFormData(prev => ({ ...prev, targetSuratAyat: preset }))}
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition cursor-pointer ${
+                              bulkFormData.targetSuratAyat === preset
+                                ? 'bg-amber-100 text-amber-950 border-[#D4AF37]'
+                                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {preset}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1">Target Jilid Ummi:</label>
+                      <select
+                        value={bulkFormData.targetUmmiJilid}
+                        onChange={(e) => setBulkFormData({ ...bulkFormData, targetUmmiJilid: e.target.value })}
+                        className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-bold focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                      >
+                        <option value="Jilid 1">Jilid 1</option>
+                        <option value="Jilid 2">Jilid 2</option>
+                        <option value="Jilid 3">Jilid 3</option>
+                        <option value="Al-Qur'an">Al-Qur'an Remaja</option>
+                        <option value="Gharib">Gharibul Qur'an</option>
+                        <option value="Tajwid">Tajwid Praktis</option>
+                        <option value="Munaqosyah">Munaqosyah</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1">Target Halaman:</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={bulkFormData.targetUmmiPage}
+                        onChange={(e) =>
+                          setBulkFormData({ ...bulkFormData, targetUmmiPage: parseInt(e.target.value) || 40 })
+                        }
+                        className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-bold focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Tenggat Waktu (Deadline):</label>
+                    <input
+                      type="date"
+                      value={bulkFormData.deadline}
+                      onChange={(e) => setBulkFormData({ ...bulkFormData, deadline: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-xl text-slate-800 font-medium focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Catatan Target / Bimbingan:</label>
+                    <input
+                      type="text"
+                      value={bulkFormData.notes}
+                      onChange={(e) => setBulkFormData({ ...bulkFormData, notes: e.target.value })}
+                      placeholder="Catatan pembinaan untuk santri terpilih..."
+                      className="w-full p-2 bg-white border border-slate-300 rounded-xl text-slate-800 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {bulkFormData.category === 'Hafalan' && bulkFormData.targetSuratAyat.trim() !== '' && (
+                  <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={bulkFormData.syncToRaport}
+                      onChange={(e) => setBulkFormData({ ...bulkFormData, syncToRaport: e.target.checked })}
+                      className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-[#D4AF37] accent-slate-900"
+                    />
+                    <span className="text-slate-700 font-semibold">
+                      Sinkronkan juga target surat/ayat (<strong>{bulkFormData.targetSuratAyat}</strong>) ke kolom Target Raport Tahfizh santri terpilih
+                    </span>
+                  </label>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="pt-3 flex items-center justify-between gap-2 border-t border-slate-200 shrink-0">
+                <span className="text-xs font-bold text-slate-600">
+                  Total terpilih: <strong className="text-slate-900">{bulkSelectedStudentIds.length} santri</strong>
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowBulkModal(false)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={bulkSelectedStudentIds.length === 0}
+                    className="px-5 py-2 bg-[#1E293B] hover:bg-slate-800 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <CheckSquare className="w-4 h-4 text-[#D4AF37]" />
+                    <span>Terapkan ke {bulkSelectedStudentIds.length} Santri</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>

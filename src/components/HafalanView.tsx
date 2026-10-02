@@ -1170,7 +1170,7 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                   Anda akan menghapus riwayat setoran{' '}
                   <strong className="text-slate-800">
-                    { getStudent(deleteConfirmRecord.studentId)?.name || 'Santri' }
+                    { students.find(s => s.id === deleteConfirmRecord.studentId)?.name || 'Santri' }
                   </strong>{' '}
                   ({deleteConfirmRecord.surahName} ayat {deleteConfirmRecord.startAyah}-{deleteConfirmRecord.endAyah} pada {deleteConfirmRecord.date}). Data capaian santri akan dihitung ulang secara otomatis.
                 </p>

@@ -185,6 +185,12 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
   });
   const [targetSaveSuccess, setTargetSaveSuccess] = useState<string | null>(null);
 
+  // In-app Delete Confirmation Modal States (Reliable in sandboxed iframes)
+  const [classToDelete, setClassToDelete] = useState<ClassItem | null>(null);
+  const [teacherToDelete, setTeacherToDelete] = useState<Teacher | null>(null);
+  const [halaqahToDelete, setHalaqahToDelete] = useState<HalaqahGroup | null>(null);
+  const [actionFeedbackToast, setActionFeedbackToast] = useState<string | null>(null);
+
   const handleOpenTargetModalForHalaqah = (group: HalaqahGroup, preselectedStudentId: string = 'all') => {
     setTargetGroup(group);
     setTargetStudentId(preselectedStudentId);
@@ -309,11 +315,20 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
     onRefreshData();
   };
 
-  const handleDeleteTeacher = (id: string) => {
-    if (window.confirm('Hapus data guru pembimbing ini?')) {
-      storageService.deleteTeacher(id);
-      onRefreshData();
-    }
+  const handleDeleteTeacher = (teacher: Teacher) => {
+    setTeacherToDelete(teacher);
+  };
+
+  const handleConfirmDeleteTeacher = () => {
+    if (!teacherToDelete) return;
+    const tId = teacherToDelete.id;
+    const tName = teacherToDelete.name;
+
+    storageService.deleteTeacher(tId);
+    setTeacherToDelete(null);
+    onRefreshData();
+    setActionFeedbackToast(`Data Guru "${tName}" berhasil dihapus.`);
+    setTimeout(() => setActionFeedbackToast(null), 4000);
   };
 
   // Class Handlers
@@ -359,15 +374,33 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
   };
 
   const handleDeleteClass = (cls: ClassItem) => {
-    const countInClass = students.filter(s => s.classId === cls.id).length;
-    const msg = countInClass > 0 
-      ? `Perhatian: Ada ${countInClass} santri/siswa yang terdaftar di rombel kelas "${cls.name}".\n\nApakah Anda yakin ingin menghapus kelas ini?`
-      : `Apakah Anda yakin ingin menghapus rombel kelas "${cls.name}"?`;
-    
-    if (window.confirm(msg)) {
-      storageService.deleteClass(cls.id);
-      onRefreshData();
+    setClassToDelete(cls);
+  };
+
+  const handleConfirmDeleteClass = () => {
+    if (!classToDelete) return;
+    const clsId = classToDelete.id;
+    const clsName = classToDelete.name;
+
+    // 1. Release students currently assigned to this class to avoid broken references
+    const classStudents = students.filter(s => s.classId === clsId);
+    if (classStudents.length > 0) {
+      const updatedStudents = classStudents.map(s => ({
+        ...s,
+        classId: '',
+        className: ''
+      }));
+      storageService.saveStudentsBulk(updatedStudents);
     }
+
+    // 2. Delete class in storageService
+    storageService.deleteClass(clsId);
+
+    // 3. Clear modal state & notify
+    setClassToDelete(null);
+    onRefreshData();
+    setActionFeedbackToast(`Rombel Kelas "${clsName}" berhasil dihapus.`);
+    setTimeout(() => setActionFeedbackToast(null), 4000);
   };
 
   // Halaqah Handlers
@@ -461,11 +494,20 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
   };
 
   const handleDeleteHalaqah = (group: HalaqahGroup) => {
-    if (window.confirm(`Hapus kelompok "${group.name}"? Santri di kelompok ini akan dilepas status halaqahnya.`)) {
-      storageService.deleteHalaqahGroup(group.id);
-      setHalaqahGroups(storageService.getHalaqahGroups());
-      onRefreshData();
-    }
+    setHalaqahToDelete(group);
+  };
+
+  const handleConfirmDeleteHalaqah = () => {
+    if (!halaqahToDelete) return;
+    const hId = halaqahToDelete.id;
+    const hName = halaqahToDelete.name;
+
+    storageService.deleteHalaqahGroup(hId);
+    setHalaqahGroups(storageService.getHalaqahGroups());
+    setHalaqahToDelete(null);
+    onRefreshData();
+    setActionFeedbackToast(`Kelompok Halaqah "${hName}" berhasil dihapus.`);
+    setTimeout(() => setActionFeedbackToast(null), 4000);
   };
 
   const filteredTeachers = teachers.filter(t => 
@@ -546,6 +588,23 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Toast Notification Banner */}
+      {actionFeedbackToast && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-semibold flex items-center justify-between shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{actionFeedbackToast}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionFeedbackToast(null)}
+            className="text-emerald-700 hover:text-emerald-900 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Tabs & Search Bar */}
       <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
@@ -701,7 +760,7 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
                           <Edit className="w-3.5 h-3.5" /> Edit
                         </button>
                         <button
-                          onClick={() => handleDeleteTeacher(t.id)}
+                          onClick={() => handleDeleteTeacher(t)}
                           className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 text-xs font-semibold flex items-center gap-1 cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" /> Hapus
@@ -2218,6 +2277,139 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
               </form>
             )}
 
+          </div>
+        </div>
+      )}
+
+      {/* MODAL KONFIRMASI HAPUS KELAS */}
+      {classToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-lg font-bold text-slate-900">
+                Hapus Rombel Kelas {classToDelete.name}?
+              </h3>
+              <p className="text-xs text-slate-500">
+                Tindakan ini akan menghapus data rombel kelas dari daftar kelas aktif.
+              </p>
+            </div>
+
+            {/* Warning if students exist in class */}
+            {(() => {
+              const countInClass = students.filter(s => s.classId === classToDelete.id).length;
+              if (countInClass > 0) {
+                return (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs space-y-1">
+                    <p className="font-bold flex items-center gap-1.5">
+                      <span>⚠️ Perhatian:</span>
+                      <span>{countInClass} Santri Terdaftar</span>
+                    </p>
+                    <p className="text-[11px] text-amber-800 leading-relaxed">
+                      Terdapat {countInClass} santri yang saat ini terdaftar di kelas ini. Jika kelas dihapus, status rombel kelas santri-santri tersebut akan dikosongkan (belum ada kelas) dan data santri, setoran hafalan, serta nilainya <strong>tetap aman</strong>.
+                    </p>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setClassToDelete(null)}
+                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteClass}
+                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Ya, Hapus Kelas</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL KONFIRMASI HAPUS GURU */}
+      {teacherToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-lg font-bold text-slate-900">
+                Hapus Data Guru {teacherToDelete.name}?
+              </h3>
+              <p className="text-xs text-slate-500">
+                Tindakan ini akan menghapus data guru pembimbing ini dari sistem.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setTeacherToDelete(null)}
+                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteTeacher}
+                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Ya, Hapus Guru</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL KONFIRMASI HAPUS HALAQAH */}
+      {halaqahToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-lg font-bold text-slate-900">
+                Hapus Kelompok "{halaqahToDelete.name}"?
+              </h3>
+              <p className="text-xs text-slate-500">
+                Santri yang terdaftar di kelompok ini akan dilepas status halaqahnya dan dapat dimasukkan ke kelompok lain.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setHalaqahToDelete(null)}
+                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteHalaqah}
+                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Ya, Hapus Kelompok</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

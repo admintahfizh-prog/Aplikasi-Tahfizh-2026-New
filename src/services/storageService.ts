@@ -37,6 +37,7 @@ import { isGrade8or9Student, isUmmiEnrolledStudent, isClass7Bto7E, isLegacyDefau
 import { getGradeFromScore } from '../utils/gradeConversion';
 import { TermName } from '../types';
 import { getStudentStandardTermTarget, evaluateHafalanTerm, evaluateUmmiTerm } from '../data/targetTermData';
+import { KaldikData, ProsemSheet, INITIAL_KALDIK_DATA, INITIAL_PROSEM_SHEETS } from '../data/kaldikProsemData';
 import { 
   db, 
   collection, 
@@ -71,6 +72,8 @@ const STORAGE_KEYS = {
   MATRIKULASI_RECORDS: 'tahfizh_smpia21_matrikulasi_records',
   ATTENDANCE: 'tahfizh_smpia21_attendance',
   EXAM_SUBMISSIONS: 'tahfizh_smpia21_exam_submissions',
+  KALDIK: 'tahfizh_smpia21_kaldik_v1',
+  PROSEM: 'tahfizh_smpia21_prosem_v1',
   CLOUD_SYNCED: 'tahfizh_smpia21_cloud_synced',
   QUOTA_EXCEEDED: 'tahfizh_smpia21_quota_exceeded',
   QUOTA_EXCEEDED_DATE: 'tahfizh_smpia21_quota_exceeded_date',
@@ -819,7 +822,7 @@ export const storageService = {
                       jilid: newJilid,
                       page: newPage || 1,
                       _updatedAt: studentUpdatedAt
-                    };
+                    } as any;
                     ummiChanged = true;
                   }
                 }
@@ -1403,13 +1406,25 @@ export const storageService = {
 
   // Classes
   getClasses(): ClassItem[] {
-    const list = getItem(STORAGE_KEYS.CLASSES, INITIAL_CLASSES);
+    const deletedSet = getDeletedIdsSet();
+    const list = getItem(STORAGE_KEYS.CLASSES, INITIAL_CLASSES).filter(
+      c => c && c.id && !deletedSet.has(String(c.id))
+    );
     // Sort classes naturally/alphabetically: 7A, 7B, 7C, 8A, 8B, 8C, 9A, 9B, etc.
     return [...list].sort((a, b) => 
       a.name.localeCompare(b.name, 'id', { numeric: true, sensitivity: 'base' })
     );
   },
   saveClass(cls: ClassItem): void {
+    const deletedSet = getDeletedIdsSet();
+    if (deletedSet.has(String(cls.id))) {
+      deletedSet.delete(String(cls.id));
+      try {
+        localStorage.setItem(STORAGE_KEYS.DELETED_IDS, JSON.stringify(Array.from(deletedSet)));
+      } catch (e) {
+        console.error(e);
+      }
+    }
     const list = this.getClasses();
     const idx = list.findIndex(c => c.id === cls.id);
     if (idx >= 0) {
@@ -1419,11 +1434,14 @@ export const storageService = {
     }
     setItem(STORAGE_KEYS.CLASSES, list);
     syncDocToCloud('classes', cls.id, cls);
+    this.notifyListeners();
   },
   deleteClass(id: string): void {
+    markDeletedId(id);
     const list = this.getClasses().filter(c => c.id !== id);
     setItem(STORAGE_KEYS.CLASSES, list);
     deleteDocFromCloud('classes', id);
+    this.notifyListeners();
   },
 
   // Halaqah Groups (1 guru bisa 2 sampai 7 kelompok halaqah, input manual)
@@ -1492,9 +1510,11 @@ export const storageService = {
     return resolvedGroup;
   },
   deleteHalaqahGroup(id: string): void {
+    markDeletedId(id);
     const list = this.getHalaqahGroups().filter(g => g.id !== id);
     setItem(STORAGE_KEYS.HALAQAH_GROUPS, list);
     deleteDocFromCloud('halaqah_groups', id);
+    this.notifyListeners();
 
     // Unassign halaqah group reference from students
     const students = this.getStudents();
@@ -1674,9 +1694,11 @@ export const storageService = {
     }
   },
   deleteTeacher(id: string): void {
+    markDeletedId(id);
     const list = this.getTeachers().filter(t => t.id !== id);
     setItem(STORAGE_KEYS.TEACHERS, list);
     deleteDocFromCloud('teachers', id);
+    this.notifyListeners();
   },
 
   // Students
@@ -1806,6 +1828,21 @@ export const storageService = {
       this.notifyListeners();
     }
     return count;
+  },
+  saveStudentsBulk(studentsToUpdate: Student[]): void {
+    if (!studentsToUpdate || studentsToUpdate.length === 0) return;
+    const list = this.getStudents();
+    const now = Date.now();
+    const updateMap = new Map<string, Student>();
+    studentsToUpdate.forEach(s => {
+      updateMap.set(s.id, { ...s, _updatedAt: now } as Student);
+    });
+    const merged = list.map(s => updateMap.get(s.id) || s);
+    setItem(STORAGE_KEYS.STUDENTS, merged);
+    syncCollectionToCloud('students', Array.from(updateMap.values())).catch(e =>
+      console.warn('[Cloud Sync] Failed bulk syncing students to cloud:', e)
+    );
+    this.notifyListeners();
   },
   getStudentById(id: string): Student | undefined {
     return this.getStudents().find(s => s.id === id);
@@ -2137,31 +2174,34 @@ export const storageService = {
     const teachers = this.getTeachers();
     const classes = this.getClasses();
 
-    const headers = ['Tanggal', 'NIS', 'Nama Santri', 'Kelas', 'Guru Pengampu', 'Jenis Setoran', 'Surah', 'Ayat Mulai', 'Ayat Selesai', 'Total Ayat', 'Nilai Kelancaran', 'Nilai Tajwid', 'Nilai Makhraj', 'Nilai Akhir', 'Kategori', 'Catatan'];
+    const headers = ['Tanggal', 'NIS', 'Nama Santri', 'Kelas', 'Guru Pengampu', 'Jenis Setoran', 'Juz', 'Surah', 'Ayat Mulai', 'Ayat Selesai', 'Total Ayat', 'Nilai Kelancaran', 'Nilai Tajwid', 'Nilai Makhraj', 'Nilai Fashahah', 'Nilai Adab', 'Nilai Akhir', 'Kategori', 'Catatan'];
     const rows = records.map(r => {
       const std = students.find(s => s.id === r.studentId);
       const cls = classes.find(c => c.id === std?.classId)?.name || '-';
       const tch = teachers.find(t => t.id === r.teacherId)?.name || '-';
       return [
-        `"${r.date}"`,
+        `"${r.date || '-'}"`,
         `"${std?.nis || '-'}"`,
         `"${std?.name || '-'}"`,
         `"${cls}"`,
         `"${tch}"`,
-        `"${r.type}"`,
-        `"${r.surahName}"`,
-        r.startAyah,
-        r.endAyah,
-        r.totalAyah,
-        r.fluencyScore,
-        r.tajweedScore,
-        r.makhrajScore,
-        r.finalScore,
-        `"${r.category}"`,
+        `"${r.type || 'Hafalan Baru'}"`,
+        r.juz || 30,
+        `"${r.surahName || '-'}"`,
+        r.startAyah || 1,
+        r.endAyah || 1,
+        r.totalAyah || 1,
+        r.scores?.kelancaran ?? r.finalScore ?? 0,
+        r.scores?.tajwid ?? r.finalScore ?? 0,
+        r.scores?.makhraj ?? r.finalScore ?? 0,
+        r.scores?.fashahah ?? r.finalScore ?? 0,
+        r.scores?.adab ?? r.finalScore ?? 0,
+        r.finalScore ?? 0,
+        `"${r.category || '-'}"`,
         `"${(r.notes || '').replace(/"/g, '""')}"`
       ].join(',');
     });
-    return [headers.join(','), ...rows].join('\n');
+    return '\uFEFF' + [headers.join(','), ...rows].join('\n');
   },
 
   // Export all Ummi records to CSV
@@ -2171,30 +2211,28 @@ export const storageService = {
     const teachers = this.getTeachers();
     const classes = this.getClasses();
 
-    const headers = ['Tanggal', 'NIS', 'Nama Santri', 'Kelas', 'Guru Pengampu', 'Jilid', 'Halaman Mulai', 'Halaman Selesai', 'Materi', 'Nilai Huruf', 'Nilai Kelancaran', 'Nilai Makhraj', 'Nilai Tajwid', 'Status Kenaikan', 'Catatan'];
+    const headers = ['Tanggal', 'NIS', 'Nama Santri', 'Kelas', 'Guru Pengampu', 'Jilid Ummi', 'Halaman', 'Materi Pokok', 'Nilai Angka', 'Nilai Huruf', 'Status Kelulusan', 'Catatan'];
     const rows = records.map(r => {
       const std = students.find(s => s.id === r.studentId);
       const cls = classes.find(c => c.id === std?.classId)?.name || '-';
       const tch = teachers.find(t => t.id === r.teacherId)?.name || '-';
+      const gradeLetter = getGradeFromScore(r.score || 85).letter;
       return [
-        `"${r.date}"`,
+        `"${r.date || '-'}"`,
         `"${std?.nis || '-'}"`,
         `"${std?.name || '-'}"`,
         `"${cls}"`,
         `"${tch}"`,
-        `"${r.jilid}"`,
-        r.startPage,
-        r.endPage,
-        `"${r.materialName || '-'}"`,
-        `"${r.grade || '-'}"`,
-        r.fluencyScore,
-        r.makhrajScore,
-        r.tajweedScore,
-        `"${r.isPassed ? 'Lanjut' : 'Ulang'}"`,
+        `"${r.jilid || '-'}"`,
+        r.page || 1,
+        `"${(r.materialName || '-').replace(/"/g, '""')}"`,
+        r.score || 0,
+        `"${gradeLetter}"`,
+        `"${r.status || 'Lulus'}"`,
         `"${(r.notes || '').replace(/"/g, '""')}"`
       ].join(',');
     });
-    return [headers.join(','), ...rows].join('\n');
+    return '\uFEFF' + [headers.join(','), ...rows].join('\n');
   },
 
   // Memorization Records
@@ -2691,6 +2729,101 @@ export const storageService = {
     const list = this.getMaterials().filter(m => m.id !== id);
     setItem(STORAGE_KEYS.MATERIALS, list);
     deleteDocFromCloud('materials', id);
+  },
+
+  // Kalender Pendidikan (Kaldik) & Program Semester (Prosem)
+  getKaldikData(): KaldikData {
+    return getItem<KaldikData>(STORAGE_KEYS.KALDIK, INITIAL_KALDIK_DATA);
+  },
+  saveKaldikData(data: KaldikData): void {
+    const updated: KaldikData = {
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    setItem(STORAGE_KEYS.KALDIK, updated);
+    syncDocToCloud('app_settings', 'kaldik_config', updated);
+    this.notifyListeners();
+  },
+  resetKaldikData(): KaldikData {
+    const fresh = JSON.parse(JSON.stringify(INITIAL_KALDIK_DATA)) as KaldikData;
+    setItem(STORAGE_KEYS.KALDIK, fresh);
+    syncDocToCloud('app_settings', 'kaldik_config', fresh);
+    this.notifyListeners();
+    return fresh;
+  },
+
+  getProsemSheets(): ProsemSheet[] {
+    const raw = getItem<ProsemSheet[]>(STORAGE_KEYS.PROSEM, INITIAL_PROSEM_SHEETS);
+    const list = raw && raw.length > 0 ? raw : INITIAL_PROSEM_SHEETS;
+    let modified = false;
+    const enriched = list.map((s, idx) => {
+      let hName = s.halaqahName;
+      let hId = s.halaqahId;
+      let mName = s.musyrifName;
+      let mId = s.musyrifId;
+      let sTitle = s.signMusyrifTitle || 'Guru / Musyrif Halaqah';
+      let sName = s.signMusyrifName || (mName ? `(${mName})` : '(Ustadz / Ustadzah)');
+
+      if (!hName) {
+        modified = true;
+        if (idx === 0 || s.id.includes('sem1-jilid1')) {
+          hId = 'hlq-1';
+          hName = 'Halaqah 1 (Umar bin Khattab)';
+          mId = 't-1';
+          mName = 'Ustadz Ahmad Fauzan, Lc.';
+          sName = '(Ustadz Ahmad Fauzan, Lc.)';
+        } else if (idx === 1 || s.id.includes('sem2-jilid2')) {
+          hId = 'hlq-2';
+          hName = 'Halaqah 2 (Abu Bakar)';
+          mId = 't-2';
+          mName = 'Ustadz Ridwan Kamil, S.Pd.I';
+          sName = '(Ustadz Ridwan Kamil, S.Pd.I)';
+        } else {
+          hId = 'hlq-1';
+          hName = 'Halaqah 1';
+          mName = 'Ustadz / Musyrif';
+        }
+      }
+
+      return {
+        ...s,
+        halaqahId: hId || s.halaqahId,
+        halaqahName: hName || s.halaqahName,
+        musyrifId: mId || s.musyrifId,
+        musyrifName: mName || s.musyrifName,
+        signMusyrifTitle: sTitle,
+        signMusyrifName: sName
+      };
+    });
+
+    if (modified) {
+      setItem(STORAGE_KEYS.PROSEM, enriched);
+    }
+    return enriched;
+  },
+  saveProsemSheets(sheets: ProsemSheet[]): void {
+    setItem(STORAGE_KEYS.PROSEM, sheets);
+    syncDocToCloud('app_settings', 'prosem_config', { sheets, updatedAt: new Date().toISOString() });
+    this.notifyListeners();
+  },
+  saveProsemSheet(sheet: ProsemSheet): void {
+    const sheets = this.getProsemSheets();
+    const idx = sheets.findIndex(s => s.id === sheet.id);
+    const updatedSheet: ProsemSheet = {
+      ...sheet,
+      updatedAt: new Date().toISOString()
+    };
+    if (idx >= 0) {
+      sheets[idx] = updatedSheet;
+    } else {
+      sheets.push(updatedSheet);
+    }
+    this.saveProsemSheets(sheets);
+  },
+  resetProsemSheets(): ProsemSheet[] {
+    const fresh = JSON.parse(JSON.stringify(INITIAL_PROSEM_SHEETS)) as ProsemSheet[];
+    this.saveProsemSheets(fresh);
+    return fresh;
   },
 
   // Violations & Kedisiplinan

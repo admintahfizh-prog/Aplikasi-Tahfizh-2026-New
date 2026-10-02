@@ -597,11 +597,32 @@ export default function App() {
             />
           )}
 
-          {/* VIEW: MATERI PEMBELAJARAN */}
-          {currentView === 'materials' && (
+          {/* VIEW: MATERI PEMBELAJARAN, KALDIK & PROSEM */}
+          {(currentView === 'materials' ||
+            currentView === 'materials-silabus' ||
+            currentView === 'materials-kaldik' ||
+            currentView === 'materials-prosem') && (
             <MaterialsView
               materials={materials}
               userRole={currentUser.role}
+              currentUser={currentUser}
+              currentTeacher={currentTeacher}
+              teachers={teachers}
+              halaqahGroups={halaqahGroups}
+              activeSection={
+                currentUser.role === 'wali'
+                  ? 'silabus'
+                  : currentView === 'materials-kaldik'
+                  ? 'kaldik'
+                  : currentView === 'materials-prosem'
+                  ? 'prosem'
+                  : 'silabus'
+              }
+              onChangeSection={(sec) => {
+                if (sec === 'kaldik' && currentUser.role !== 'wali') setCurrentView('materials-kaldik');
+                else if (sec === 'prosem' && currentUser.role !== 'wali') setCurrentView('materials-prosem');
+                else setCurrentView('materials-silabus');
+              }}
               onRefreshData={loadAllData}
             />
           )}

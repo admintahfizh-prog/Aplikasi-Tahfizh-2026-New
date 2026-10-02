@@ -72,13 +72,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
     current === 'ujian-munaqosyah' ||
     current === 'ujian-juziyyah';
 
+  const isMaterialsViewActive =
+    current === 'materials' ||
+    current === 'materials-silabus' ||
+    current === 'materials-kaldik' ||
+    current === 'materials-prosem';
+
   const [isExamDropdownOpen, setIsExamDropdownOpen] = React.useState<boolean>(() => isExamViewActive);
+  const [isMaterialsDropdownOpen, setIsMaterialsDropdownOpen] = React.useState<boolean>(() => isMaterialsViewActive);
 
   React.useEffect(() => {
     if (isExamViewActive) {
       setIsExamDropdownOpen(true);
     }
   }, [isExamViewActive]);
+
+  React.useEffect(() => {
+    if (isMaterialsViewActive) {
+      setIsMaterialsDropdownOpen(true);
+    }
+  }, [isMaterialsViewActive]);
 
   const handleSelectView = (view: string) => {
     if (setActiveView) setActiveView(view);
@@ -91,6 +104,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'ujian-munaqosyah', label: 'Ujian Munaqosyah' },
     { id: 'ujian-juziyyah', label: 'Ujian Juziyyah' }
   ];
+
+  // Hanya tampilkan Prosem dan Kaldik pada Guru dan Admin saja
+  const materialsSubItems =
+    userRole === 'admin' || userRole === 'guru'
+      ? [
+          { id: 'materials-silabus', label: 'Silabus & Bank Materi' },
+          { id: 'materials-kaldik', label: 'Kalender Pendidikan (Kaldik)' },
+          { id: 'materials-prosem', label: 'Program Semester (Prosem)' }
+        ]
+      : [];
 
   const getNavItems = (): NavItemConfig[] => {
     if (userRole === 'wali') {
@@ -114,7 +137,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       { id: 'ujian', label: 'Menu Ujian', icon: Award, badge: '3 Ujian', children: examSubItems },
       { id: 'matrikulasi', label: 'Matrikulasi Iqro', icon: Sparkles, badge: 'Kls 8-9' },
       { id: 'violations', label: 'Pelanggaran Tahfizh', icon: ShieldAlert },
-      { id: 'materials', label: 'Materi & Kurikulum', icon: FileText },
+      {
+        id: 'materials',
+        label: 'Materi & Kurikulum',
+        icon: FileText,
+        badge: 'Kaldik & Prosem',
+        children: materialsSubItems
+      },
       { id: 'scores', label: 'Penilaian & Nilai', icon: Star },
       { id: 'targets', label: 'Target UMMI & Hafalan', icon: Target },
       { id: 'reports', label: 'Laporan & Raport', icon: BarChart3 }
@@ -132,19 +161,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const renderNavItem = (item: NavItemConfig) => {
     const Icon = item.icon;
     if (item.children && item.children.length > 0) {
+      const isItemExam = item.id === 'ujian';
+      const isGroupActive = isItemExam ? isExamViewActive : isMaterialsViewActive;
+      const isDropdownOpen = isItemExam ? isExamDropdownOpen : isMaterialsDropdownOpen;
+      const toggleDropdown = () => {
+        if (isItemExam) {
+          setIsExamDropdownOpen(prev => !prev);
+        } else {
+          setIsMaterialsDropdownOpen(prev => !prev);
+          if (!isMaterialsViewActive) {
+            if (setActiveView) setActiveView('materials-silabus');
+            if (onViewChange) onViewChange('materials-silabus');
+          }
+        }
+      };
+
       return (
         <div key={item.id} className="space-y-1">
           <button
             type="button"
-            onClick={() => setIsExamDropdownOpen(prev => !prev)}
+            onClick={toggleDropdown}
             className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs transition cursor-pointer text-left ${
-              isExamViewActive
+              isGroupActive
                 ? 'bg-slate-800 text-[#D4AF37] font-bold border border-[#D4AF37]/40'
                 : 'text-slate-300 hover:bg-slate-800 hover:text-white'
             }`}
           >
             <div className="flex items-center gap-3 min-w-0 flex-1">
-              <Icon className={`w-4 h-4 shrink-0 ${isExamViewActive ? 'text-[#D4AF37]' : 'text-slate-400'}`} />
+              <Icon className={`w-4 h-4 shrink-0 ${isGroupActive ? 'text-[#D4AF37]' : 'text-slate-400'}`} />
               <span className="whitespace-nowrap font-semibold text-xs">{item.label}</span>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
@@ -153,7 +197,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {item.badge}
                 </span>
               )}
-              {isExamDropdownOpen ? (
+              {isDropdownOpen ? (
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
               ) : (
                 <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
@@ -161,10 +205,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </button>
 
-          {isExamDropdownOpen && (
+          {isDropdownOpen && (
             <div className="pl-6 pr-1 py-1 space-y-1 border-l border-slate-700/80 ml-4">
               {item.children.map(sub => {
-                const isSubActive = current === sub.id || (current === 'ujian' && sub.id === 'ujian-kenaikan-jilid');
+                const isSubActive =
+                  current === sub.id ||
+                  (current === 'ujian' && sub.id === 'ujian-kenaikan-jilid') ||
+                  (current === 'materials' && sub.id === 'materials-silabus');
                 return (
                   <button
                     key={sub.id}

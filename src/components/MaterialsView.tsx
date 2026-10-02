@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BookMarked, 
   Search, 
@@ -10,23 +10,89 @@ import {
   X,
   FileText,
   Layers,
-  GraduationCap
+  GraduationCap,
+  Calendar,
+  Table2,
+  Eye
 } from 'lucide-react';
-import { LearningMaterial, Role } from '../types';
+import { LearningMaterial, Role, User, Teacher, HalaqahGroup } from '../types';
 import { storageService } from '../services/storageService';
 import { UMMI_JILIDS } from '../data/ummiData';
+import { KaldikSection, ProsemSection } from './KaldikProsemSection';
+import { DocumentQuickViewModal } from './DocumentQuickViewModal';
 
 interface MaterialsViewProps {
   materials: LearningMaterial[];
   userRole: Role;
+  currentUser?: User;
+  currentTeacher?: Teacher;
+  teachers?: Teacher[];
+  halaqahGroups?: HalaqahGroup[];
+  activeSection?: 'silabus' | 'kaldik' | 'prosem';
+  onChangeSection?: (section: 'silabus' | 'kaldik' | 'prosem') => void;
   onRefreshData: () => void;
 }
 
 export const MaterialsView: React.FC<MaterialsViewProps> = ({
   materials,
   userRole,
+  currentUser,
+  currentTeacher,
+  teachers,
+  halaqahGroups,
+  activeSection = 'silabus',
+  onChangeSection,
   onRefreshData
 }) => {
+  const canAccessKaldikProsem = userRole === 'admin' || userRole === 'guru';
+  const [currentTab, setCurrentTab] = useState<'silabus' | 'kaldik' | 'prosem'>(
+    canAccessKaldikProsem ? activeSection : 'silabus'
+  );
+
+  useEffect(() => {
+    if (!canAccessKaldikProsem) {
+      setCurrentTab('silabus');
+    } else {
+      setCurrentTab(activeSection);
+    }
+  }, [activeSection, canAccessKaldikProsem]);
+
+  const handleSelectTab = (tab: 'silabus' | 'kaldik' | 'prosem') => {
+    if (!canAccessKaldikProsem && tab !== 'silabus') return;
+    setCurrentTab(tab);
+    if (onChangeSection) {
+      onChangeSection(tab);
+    }
+  };
+
+  // Quick-view document modal states
+  const [showQuickViewModal, setShowQuickViewModal] = useState<boolean>(false);
+  const [quickViewDocType, setQuickViewDocType] = useState<'kaldik' | 'prosem'>('kaldik');
+  const [quickViewSheetId, setQuickViewSheetId] = useState<string | undefined>(undefined);
+  const [directEditKaldik, setDirectEditKaldik] = useState<boolean>(false);
+  const [directEditProsem, setDirectEditProsem] = useState<boolean>(false);
+
+  const handleOpenQuickView = (type?: 'kaldik' | 'prosem', sheetId?: string) => {
+    const targetType = type || (currentTab === 'prosem' ? 'prosem' : 'kaldik');
+    setQuickViewDocType(targetType);
+    setQuickViewSheetId(sheetId);
+    setShowQuickViewModal(true);
+  };
+
+  const handleEditFromQuickView = (type: 'kaldik' | 'prosem', sheetId?: string) => {
+    setShowQuickViewModal(false);
+    if (type === 'kaldik') {
+      handleSelectTab('kaldik');
+      setDirectEditKaldik(true);
+    } else {
+      handleSelectTab('prosem');
+      if (sheetId) {
+        setQuickViewSheetId(sheetId);
+      }
+      setDirectEditProsem(true);
+    }
+  };
+
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'Ummi' | 'Tajwid' | 'Gharib' | 'Tahsin' | 'Munaqosyah' | 'Tahfizh'>('all');
   const [jilidFilter, setJilidFilter] = useState<string>('all');
@@ -81,29 +147,116 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
 
   return (
     <div className="space-y-6 animate-in fade-in">
-      
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <BookMarked className="w-5 h-5 text-[#D4AF37]" />
-            Silabus & Bank Materi Pembelajaran Lengkap
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Katalog kurikulum terpadu Buku Ummi Dewasa Jilid 1–3, Kaidah Tajwid, Gharib Musykilat, dan Tahsin Fashahah
-          </p>
-        </div>
+      {/* Sub-Menu Navigation Tabs (Only shown to Guru & Admin) */}
+      {canAccessKaldikProsem && (
+        <div className="no-print bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => handleSelectTab('silabus')}
+              className={`px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition cursor-pointer ${
+                currentTab === 'silabus'
+                  ? 'bg-[#1E293B] text-white font-bold shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
+            >
+              <BookMarked className={`w-4 h-4 ${currentTab === 'silabus' ? 'text-[#D4AF37]' : 'text-slate-500'}`} />
+              <span>Silabus &amp; Bank Materi</span>
+            </button>
 
-        {userRole === 'admin' && (
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="px-4 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <Plus className="w-4 h-4 text-[#D4AF37]" />
-            <span>+ Tambah Materi Pembelajaran</span>
-          </button>
-        )}
-      </div>
+            <button
+              type="button"
+              onClick={() => handleSelectTab('kaldik')}
+              className={`px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition cursor-pointer ${
+                currentTab === 'kaldik'
+                  ? 'bg-[#1E293B] text-white font-bold shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
+            >
+              <Calendar className={`w-4 h-4 ${currentTab === 'kaldik' ? 'text-[#D4AF37]' : 'text-slate-500'}`} />
+              <span>Kalender Pendidikan (Kaldik)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSelectTab('prosem')}
+              className={`px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition cursor-pointer ${
+                currentTab === 'prosem'
+                  ? 'bg-[#1E293B] text-white font-bold shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
+            >
+              <Table2 className={`w-4 h-4 ${currentTab === 'prosem' ? 'text-[#D4AF37]' : 'text-slate-500'}`} />
+              <span>Program Semester (Prosem)</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleOpenQuickView()}
+              className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+              title="Tampilkan dokumen formal Kaldik / Prosem dalam modal pratinjau siap cetak"
+            >
+              <Eye className="w-3.5 h-3.5 text-indigo-700" />
+              <span>Pratinjau Dokumen (Quick-View)</span>
+            </button>
+
+            <span className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg hidden sm:inline">
+              Khusus Guru &amp; Admin
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW: KALDIK (Guru & Admin Only) */}
+      {canAccessKaldikProsem && currentTab === 'kaldik' && (
+        <KaldikSection
+          userRole={userRole}
+          onOpenQuickView={() => handleOpenQuickView('kaldik')}
+          isDirectEdit={directEditKaldik}
+        />
+      )}
+
+      {/* VIEW: PROSEM (Guru & Admin Only) */}
+      {canAccessKaldikProsem && currentTab === 'prosem' && (
+        <ProsemSection
+          userRole={userRole}
+          currentUser={currentUser}
+          currentTeacher={currentTeacher}
+          teachers={teachers}
+          halaqahGroups={halaqahGroups}
+          onOpenQuickView={(sheetId) => handleOpenQuickView('prosem', sheetId)}
+          isDirectEdit={directEditProsem}
+          selectedSheetIdProp={quickViewSheetId}
+        />
+      )}
+
+      {/* VIEW: SILABUS & BANK MATERI */}
+      {(!canAccessKaldikProsem || currentTab === 'silabus') && (
+        <>
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
+                <BookMarked className="w-5 h-5 text-[#D4AF37]" />
+                Silabus &amp; Bank Materi Pembelajaran Lengkap
+              </h1>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Katalog kurikulum terpadu Buku Ummi Dewasa Jilid 1–3, Kaidah Tajwid, Gharib Musykilat, dan Tahsin Fashahah
+              </p>
+            </div>
+
+            {canAccessKaldikProsem && (
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="px-4 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4 text-[#D4AF37]" />
+                <span>+ Tambah Materi Pembelajaran</span>
+              </button>
+            )}
+          </div>
 
       {/* Toolbar & Category Filters */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
@@ -230,6 +383,8 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
           <p className="text-xs text-slate-400">Silakan ubah filter kategori atau kata kunci pencarian Anda.</p>
         </div>
       )}
+        </>
+      )}
 
       {/* ADD MATERIAL MODAL */}
       {showAddModal && (
@@ -347,6 +502,19 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* QUICK-VIEW MODAL FOR KALDIK & PROSEM */}
+      {showQuickViewModal && canAccessKaldikProsem && (
+        <DocumentQuickViewModal
+          isOpen={showQuickViewModal}
+          onClose={() => setShowQuickViewModal(false)}
+          kaldikData={storageService.getKaldikData()}
+          prosemSheets={storageService.getProsemSheets()}
+          initialType={quickViewDocType}
+          initialSheetId={quickViewSheetId}
+          onEditDocument={handleEditFromQuickView}
+        />
       )}
 
     </div>
