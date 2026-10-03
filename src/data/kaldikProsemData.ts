@@ -1,5 +1,7 @@
 export type KaldikCellStyle = 'normal' | 'sunday_red' | 'holiday_text_red' | 'invalid_black';
 
+export type KaldikCategory = 'tahfizh' | 'reguler';
+
 export interface KaldikCell {
   text: string;
   style?: KaldikCellStyle;
@@ -25,6 +27,7 @@ export interface KaldikEffectiveMonth {
 }
 
 export interface KaldikData {
+  category?: KaldikCategory;
   title: string;
   schoolName: string;
   academicYear: string;
@@ -34,6 +37,8 @@ export interface KaldikData {
   signPlaceDate: string;
   signRoleTitle: string;
   signCoordinatorName: string;
+  signHeadmasterTitle?: string;
+  signHeadmasterName?: string;
   semester1Effective: KaldikEffectiveMonth[];
   semester2Effective: KaldikEffectiveMonth[];
   updatedAt?: string;
@@ -114,6 +119,7 @@ function createMonthDays(
 }
 
 export const INITIAL_KALDIK_DATA: KaldikData = {
+  category: 'tahfizh',
   title: "KALENDER PENDIDIKAN AL QUR'AN METODE UMMI",
   schoolName: 'SMP ISLAM AL AZHAR 21 SOLO BARU',
   academicYear: 'Tahun Ajaran 2026/2027',
@@ -241,7 +247,7 @@ export const INITIAL_KALDIK_DATA: KaldikData = {
     },
     {
       id: 'm-maret',
-      monthName: 'Maret 2027',
+      monthName: 'Maret',
       days: createMonthDays(
         {
           1: 'LR', 2: 'LR', 3: 'LR', 4: 'LR', 5: 'LR',
@@ -257,7 +263,7 @@ export const INITIAL_KALDIK_DATA: KaldikData = {
     },
     {
       id: 'm-april',
-      monthName: 'April 2027',
+      monthName: 'April',
       days: createMonthDays(
         {
           1: 'PUS', 2: 'BLP',
@@ -271,7 +277,7 @@ export const INITIAL_KALDIK_DATA: KaldikData = {
     },
     {
       id: 'm-mei',
-      monthName: 'Mei 2027',
+      monthName: 'Mei',
       days: createMonthDays(
         {
           3: 'ASAJ', 4: 'ASAJ', 5: 'ASAJ', 6: 'LU', 7: 'ASAJ',
@@ -286,7 +292,7 @@ export const INITIAL_KALDIK_DATA: KaldikData = {
     },
     {
       id: 'm-juni',
-      monthName: 'Juni 2027',
+      monthName: 'Juni',
       days: createMonthDays(
         {
           1: 'LU', 2: 'ASAS', 3: 'ASAS', 4: 'ASAS',
@@ -321,8 +327,10 @@ export const INITIAL_KALDIK_DATA: KaldikData = {
     { id: 'leg-17', code: 'HI', description: "Khotmil Qur'an & Imtihan", column: 'right' }
   ],
   signPlaceDate: 'Sukoharjo, 14 Juni 2026',
-  signRoleTitle: "Koordinator Al Qur'an",
-  signCoordinatorName: '(Muh. Yusrie Alfian, S.Ag)',
+  signRoleTitle: 'Koordinator Tahfizh',
+  signCoordinatorName: 'Ustadz Muhammad Yusrie Alfian, S.Ag.',
+  signHeadmasterTitle: 'Kepala SMP Islam Al Azhar 21',
+  signHeadmasterName: 'Muh Saifuddin, S.Si.',
   semester1Effective: [
     { monthName: 'JULI', weeks: [null, null, null, 5, 5], jamWeeks: [null, null, null, 8, 8] },
     { monthName: 'Agustus', weeks: [5, 5, 4, 4, 1], jamWeeks: [8, 8, 6, 6, null] },
@@ -332,12 +340,244 @@ export const INITIAL_KALDIK_DATA: KaldikData = {
     { monthName: 'Desember', weeks: [null, null, null, null, null], jamWeeks: [null, null, null, null, null] }
   ],
   semester2Effective: [
-    { monthName: 'Januari', weeks: [null, 3, 5, 5, 5] },
-    { monthName: 'Februari', weeks: [5, 4, 2, null, null] },
-    { monthName: 'Maret', weeks: [null, null, null, 3, null] },
-    { monthName: 'April', weeks: [5, 5, 5, 5, null] },
-    { monthName: 'Mei', weeks: [null, 2, 4, 5, null] },
-    { monthName: 'Juni', weeks: [null, null, null, null, null] }
+    { monthName: 'Januari', weeks: [null, 3, 5, 5, 5], jamWeeks: [null, 6, 8, 8, 8] },
+    { monthName: 'Februari', weeks: [5, 4, 2, null, null], jamWeeks: [8, 6, 4, null, null] },
+    { monthName: 'Maret', weeks: [null, null, null, 3, null], jamWeeks: [null, null, null, 6, null] },
+    { monthName: 'April', weeks: [5, 5, 5, 5, null], jamWeeks: [8, 8, 8, 8, null] },
+    { monthName: 'Mei', weeks: [null, 2, 4, 5, null], jamWeeks: [null, 4, 6, 8, null] },
+    { monthName: 'Juni', weeks: [null, null, null, null, null], jamWeeks: [null, null, null, null, null] }
+  ]
+};
+
+export const INITIAL_KALDIK_REGULER_DATA: KaldikData = {
+  category: 'reguler',
+  title: 'KALENDER PENDIDIKAN REGULER (KELAS NON-TAHFIZH)',
+  schoolName: 'SMP ISLAM AL AZHAR 21 SOLO BARU',
+  academicYear: 'Tahun Ajaran 2026/2027',
+  semesterLabel: 'Semester: 1 & 2',
+  signPlaceDate: 'Sukoharjo, 14 Juni 2026',
+  signRoleTitle: 'Koordinator Tahfizh',
+  signCoordinatorName: 'Ustadz Muhammad Yusrie Alfian, S.Ag.',
+  signHeadmasterTitle: 'Kepala SMP Islam Al Azhar 21',
+  signHeadmasterName: 'Muh Saifuddin, S.Si.',
+  months: [
+    {
+      id: 'reg-m-juli',
+      monthName: 'Juli',
+      days: createMonthDays(
+        {
+          1: 'LS', 2: 'LS', 3: 'LS', 6: 'LS',
+          7: 'MOM', 8: 'MOM', 9: 'MOM',
+          13: 'MPLS', 14: 'MPLS', 15: 'MPLS', 16: 'MPLS', 17: 'MPLS',
+          20: '1', 21: '2', 22: '3', 23: '4', 24: '5',
+          27: '6', 28: '7', 29: '8', 30: '9', 31: '10'
+        },
+        [5, 12, 19, 26]
+      )
+    },
+    {
+      id: 'reg-m-agustus',
+      monthName: 'Agustus',
+      days: createMonthDays(
+        {
+          3: '11', 4: '12', 5: '13', 6: '14', 7: '15',
+          10: '16', 11: '17', 12: '18', 13: '19', 14: '20',
+          17: 'LU', 18: '21', 19: '22', 20: '23', 21: '24',
+          24: '25', 25: 'LU', 26: '26', 27: '27', 28: '28',
+          31: '29'
+        },
+        [2, 9, 16, 23, 30],
+        [],
+        [17, 25]
+      )
+    },
+    {
+      id: 'reg-m-september',
+      monthName: 'September',
+      days: createMonthDays(
+        {
+          1: '30', 2: '31', 3: '32', 4: '33',
+          7: '34', 8: '35', 9: '36', 10: '37', 11: '38',
+          14: '39', 15: '40', 16: '41', 17: '42', 18: '43',
+          21: 'ASTS', 22: 'ASTS', 23: 'ASTS', 24: 'ASTS', 25: 'ASTS',
+          28: 'ASTS', 29: 'ASTS', 30: 'ASTS'
+        },
+        [6, 13, 20, 27],
+        [31]
+      )
+    },
+    {
+      id: 'reg-m-oktober',
+      monthName: 'Oktober',
+      days: createMonthDays(
+        {
+          1: '44', 2: '45',
+          5: '46', 6: '47', 7: '48', 8: '49', 9: 'LHB',
+          12: '50', 13: '51', 14: '52', 15: '53', 16: '54',
+          19: '55', 20: '56', 21: '57', 22: '58', 23: '59',
+          26: '60', 27: '61', 28: 'HSP', 29: '62', 30: '63'
+        },
+        [4, 11, 18, 25]
+      )
+    },
+    {
+      id: 'reg-m-november',
+      monthName: 'November',
+      days: createMonthDays(
+        {
+          2: '64', 3: '65', 4: '66', 5: '67', 6: '68',
+          9: '69', 10: '70', 11: '71', 12: '72', 13: '73',
+          16: '74', 17: '75', 18: '76', 19: '77', 20: '78',
+          23: '79', 24: '80', 25: 'HGN', 26: '81', 27: '82',
+          30: 'ASAS'
+        },
+        [1, 8, 15, 22, 29],
+        [31]
+      )
+    },
+    {
+      id: 'reg-m-desember',
+      monthName: 'Desember',
+      days: createMonthDays(
+        {
+          1: 'ASAS', 2: 'ASAS', 3: 'ASAS', 4: 'ASAS',
+          7: 'ASAS', 8: 'ASAS', 9: 'CM', 10: 'CM', 11: 'CM',
+          14: 'PUS', 15: 'PUS', 16: 'PUS', 17: 'PUS', 18: 'LHB',
+          21: 'LS1', 22: 'LS1', 23: 'LS1', 24: 'LS1', 25: 'LU',
+          28: 'LS1', 29: 'LS1', 30: 'LS1', 31: 'LS1'
+        },
+        [6, 13, 20, 27],
+        [],
+        [21, 22, 23, 24, 25, 28, 29, 30, 31]
+      )
+    },
+    {
+      id: 'reg-m-januari',
+      monthName: 'Januari',
+      days: createMonthDays(
+        {
+          1: 'LU', 4: 'HP', 5: '1', 6: '2', 7: '3', 8: '4',
+          11: '5', 12: '6', 13: '7', 14: '8', 15: '9',
+          18: 'LU', 19: '10', 20: '11', 21: '12', 22: '13',
+          25: '14', 26: '15', 27: '16', 28: '17', 29: '18'
+        },
+        [3, 10, 17, 24, 31],
+        [],
+        [1, 18]
+      )
+    },
+    {
+      id: 'reg-m-februari',
+      monthName: 'Februari',
+      days: createMonthDays(
+        {
+          1: '19', 2: '20', 3: '21', 4: '22', 5: '23',
+          8: 'LPP', 9: 'LPP', 10: 'LPP', 11: 'LU', 12: 'EF',
+          15: '24', 16: '25', 17: '26', 18: '27', 19: '28',
+          22: '29', 23: '30', 24: 'EF', 25: 'EF', 26: 'EF'
+        },
+        [7, 14, 21, 28],
+        [29, 30, 31],
+        [8, 9, 10, 11]
+      )
+    },
+    {
+      id: 'reg-m-maret',
+      monthName: 'Maret',
+      days: createMonthDays(
+        {
+          1: 'LHR', 2: 'LHR', 3: 'LHR', 4: 'LHR', 5: 'LHR',
+          8: 'LHR', 9: 'LHR', 10: 'LHR', 11: 'LHR', 12: 'LHR',
+          15: 'LHR', 16: 'LHR', 17: 'HP', 18: 'ASTS', 19: 'ASTS',
+          22: 'ASTS', 23: 'ASTS', 24: 'ASTS', 25: 'ASTS', 26: 'EF',
+          29: '31', 30: '32', 31: '33'
+        },
+        [7, 14, 21, 28],
+        [],
+        [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16]
+      )
+    },
+    {
+      id: 'reg-m-april',
+      monthName: 'April',
+      days: createMonthDays(
+        {
+          1: 'PUS', 2: 'LHB',
+          5: '34', 6: '35', 7: '36', 8: '37', 9: '38',
+          12: '39', 13: '40', 14: '41', 15: '42', 16: '43',
+          19: '44', 20: '45', 21: '46', 22: '47', 23: '48',
+          26: '49', 27: '50', 28: '51', 29: '52', 30: '53'
+        },
+        [4, 11, 18, 25]
+      )
+    },
+    {
+      id: 'reg-m-mei',
+      monthName: 'Mei',
+      days: createMonthDays(
+        {
+          3: 'ASAJ', 4: 'ASAJ', 5: 'ASAJ', 6: 'LU', 7: 'ASAJ',
+          10: 'ASAJ', 11: 'ASAJ', 12: 'ASAJ', 13: '54', 14: '55',
+          17: '56', 18: '57', 19: '58', 20: 'LU', 21: '59',
+          24: '60', 25: '61', 26: '62', 27: '63', 28: '64',
+          31: '65'
+        },
+        [2, 9, 16, 23, 30],
+        [],
+        [6, 20]
+      )
+    },
+    {
+      id: 'reg-m-juni',
+      monthName: 'Juni',
+      days: createMonthDays(
+        {
+          1: 'LU', 2: 'ASAT', 3: 'ASAT', 4: 'ASAT',
+          7: 'ASAT', 8: 'ASAT', 9: 'ASAT', 10: 'ASAT', 11: 'CM',
+          14: 'CM', 15: 'PUS', 16: 'PUS', 17: 'PUS', 18: 'LHB',
+          21: 'LS2', 22: 'LS2', 23: 'LS2', 24: 'LS2', 25: 'LS2',
+          28: 'LS2', 29: 'LS2', 30: 'LS2'
+        },
+        [6, 13, 20, 27],
+        [31],
+        [1, 21, 22, 23, 24, 25, 28, 29, 30]
+      )
+    }
+  ],
+  legends: [
+    { id: 'reg-leg-1', code: 'LU', description: 'Libur umum / nasional', column: 'left' },
+    { id: 'reg-leg-2', code: 'HP', description: 'Hari pertama masuk sekolah', column: 'left' },
+    { id: 'reg-leg-3', code: 'MPLS', description: 'Masa Pengenalan Lingkungan Sekolah', column: 'left' },
+    { id: 'reg-leg-4', code: 'LPP', description: 'Libur permulaan puasa Ramadan', column: 'left' },
+    { id: 'reg-leg-5', code: 'LHR', description: 'Libur Hari Raya Idul Fitri', column: 'left' },
+    { id: 'reg-leg-6', code: 'LS1', description: 'Libur akhir semester gasal', column: 'left' },
+    { id: 'reg-leg-7', code: 'LS2', description: 'Libur akhir tahun ajaran (genap)', column: 'left' },
+    { id: 'reg-leg-8', code: 'EF', description: 'Efektif Fakultatif / Pondok Ramadan', column: 'left' },
+    { id: 'reg-leg-9', code: 'P5', description: 'Projek Penguatan Profil Pelajar Pancasila', column: 'left' },
+    { id: 'reg-leg-10', code: 'ASTS', description: 'Asesmen Sumatif Tengah Semester', column: 'right' },
+    { id: 'reg-leg-11', code: 'ASAS', description: 'Asesmen Sumatif Akhir Semester Gasal', column: 'right' },
+    { id: 'reg-leg-12', code: 'ASAT', description: 'Asesmen Sumatif Akhir Tahun Genap', column: 'right' },
+    { id: 'reg-leg-13', code: 'ASAJ', description: 'Asesmen Sumatif Akhir Jenjang (Kelas 9)', column: 'right' },
+    { id: 'reg-leg-14', code: 'ANBK', description: 'Asesmen Nasional Berbasis Komputer', column: 'right' },
+    { id: 'reg-leg-15', code: 'CM', description: 'Class Meeting / Pekan Kreativitas Siswa', column: 'right' },
+    { id: 'reg-leg-16', code: 'PUS', description: 'Pengolahan nilai & pasca ujian', column: 'right' },
+    { id: 'reg-leg-17', code: 'LHB', description: 'Penyerahan Laporan Hasil Belajar (Rapor)', column: 'right' }
+  ],
+  semester1Effective: [
+    { monthName: 'JULI', weeks: [null, null, null, 5, 5], jamWeeks: [null, null, null, 2, 2] },
+    { monthName: 'Agustus', weeks: [5, 5, 4, 4, 1], jamWeeks: [2, 2, 2, 2, null] },
+    { monthName: 'September', weeks: [4, 5, 5, null, null], jamWeeks: [2, 2, 2, null, null] },
+    { monthName: 'Oktober', weeks: [2, 4, 5, 5, 5], jamWeeks: [null, 2, 2, 2, 2] },
+    { monthName: 'Nopember', weeks: [5, 5, 5, 4, null], jamWeeks: [2, 2, 2, 2, null] },
+    { monthName: 'Desember', weeks: [null, null, null, null, null], jamWeeks: [null, null, null, null, null] }
+  ],
+  semester2Effective: [
+    { monthName: 'Januari', weeks: [null, 3, 5, 5, 5], jamWeeks: [null, 2, 2, 2, 2] },
+    { monthName: 'Februari', weeks: [5, 4, 2, null, null], jamWeeks: [2, 2, 1, null, null] },
+    { monthName: 'Maret', weeks: [null, null, null, 3, null], jamWeeks: [null, null, null, 2, null] },
+    { monthName: 'April', weeks: [5, 5, 5, 5, null], jamWeeks: [2, 2, 2, 2, null] },
+    { monthName: 'Mei', weeks: [null, 2, 4, 5, null], jamWeeks: [null, 1, 2, 2, null] },
+    { monthName: 'Juni', weeks: [null, null, null, null, null], jamWeeks: [null, null, null, null, null] }
   ]
 };
 

@@ -17,14 +17,18 @@ import {
   Eye,
   Filter,
   Users,
-  UserCheck
+  UserCheck,
+  BookOpen,
+  GraduationCap
 } from 'lucide-react';
 import {
   KaldikData,
+  KaldikCategory,
   KaldikCellStyle,
   ProsemSheet,
   ProsemRow,
   INITIAL_KALDIK_DATA,
+  INITIAL_KALDIK_REGULER_DATA,
   INITIAL_PROSEM_SHEETS
 } from '../data/kaldikProsemData';
 import { storageService } from '../services/storageService';
@@ -42,7 +46,8 @@ export const KaldikSection: React.FC<KaldikSectionProps> = ({
   isDirectEdit = false
 }) => {
   const canEdit = userRole === 'admin' || userRole === 'guru';
-  const [kaldik, setKaldik] = useState<KaldikData>(() => storageService.getKaldikData());
+  const [activeCategory, setActiveCategory] = useState<KaldikCategory>('tahfizh');
+  const [kaldik, setKaldik] = useState<KaldikData>(() => storageService.getKaldikData('tahfizh'));
   const [isEditing, setIsEditing] = useState<boolean>(isDirectEdit);
 
   useEffect(() => {
@@ -52,6 +57,14 @@ export const KaldikSection: React.FC<KaldikSectionProps> = ({
   }, [isDirectEdit]);
 
   const [saveBanner, setSaveBanner] = useState<string | null>(null);
+
+  const handleSwitchCategory = (cat: KaldikCategory) => {
+    setActiveCategory(cat);
+    const data = storageService.getKaldikData(cat);
+    setKaldik(data);
+    setBatchMonthId(data.months[0]?.id || (cat === 'reguler' ? 'reg-m-juli' : 'm-juli'));
+    setIsEditing(false);
+  };
 
   // Selected brush / quick input tool for Kaldik cells
   const [activeBrushStyle, setActiveBrushStyle] = useState<KaldikCellStyle | 'keep'>('keep');
@@ -68,15 +81,15 @@ export const KaldikSection: React.FC<KaldikSectionProps> = ({
   };
 
   const handleSaveKaldik = () => {
-    storageService.saveKaldikData(kaldik);
+    storageService.saveKaldikData(kaldik, activeCategory);
     setIsEditing(false);
-    showSavedMessage('Kalender Pendidikan (Kaldik) berhasil disimpan.');
+    showSavedMessage(`Kalender Pendidikan (${activeCategory === 'reguler' ? 'Kelas Reguler' : 'Kelas Tahfizh'}) berhasil disimpan.`);
   };
 
   const handleResetKaldik = () => {
-    const fresh = storageService.resetKaldikData();
+    const fresh = storageService.resetKaldikData(activeCategory);
     setKaldik(fresh);
-    showSavedMessage('Kalender Pendidikan dikembalikan ke data standar.');
+    showSavedMessage(`Kalender Pendidikan (${activeCategory === 'reguler' ? 'Kelas Reguler' : 'Kelas Tahfizh'}) dikembalikan ke data standar.`);
   };
 
   const handleCellTextChange = (monthId: string, day: number, newText: string) => {
@@ -204,11 +217,22 @@ export const KaldikSection: React.FC<KaldikSectionProps> = ({
     });
 
     rows.push([]);
-    rows.push(['PERHITUNGAN HARI EFEKTIF SEMESTER 1']);
-    rows.push(['Bulan', 'Pekan 1', 'Pekan 2', 'Pekan 3', 'Pekan 4', 'Pekan 5', 'Jml Hari Efektif', 'Jml Pekan Efektif']);
+    const tmLabel = activeCategory === 'reguler' ? 'TM (2 TM/Pekan)' : 'Jam';
+    rows.push([]);
+    rows.push([`PERHITUNGAN HARI & ${activeCategory === 'reguler' ? 'TM' : 'JAM'} EFEKTIF SEMESTER 1`]);
+    rows.push([
+      'Bulan',
+      'Pekan 1 (Hari)', 'Pekan 2 (Hari)', 'Pekan 3 (Hari)', 'Pekan 4 (Hari)', 'Pekan 5 (Hari)',
+      'Jml Hari Efektif', 'Jml Pekan Efektif',
+      `Pekan 1 (${tmLabel})`, `Pekan 2 (${tmLabel})`, `Pekan 3 (${tmLabel})`, `Pekan 4 (${tmLabel})`, `Pekan 5 (${tmLabel})`,
+      `Jml ${activeCategory === 'reguler' ? 'TM' : 'Jam'} Efektif`, 'Jml Pekan Efektif'
+    ]);
     kaldik.semester1Effective.forEach(item => {
       const validWeeks = item.weeks.filter((w): w is number => typeof w === 'number' && w > 0);
       const sumDays = validWeeks.reduce((a, b) => a + b, 0);
+      const jamList = item.jamWeeks || [null, null, null, null, null];
+      const validJam = jamList.filter((w): w is number => typeof w === 'number' && w > 0);
+      const sumJam = validJam.reduce((a, b) => a + b, 0);
       rows.push([
         item.monthName,
         item.weeks[0] ?? '-',
@@ -217,16 +241,32 @@ export const KaldikSection: React.FC<KaldikSectionProps> = ({
         item.weeks[3] ?? '-',
         item.weeks[4] ?? '-',
         sumDays,
-        validWeeks.length
+        validWeeks.length,
+        jamList[0] ?? '-',
+        jamList[1] ?? '-',
+        jamList[2] ?? '-',
+        jamList[3] ?? '-',
+        jamList[4] ?? '-',
+        sumJam,
+        validJam.length
       ]);
     });
 
     rows.push([]);
-    rows.push(['PERHITUNGAN HARI EFEKTIF SEMESTER 2']);
-    rows.push(['Bulan', 'Pekan 1', 'Pekan 2', 'Pekan 3', 'Pekan 4', 'Pekan 5', 'Jml Hari Efektif', 'Jml Pekan Efektif']);
+    rows.push([`PERHITUNGAN HARI & ${activeCategory === 'reguler' ? 'TM' : 'JAM'} EFEKTIF SEMESTER 2`]);
+    rows.push([
+      'Bulan',
+      'Pekan 1 (Hari)', 'Pekan 2 (Hari)', 'Pekan 3 (Hari)', 'Pekan 4 (Hari)', 'Pekan 5 (Hari)',
+      'Jml Hari Efektif', 'Jml Pekan Efektif',
+      `Pekan 1 (${tmLabel})`, `Pekan 2 (${tmLabel})`, `Pekan 3 (${tmLabel})`, `Pekan 4 (${tmLabel})`, `Pekan 5 (${tmLabel})`,
+      `Jml ${activeCategory === 'reguler' ? 'TM' : 'Jam'} Efektif`, 'Jml Pekan Efektif'
+    ]);
     kaldik.semester2Effective.forEach(item => {
       const validWeeks = item.weeks.filter((w): w is number => typeof w === 'number' && w > 0);
       const sumDays = validWeeks.reduce((a, b) => a + b, 0);
+      const jamList = item.jamWeeks || [null, null, null, null, null];
+      const validJam = jamList.filter((w): w is number => typeof w === 'number' && w > 0);
+      const sumJam = validJam.reduce((a, b) => a + b, 0);
       rows.push([
         item.monthName,
         item.weeks[0] ?? '-',
@@ -235,13 +275,22 @@ export const KaldikSection: React.FC<KaldikSectionProps> = ({
         item.weeks[3] ?? '-',
         item.weeks[4] ?? '-',
         sumDays,
-        validWeeks.length
+        validWeeks.length,
+        jamList[0] ?? '-',
+        jamList[1] ?? '-',
+        jamList[2] ?? '-',
+        jamList[3] ?? '-',
+        jamList[4] ?? '-',
+        sumJam,
+        validJam.length
       ]);
     });
 
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    XLSX.utils.book_append_sheet(wb, ws, 'Kaldik Ummi');
-    XLSX.writeFile(wb, `Kaldik_Metode_Ummi_${kaldik.academicYear.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`);
+    const sheetName = activeCategory === 'reguler' ? 'Kaldik Reguler' : 'Kaldik Ummi';
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    const fileName = `Kaldik_${activeCategory === 'reguler' ? 'Reguler_Non_Tahfizh' : 'Metode_Ummi'}_${kaldik.academicYear.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`;
+    XLSX.writeFile(wb, fileName);
   };
 
   // Totals for Semester 1 & Semester 2
@@ -265,13 +314,58 @@ export const KaldikSection: React.FC<KaldikSectionProps> = ({
   const sem2Stats = useMemo(() => {
     let totalDays = 0;
     let totalWeeks = 0;
+    let totalJam = 0;
+    let totalJamWeeks = 0;
     kaldik.semester2Effective.forEach(m => {
       const valid = m.weeks.filter((w): w is number => typeof w === 'number' && w > 0);
       totalDays += valid.reduce((a, b) => a + b, 0);
       totalWeeks += valid.length;
+
+      const validJam = (m.jamWeeks || []).filter((w): w is number => typeof w === 'number' && w > 0);
+      totalJam += validJam.reduce((a, b) => a + b, 0);
+      totalJamWeeks += validJam.length;
     });
-    return { totalDays, totalWeeks };
+    return { totalDays, totalWeeks, totalJam, totalJamWeeks };
   }, [kaldik.semester2Effective]);
+
+  const yearlyStats = useMemo(() => ({
+    totalDays: sem1Stats.totalDays + sem2Stats.totalDays,
+    totalWeeks: sem1Stats.totalWeeks + sem2Stats.totalWeeks,
+    totalJam: sem1Stats.totalJam + sem2Stats.totalJam,
+    totalJamWeeks: sem1Stats.totalJamWeeks + sem2Stats.totalJamWeeks
+  }), [sem1Stats, sem2Stats]);
+
+  const handlePrintKaldik = () => {
+    const styleEl = document.createElement('style');
+    styleEl.id = 'kaldik-print-page-style';
+    styleEl.innerHTML = `
+      @page {
+        size: landscape !important;
+        margin: 5mm 6mm !important;
+      }
+      @media print {
+        body {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .kaldik-print-container {
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          border: none !important;
+          box-shadow: none !important;
+        }
+      }
+    `;
+    document.head.appendChild(styleEl);
+    window.print();
+    setTimeout(() => {
+      const el = document.getElementById('kaldik-print-page-style');
+      if (el) el.remove();
+    }, 1200);
+  };
 
   const leftLegends = kaldik.legends.filter(l => l.column === 'left');
   const rightLegends = kaldik.legends.filter(l => l.column === 'right');
@@ -279,17 +373,58 @@ export const KaldikSection: React.FC<KaldikSectionProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* Category Tab Selector: Kaldik Kelas Tahfizh vs Kaldik Kelas Reguler */}
+      <div className="no-print bg-slate-900 p-2 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-md">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleSwitchCategory('tahfizh')}
+            className={`px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition cursor-pointer ${
+              activeCategory === 'tahfizh'
+                ? 'bg-[#D4AF37] text-slate-950 shadow-sm'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>Kaldik Kelas Tahfizh (Al-Qur&apos;an Metode Ummi)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSwitchCategory('reguler')}
+            className={`px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition cursor-pointer ${
+              activeCategory === 'reguler'
+                ? 'bg-[#D4AF37] text-slate-950 shadow-sm'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <GraduationCap className="w-4 h-4" />
+            <span>Kaldik Kelas Reguler (Non-Tahfizh / Akademik)</span>
+          </button>
+        </div>
+
+        <div className="text-xs text-slate-400 px-2 flex items-center gap-2">
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-[11px] sm:text-xs">
+            Mode Aktif: <strong className="text-slate-100">{activeCategory === 'reguler' ? 'Kelas Reguler (Akademik Sekolah)' : 'Kelas Tahfizh (Al-Qur\'an Ummi)'}</strong>
+          </span>
+        </div>
+      </div>
+
       {/* Top Action Bar */}
       <div className="no-print bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <Calendar className="w-5 h-5 text-[#D4AF37]" />
             <h2 className="text-base sm:text-lg font-bold text-slate-800">
-              Kalender Pendidikan Al-Qur&apos;an Metode Ummi (Kaldik)
+              {activeCategory === 'reguler'
+                ? 'Kalender Pendidikan Kelas Reguler (Non-Tahfizh)'
+                : "Kalender Pendidikan Al-Qur'an Metode Ummi (Kaldik Tahfizh)"}
             </h2>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Jadwal hari efektif, agenda ujian, libur semester, serta perhitungan pekan &amp; jam efektif Semester 1 dan 2.
+            {activeCategory === 'reguler'
+              ? 'Agenda akademik KBM reguler, penilaian ASTS/ASAS/ASAT, libur umum, dan perhitungan pekan & jam efektif reguler.'
+              : 'Jadwal hari efektif, agenda munaqosyah & ujian Ummi, libur semester, serta perhitungan pekan & jam efektif tahfizh.'}
           </p>
         </div>
 
@@ -329,7 +464,7 @@ export const KaldikSection: React.FC<KaldikSectionProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      setKaldik(storageService.getKaldikData());
+                      setKaldik(storageService.getKaldikData(activeCategory));
                       setIsEditing(false);
                     }}
                     className="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition cursor-pointer"
@@ -361,7 +496,7 @@ export const KaldikSection: React.FC<KaldikSectionProps> = ({
 
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={handlePrintKaldik}
             className="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs flex items-center gap-1.5 transition cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5" />
@@ -794,255 +929,375 @@ export const KaldikSection: React.FC<KaldikSectionProps> = ({
               </table>
             </div>
 
-            {/* Right: Signature & Effective Days/Hours Calculation Tables */}
+            {/* Right: Effective Days & Hours Calculation Tables (Semester 1 & Semester 2) */}
             <div className="col-span-7 space-y-3">
-              {/* Top Row: Signature + Semester 1 Perhitungan Hari & Jam Efektif */}
-              <div className="grid grid-cols-12 gap-3 items-start">
-                {/* Signature Block */}
-                <div className="col-span-4 text-xs text-slate-900 pt-1 pl-2 space-y-1">
-                  {isEditing ? (
-                    <>
-                      <input
-                        type="text"
-                        value={kaldik.signPlaceDate}
-                        onChange={e => setKaldik({ ...kaldik, signPlaceDate: e.target.value })}
-                        className="w-full border border-amber-400 rounded px-1.5 py-0.5 text-xs bg-amber-50/40"
-                      />
-                      <input
-                        type="text"
-                        value={kaldik.signRoleTitle}
-                        onChange={e => setKaldik({ ...kaldik, signRoleTitle: e.target.value })}
-                        className="w-full border border-amber-400 rounded px-1.5 py-0.5 text-xs bg-amber-50/40"
-                      />
-                      <div className="h-10" />
-                      <input
-                        type="text"
-                        value={kaldik.signCoordinatorName}
-                        onChange={e => setKaldik({ ...kaldik, signCoordinatorName: e.target.value })}
-                        className="w-full border border-amber-400 rounded px-1.5 py-0.5 text-xs font-bold bg-amber-50/40"
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <div>{kaldik.signPlaceDate}</div>
-                      <div>{kaldik.signRoleTitle}</div>
-                      <div className="h-12" />
-                      <div className="font-semibold">{kaldik.signCoordinatorName}</div>
-                    </>
-                  )}
+              {/* Semester 1: Perhitungan Hari & Jam Efektif */}
+              <div>
+                <div className="text-[11px] font-bold text-slate-900 mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-blue-600 inline-block" />
+                    <span>Perhitungan Hari &amp; Jam Efektif — Semester 1 (Gasal)</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-semibold">Tahun Ajaran {kaldik.academicYear}</span>
                 </div>
+                <table className="w-full border-collapse border-2 border-slate-800 text-[10px]">
+                  <thead>
+                    <tr className="bg-[#BDD7EE] text-slate-900 font-bold">
+                      <th rowSpan={2} className="border border-slate-800 px-1.5 py-0.5 text-left">
+                        Semester 1
+                      </th>
+                      <th colSpan={5} className="border border-slate-800 px-1 py-0.5 text-center">
+                        Pekan ke- (Hari)
+                      </th>
+                      <th rowSpan={2} className="border border-slate-800 px-1 py-0.5 text-center leading-tight">
+                        Jml Hari
+                        <br />
+                        Efektif
+                      </th>
+                      <th rowSpan={2} className="border border-slate-800 px-1 py-0.5 text-center leading-tight">
+                        Jml Pekan
+                        <br />
+                        Efektif
+                      </th>
+                      <th colSpan={5} className="border border-slate-800 px-1 py-0.5 text-center">
+                        Pekan ke- ({activeCategory === 'reguler' ? 'TM: 2 TM/Pekan' : 'Jam'})
+                      </th>
+                      <th rowSpan={2} className="border border-slate-800 px-1 py-0.5 text-center leading-tight">
+                        {activeCategory === 'reguler' ? 'Jml TM' : 'Jml Jam'}
+                        <br />
+                        Efektif
+                      </th>
+                      <th rowSpan={2} className="border border-slate-800 px-1 py-0.5 text-center leading-tight">
+                        Jml Pekan
+                        <br />
+                        Efektif
+                      </th>
+                    </tr>
+                    <tr className="bg-[#BDD7EE] text-slate-900 font-bold">
+                      {[1, 2, 3, 4, 5].map(w => (
+                        <th key={`d-${w}`} className="border border-slate-800 px-1 py-0.5 text-center w-5">
+                          {w}
+                        </th>
+                      ))}
+                      {[1, 2, 3, 4, 5].map(w => (
+                        <th key={`j-${w}`} className="border border-slate-800 px-1 py-0.5 text-center w-5">
+                          {w}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {kaldik.semester1Effective.map((row, rIdx) => {
+                      const validDays = row.weeks.filter((w): w is number => typeof w === 'number' && w > 0);
+                      const sumDays = validDays.reduce((a, b) => a + b, 0);
+                      const countWeeks = validDays.length;
 
-                {/* Semester 1: Perhitungan Hari Efektif & Jam Efektif */}
-                <div className="col-span-8">
-                  <div className="text-[11px] font-bold text-slate-900 mb-1 flex justify-between">
-                    <span>Perhitungan hari efektif</span>
-                    <span>Perhitungan jam efektif</span>
-                  </div>
-                  <table className="w-full border-collapse border-2 border-slate-800 text-[10px]">
-                    <thead>
-                      <tr className="bg-[#BDD7EE] text-slate-900 font-bold">
-                        <th rowSpan={2} className="border border-slate-800 px-1.5 py-0.5 text-left">
-                          Semester 1
-                        </th>
-                        <th colSpan={5} className="border border-slate-800 px-1 py-0.5 text-center">
-                          Pekan ke-
-                        </th>
-                        <th rowSpan={2} className="border border-slate-800 px-1 py-0.5 text-center leading-tight">
-                          Jml Hari
-                          <br />
-                          Efektif
-                        </th>
-                        <th rowSpan={2} className="border border-slate-800 px-1 py-0.5 text-center leading-tight">
-                          Jml Pekan
-                          <br />
-                          Efektif
-                        </th>
-                        <th colSpan={5} className="border border-slate-800 px-1 py-0.5 text-center">
-                          Pekan ke-
-                        </th>
-                        <th rowSpan={2} className="border border-slate-800 px-1 py-0.5 text-center leading-tight">
-                          Jml Jam
-                          <br />
-                          Efektif
-                        </th>
-                        <th rowSpan={2} className="border border-slate-800 px-1 py-0.5 text-center leading-tight">
-                          Jml Pekan
-                          <br />
-                          Efektif
-                        </th>
-                      </tr>
-                      <tr className="bg-[#BDD7EE] text-slate-900 font-bold">
-                        {[1, 2, 3, 4, 5].map(w => (
-                          <th key={`d-${w}`} className="border border-slate-800 px-1 py-0.5 text-center w-5">
-                            {w}
-                          </th>
-                        ))}
-                        {[1, 2, 3, 4, 5].map(w => (
-                          <th key={`j-${w}`} className="border border-slate-800 px-1 py-0.5 text-center w-5">
-                            {w}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {kaldik.semester1Effective.map((row, rIdx) => {
-                        const validDays = row.weeks.filter((w): w is number => typeof w === 'number' && w > 0);
-                        const sumDays = validDays.reduce((a, b) => a + b, 0);
-                        const countWeeks = validDays.length;
+                      const jamList = row.jamWeeks || [null, null, null, null, null];
+                      const validJam = jamList.filter((w): w is number => typeof w === 'number' && w > 0);
+                      const sumJam = validJam.reduce((a, b) => a + b, 0);
+                      const countJamWeeks = validJam.length;
 
-                        const jamList = row.jamWeeks || [null, null, null, null, null];
-                        const validJam = jamList.filter((w): w is number => typeof w === 'number' && w > 0);
-                        const sumJam = validJam.reduce((a, b) => a + b, 0);
-                        const countJamWeeks = validJam.length;
+                      return (
+                        <tr key={row.monthName} className="h-5">
+                          <td className="border border-slate-800 px-1.5 font-semibold text-slate-900">
+                            {row.monthName}
+                          </td>
+                          {[0, 1, 2, 3, 4].map(wIdx => (
+                            <td key={`sd-${wIdx}`} className="border border-slate-800 text-center p-0">
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={row.weeks[wIdx] ?? ''}
+                                  onChange={e =>
+                                    handleEffectiveWeekChange(1, rIdx, wIdx, e.target.value, false)
+                                  }
+                                  className="w-full text-center bg-amber-50/40 text-[10px]"
+                                />
+                              ) : (
+                                row.weeks[wIdx] ?? '-'
+                              )}
+                            </td>
+                          ))}
+                          <td className="border border-slate-800 text-center font-bold bg-slate-50">
+                            {sumDays}
+                          </td>
+                          <td className="border border-slate-800 text-center font-bold bg-slate-50">
+                            {countWeeks}
+                          </td>
 
-                        return (
-                          <tr key={row.monthName} className="h-5">
-                            <td className="border border-slate-800 px-1.5 font-semibold text-slate-900">
-                              {row.monthName}
+                          {[0, 1, 2, 3, 4].map(wIdx => (
+                            <td key={`sj-${wIdx}`} className="border border-slate-800 text-center p-0">
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={jamList[wIdx] ?? ''}
+                                  onChange={e =>
+                                    handleEffectiveWeekChange(1, rIdx, wIdx, e.target.value, true)
+                                  }
+                                  className="w-full text-center bg-amber-50/40 text-[10px]"
+                                />
+                              ) : (
+                                jamList[wIdx] ?? '-'
+                              )}
                             </td>
-                            {[0, 1, 2, 3, 4].map(wIdx => (
-                              <td key={`sd-${wIdx}`} className="border border-slate-800 text-center p-0">
-                                {isEditing ? (
-                                  <input
-                                    type="text"
-                                    value={row.weeks[wIdx] ?? ''}
-                                    onChange={e =>
-                                      handleEffectiveWeekChange(1, rIdx, wIdx, e.target.value, false)
-                                    }
-                                    className="w-full text-center bg-amber-50/40 text-[10px]"
-                                  />
-                                ) : (
-                                  row.weeks[wIdx] ?? '-'
-                                )}
-                              </td>
-                            ))}
-                            <td className="border border-slate-800 text-center font-bold bg-slate-50">
-                              {sumDays}
-                            </td>
-                            <td className="border border-slate-800 text-center font-bold bg-slate-50">
-                              {countWeeks}
-                            </td>
-
-                            {[0, 1, 2, 3, 4].map(wIdx => (
-                              <td key={`sj-${wIdx}`} className="border border-slate-800 text-center p-0">
-                                {isEditing ? (
-                                  <input
-                                    type="text"
-                                    value={jamList[wIdx] ?? ''}
-                                    onChange={e =>
-                                      handleEffectiveWeekChange(1, rIdx, wIdx, e.target.value, true)
-                                    }
-                                    className="w-full text-center bg-amber-50/40 text-[10px]"
-                                  />
-                                ) : (
-                                  jamList[wIdx] ?? '-'
-                                )}
-                              </td>
-                            ))}
-                            <td className="border border-slate-800 text-center font-bold bg-slate-50">
-                              {sumJam}
-                            </td>
-                            <td className="border border-slate-800 text-center font-bold bg-slate-50">
-                              {countJamWeeks}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      <tr className="bg-[#BDD7EE] font-extrabold text-slate-900 h-5">
-                        <td colSpan={6} className="border border-slate-800 text-center">
-                          Total
-                        </td>
-                        <td className="border border-slate-800 text-center">{sem1Stats.totalDays} Hari</td>
-                        <td className="border border-slate-800 text-center">{sem1Stats.totalWeeks} Pekan</td>
-                        <td colSpan={5} className="border border-slate-800 text-center">
-                          Total
-                        </td>
-                        <td className="border border-slate-800 text-center">{sem1Stats.totalJam} Jam</td>
-                        <td className="border border-slate-800 text-center">{sem1Stats.totalJamWeeks} Pekan</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                          ))}
+                          <td className="border border-slate-800 text-center font-bold bg-slate-50">
+                            {sumJam}
+                          </td>
+                          <td className="border border-slate-800 text-center font-bold bg-slate-50">
+                            {countJamWeeks}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="bg-[#BDD7EE] font-extrabold text-slate-900 h-5">
+                      <td colSpan={6} className="border border-slate-800 text-center">
+                        Total Semester 1
+                      </td>
+                      <td className="border border-slate-800 text-center">{sem1Stats.totalDays} Hari</td>
+                      <td className="border border-slate-800 text-center">{sem1Stats.totalWeeks} Pekan</td>
+                      <td colSpan={5} className="border border-slate-800 text-center">
+                        Total
+                      </td>
+                      <td className="border border-slate-800 text-center">{sem1Stats.totalJam} Jam</td>
+                      <td className="border border-slate-800 text-center">{sem1Stats.totalJamWeeks} Pekan</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
 
-              {/* Semester 2: Perhitungan Hari Efektif */}
-              <div className="grid grid-cols-12 gap-3">
-                <div className="col-span-4" />
-                <div className="col-span-5">
-                  <div className="text-[11px] font-bold text-slate-900 mb-1">Perhitungan hari efektif</div>
-                  <table className="w-full border-collapse border-2 border-slate-800 text-[10px]">
-                    <thead>
-                      <tr className="bg-[#BDD7EE] text-slate-900 font-bold">
-                        <th rowSpan={2} className="border border-slate-800 px-1.5 py-0.5 text-left">
-                          Semester 2
-                        </th>
-                        <th colSpan={5} className="border border-slate-800 px-1 py-0.5 text-center">
-                          Pekan ke-
-                        </th>
-                        <th rowSpan={2} className="border border-slate-800 px-1 py-0.5 text-center leading-tight">
-                          Jml Hari
-                          <br />
-                          Efektif
-                        </th>
-                        <th rowSpan={2} className="border border-slate-800 px-1 py-0.5 text-center leading-tight">
-                          Jml Pekan
-                          <br />
-                          Efektif
-                        </th>
-                      </tr>
-                      <tr className="bg-[#BDD7EE] text-slate-900 font-bold">
-                        {[1, 2, 3, 4, 5].map(w => (
-                          <th key={w} className="border border-slate-800 px-1 py-0.5 text-center w-5">
-                            {w}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {kaldik.semester2Effective.map((row, rIdx) => {
-                        const validDays = row.weeks.filter((w): w is number => typeof w === 'number' && w > 0);
-                        const sumDays = validDays.reduce((a, b) => a + b, 0);
-                        const countWeeks = validDays.length;
-                        return (
-                          <tr key={row.monthName} className="h-5">
-                            <td className="border border-slate-800 px-1.5 font-semibold text-slate-900">
-                              {row.monthName}
-                            </td>
-                            {[0, 1, 2, 3, 4].map(wIdx => (
-                              <td key={wIdx} className="border border-slate-800 text-center p-0">
-                                {isEditing ? (
-                                  <input
-                                    type="text"
-                                    value={row.weeks[wIdx] ?? ''}
-                                    onChange={e =>
-                                      handleEffectiveWeekChange(2, rIdx, wIdx, e.target.value, false)
-                                    }
-                                    className="w-full text-center bg-amber-50/40 text-[10px]"
-                                  />
-                                ) : (
-                                  row.weeks[wIdx] ?? '-'
-                                )}
-                              </td>
-                            ))}
-                            <td className="border border-slate-800 text-center font-bold bg-slate-50">
-                              {sumDays}
-                            </td>
-                            <td className="border border-slate-800 text-center font-bold bg-slate-50">
-                              {countWeeks}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      <tr className="bg-[#BDD7EE] font-extrabold text-slate-900 h-5">
-                        <td colSpan={6} className="border border-slate-800 text-center">
-                          Total
-                        </td>
-                        <td className="border border-slate-800 text-center">{sem2Stats.totalDays} Hari</td>
-                        <td className="border border-slate-800 text-center">{sem2Stats.totalWeeks} Pekan</td>
-                      </tr>
-                    </tbody>
-                  </table>
+              {/* Semester 2: Perhitungan Hari & Jam Efektif (Matches Exactly Semester 1 Width & Structure) */}
+              <div>
+                <div className="text-[11px] font-bold text-slate-900 mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block" />
+                    <span>Perhitungan Hari &amp; Jam Efektif — Semester 2 (Genap)</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-semibold">Tahun Ajaran {kaldik.academicYear}</span>
                 </div>
+                <table className="w-full border-collapse border-2 border-slate-800 text-[10px]">
+                  <thead>
+                    <tr className="bg-[#BDD7EE] text-slate-900 font-bold">
+                      <th rowSpan={2} className="border border-slate-800 px-1.5 py-0.5 text-left">
+                        Semester 2
+                      </th>
+                      <th colSpan={5} className="border border-slate-800 px-1 py-0.5 text-center">
+                        Pekan ke- (Hari)
+                      </th>
+                      <th rowSpan={2} className="border border-slate-800 px-1 py-0.5 text-center leading-tight">
+                        Jml Hari
+                        <br />
+                        Efektif
+                      </th>
+                      <th rowSpan={2} className="border border-slate-800 px-1 py-0.5 text-center leading-tight">
+                        Jml Pekan
+                        <br />
+                        Efektif
+                      </th>
+                      <th colSpan={5} className="border border-slate-800 px-1 py-0.5 text-center">
+                        Pekan ke- ({activeCategory === 'reguler' ? 'TM: 2 TM/Pekan' : 'Jam'})
+                      </th>
+                      <th rowSpan={2} className="border border-slate-800 px-1 py-0.5 text-center leading-tight">
+                        {activeCategory === 'reguler' ? 'Jml TM' : 'Jml Jam'}
+                        <br />
+                        Efektif
+                      </th>
+                      <th rowSpan={2} className="border border-slate-800 px-1 py-0.5 text-center leading-tight">
+                        Jml Pekan
+                        <br />
+                        Efektif
+                      </th>
+                    </tr>
+                    <tr className="bg-[#BDD7EE] text-slate-900 font-bold">
+                      {[1, 2, 3, 4, 5].map(w => (
+                        <th key={`d2-${w}`} className="border border-slate-800 px-1 py-0.5 text-center w-5">
+                          {w}
+                        </th>
+                      ))}
+                      {[1, 2, 3, 4, 5].map(w => (
+                        <th key={`j2-${w}`} className="border border-slate-800 px-1 py-0.5 text-center w-5">
+                          {w}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {kaldik.semester2Effective.map((row, rIdx) => {
+                      const validDays = row.weeks.filter((w): w is number => typeof w === 'number' && w > 0);
+                      const sumDays = validDays.reduce((a, b) => a + b, 0);
+                      const countWeeks = validDays.length;
+
+                      const jamList = row.jamWeeks || [null, null, null, null, null];
+                      const validJam = jamList.filter((w): w is number => typeof w === 'number' && w > 0);
+                      const sumJam = validJam.reduce((a, b) => a + b, 0);
+                      const countJamWeeks = validJam.length;
+
+                      return (
+                        <tr key={row.monthName} className="h-5">
+                          <td className="border border-slate-800 px-1.5 font-semibold text-slate-900">
+                            {row.monthName}
+                          </td>
+                          {[0, 1, 2, 3, 4].map(wIdx => (
+                            <td key={`sd2-${wIdx}`} className="border border-slate-800 text-center p-0">
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={row.weeks[wIdx] ?? ''}
+                                  onChange={e =>
+                                    handleEffectiveWeekChange(2, rIdx, wIdx, e.target.value, false)
+                                  }
+                                  className="w-full text-center bg-amber-50/40 text-[10px]"
+                                />
+                              ) : (
+                                row.weeks[wIdx] ?? '-'
+                              )}
+                            </td>
+                          ))}
+                          <td className="border border-slate-800 text-center font-bold bg-slate-50">
+                            {sumDays}
+                          </td>
+                          <td className="border border-slate-800 text-center font-bold bg-slate-50">
+                            {countWeeks}
+                          </td>
+
+                          {[0, 1, 2, 3, 4].map(wIdx => (
+                            <td key={`sj2-${wIdx}`} className="border border-slate-800 text-center p-0">
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={jamList[wIdx] ?? ''}
+                                  onChange={e =>
+                                    handleEffectiveWeekChange(2, rIdx, wIdx, e.target.value, true)
+                                  }
+                                  className="w-full text-center bg-amber-50/40 text-[10px]"
+                                />
+                              ) : (
+                                jamList[wIdx] ?? '-'
+                              )}
+                            </td>
+                          ))}
+                          <td className="border border-slate-800 text-center font-bold bg-slate-50">
+                            {sumJam}
+                          </td>
+                          <td className="border border-slate-800 text-center font-bold bg-slate-50">
+                            {countJamWeeks}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="bg-[#BDD7EE] font-extrabold text-slate-900 h-5">
+                      <td colSpan={6} className="border border-slate-800 text-center">
+                        Total Semester 2
+                      </td>
+                      <td className="border border-slate-800 text-center">{sem2Stats.totalDays} Hari</td>
+                      <td className="border border-slate-800 text-center">{sem2Stats.totalWeeks} Pekan</td>
+                      <td colSpan={5} className="border border-slate-800 text-center">
+                        Total
+                      </td>
+                      <td className="border border-slate-800 text-center">{sem2Stats.totalJam} Jam</td>
+                      <td className="border border-slate-800 text-center">{sem2Stats.totalJamWeeks} Pekan</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Annual Accumulation Summary Bar */}
+              <div className="bg-[#EBF3FB] border-2 border-slate-800 rounded p-2 text-xs font-bold text-slate-900 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Total Efektif Tahun Ajaran ({kaldik.academicYear}):</span>
+                </span>
+                <div className="flex flex-wrap items-center gap-3 text-slate-900">
+                  <span className="bg-white px-2 py-0.5 rounded border border-slate-300 font-extrabold">
+                    {yearlyStats.totalDays} Hari Efektif
+                  </span>
+                  <span>•</span>
+                  <span className="bg-white px-2 py-0.5 rounded border border-slate-300 font-extrabold">
+                    {yearlyStats.totalWeeks} Pekan Efektif
+                  </span>
+                  <span>•</span>
+                  <span className="bg-white px-2 py-0.5 rounded border border-slate-300 font-extrabold">
+                    {yearlyStats.totalJam} {activeCategory === 'reguler' ? 'Tatap Muka (TM)' : 'Jam Pelajaran'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SIGNATURE SECTION (Proporsional & Sejajar di Bawah Tabel Kaldik) */}
+          <div className="pt-4 border-t-2 border-slate-800 mt-3">
+            <div className="grid grid-cols-2 gap-8 text-xs text-slate-900">
+              {/* Left Signature: Kepala Sekolah */}
+              <div className="text-center space-y-1">
+                <div>Mengetahui,</div>
+                {isEditing ? (
+                  <div className="space-y-1 max-w-xs mx-auto">
+                    <input
+                      type="text"
+                      value={kaldik.signHeadmasterTitle || 'Kepala SMP Islam Al Azhar 21'}
+                      onChange={e => setKaldik({ ...kaldik, signHeadmasterTitle: e.target.value })}
+                      placeholder="Jabatan Kepala Sekolah"
+                      className="w-full text-center border border-amber-400 rounded px-1.5 py-0.5 text-xs font-bold bg-amber-50/40"
+                    />
+                    <div className="h-12" />
+                    <input
+                      type="text"
+                      value={kaldik.signHeadmasterName || 'Muh Saifuddin, S.Si.'}
+                      onChange={e => setKaldik({ ...kaldik, signHeadmasterName: e.target.value })}
+                      placeholder="Nama Kepala Sekolah"
+                      className="w-full text-center border border-amber-400 rounded px-1.5 py-0.5 text-xs font-bold bg-amber-50/40"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div className="font-bold">{kaldik.signHeadmasterTitle || 'Kepala SMP Islam Al Azhar 21'}</div>
+                    <div className="h-14 sm:h-16" />
+                    <div className="font-bold underline text-sm tracking-wide">
+                      {kaldik.signHeadmasterName || 'Muh Saifuddin, S.Si.'}
+                    </div>
+                    <div className="text-[10px] text-slate-600 font-medium">NIK. 01.0125</div>
+                  </>
+                )}
+              </div>
+
+              {/* Right Signature: Koordinator / Waka Kurikulum */}
+              <div className="text-center space-y-1">
+                {isEditing ? (
+                  <div className="space-y-1 max-w-xs mx-auto">
+                    <input
+                      type="text"
+                      value={kaldik.signPlaceDate}
+                      onChange={e => setKaldik({ ...kaldik, signPlaceDate: e.target.value })}
+                      placeholder="Tempat, Tanggal Titimangsa"
+                      className="w-full text-center border border-amber-400 rounded px-1.5 py-0.5 text-xs bg-amber-50/40"
+                    />
+                    <input
+                      type="text"
+                      value={kaldik.signRoleTitle}
+                      onChange={e => setKaldik({ ...kaldik, signRoleTitle: e.target.value })}
+                      placeholder="Jabatan Penanggung Jawab"
+                      className="w-full text-center border border-amber-400 rounded px-1.5 py-0.5 text-xs font-bold bg-amber-50/40"
+                    />
+                    <div className="h-12" />
+                    <input
+                      type="text"
+                      value={kaldik.signCoordinatorName}
+                      onChange={e => setKaldik({ ...kaldik, signCoordinatorName: e.target.value })}
+                      placeholder="Nama Pejabat Penandatangan"
+                      className="w-full text-center border border-amber-400 rounded px-1.5 py-0.5 text-xs font-bold bg-amber-50/40"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div>{kaldik.signPlaceDate}</div>
+                    <div className="font-bold">{kaldik.signRoleTitle || 'Koordinator Tahfizh'}</div>
+                    <div className="h-14 sm:h-16" />
+                    <div className="font-bold underline text-sm tracking-wide">
+                      {kaldik.signCoordinatorName || 'Ustadz Muhammad Yusrie Alfian, S.Ag.'}
+                    </div>
+                    <div className="text-[10px] text-slate-600 font-medium">NIK. 04.0413</div>
+                  </>
+                )}
               </div>
             </div>
           </div>

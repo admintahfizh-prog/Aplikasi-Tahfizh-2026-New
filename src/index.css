@@ -91,5 +91,26 @@
   .page-break {
     page-break-after: always;
   }
+
+  /* Kaldik Sheet Landscape Print Styling */
+  .kaldik-print-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    page-break-inside: avoid !important;
+  }
+
+  .kaldik-print-container table {
+    width: 100% !important;
+    font-size: 8.5pt !important;
+  }
+
+  .kaldik-print-container table th,
+  .kaldik-print-container table td {
+    padding: 1.5px 2px !important;
+  }
 }
 

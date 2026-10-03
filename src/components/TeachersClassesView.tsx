@@ -47,7 +47,7 @@ interface TeachersClassesViewProps {
 
 export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
   teachers,
-  classes,
+  classes: propClasses,
   students,
   halaqahGroups: propHalaqahGroups,
   userRole,
@@ -64,6 +64,26 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
       (currentUser?.name && t.name && (t.name.toLowerCase().includes(currentUser.name.toLowerCase()) || currentUser.name.toLowerCase().includes(t.name.toLowerCase())))
     ) || (userRole === 'guru' ? teachers[0] : undefined);
   }, [teachers, currentUser, userRole]);
+
+  // Reactive classes state synced with prop & cloud storage
+  const [classes, setClasses] = useState<ClassItem[]>(() =>
+    propClasses && propClasses.length > 0 ? propClasses : storageService.getClasses()
+  );
+
+  useEffect(() => {
+    if (propClasses && propClasses.length > 0) {
+      setClasses(propClasses);
+    } else {
+      setClasses(storageService.getClasses());
+    }
+  }, [propClasses]);
+
+  useEffect(() => {
+    const unsub = storageService.onSyncChange(() => {
+      setClasses(storageService.getClasses());
+    });
+    return () => unsub();
+  }, []);
 
   const [activeTab, setActiveTab] = useState<'teachers' | 'classes' | 'halaqah'>(userRole === 'guru' ? 'halaqah' : 'teachers');
   const [searchTerm, setSearchTerm] = useState('');
@@ -368,6 +388,7 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
     };
 
     storageService.saveClass(classToSave);
+    setClasses(storageService.getClasses());
     setShowClassModal(false);
     setEditingClass(null);
     onRefreshData();
@@ -393,8 +414,9 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
       storageService.saveStudentsBulk(updatedStudents);
     }
 
-    // 2. Delete class in storageService
+    // 2. Delete class in storageService and local state
     storageService.deleteClass(clsId);
+    setClasses(prev => prev.filter(c => c.id !== clsId));
 
     // 3. Clear modal state & notify
     setClassToDelete(null);
@@ -548,13 +570,23 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
           )}
 
           {userRole === 'guru' && (
-            <button
-              onClick={() => handleOpenAddHalaqah(myTeacher?.id)}
-              className="px-4 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus className="w-4 h-4 text-[#D4AF37]" />
-              <span>+ Tambah Kelompok Halaqah Saya</span>
-            </button>
+            activeTab === 'classes' ? (
+              <button
+                onClick={handleOpenAddClass}
+                className="px-4 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4 text-[#D4AF37]" />
+                <span>+ Tambah Kelas Baru</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => handleOpenAddHalaqah(myTeacher?.id)}
+                className="px-4 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4 text-[#D4AF37]" />
+                <span>+ Tambah Kelompok Halaqah Saya</span>
+              </button>
+            )
           )}
 
           {userRole === 'admin' && (
@@ -887,7 +919,7 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
                     </div>
                   </div>
 
-                  {userRole === 'admin' && (
+                  {(userRole === 'admin' || userRole === 'guru') && (
                     <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-1 mt-2">
                       <button
                         onClick={() => handleOpenEditClass(c)}
@@ -913,7 +945,7 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
           {filteredClasses.length === 0 && (
             <div className="p-10 text-center bg-white rounded-xl border border-slate-200 text-slate-500">
               <p className="text-sm font-semibold">Tidak ada rombel kelas yang sesuai dengan pencarian "{searchTerm}".</p>
-              {userRole === 'admin' && (
+              {(userRole === 'admin' || userRole === 'guru') && (
                 <button
                   onClick={handleOpenAddClass}
                   className="mt-3 px-4 py-2 bg-[#1E293B] text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-slate-700"
@@ -1490,21 +1522,39 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
                 </select>
               </div>
 
-              <div className="pt-3 flex justify-end gap-2 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => { setShowClassModal(false); setEditingClass(null); }}
-                  className="px-4 py-2 text-slate-600 font-semibold cursor-pointer hover:bg-slate-100 rounded-lg"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-[#1E293B] hover:bg-slate-700 text-white font-semibold rounded-lg shadow-xs cursor-pointer flex items-center gap-1.5"
-                >
-                  <Save className="w-3.5 h-3.5 text-[#D4AF37]" />
-                  <span>{editingClass ? 'Simpan Perubahan' : 'Tambah Kelas'}</span>
-                </button>
+              <div className="pt-3 flex items-center justify-between gap-2 border-t border-slate-200">
+                {editingClass ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = editingClass;
+                      setShowClassModal(false);
+                      setEditingClass(null);
+                      handleDeleteClass(target);
+                    }}
+                    className="px-3 py-2 text-rose-600 hover:bg-rose-50 font-semibold rounded-lg text-xs flex items-center gap-1.5 cursor-pointer transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Hapus Kelas Ini</span>
+                  </button>
+                ) : <div />}
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowClassModal(false); setEditingClass(null); }}
+                    className="px-4 py-2 text-slate-600 font-semibold cursor-pointer hover:bg-slate-100 rounded-lg"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-[#1E293B] hover:bg-slate-700 text-white font-semibold rounded-lg shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Save className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>{editingClass ? 'Simpan Perubahan' : 'Tambah Kelas'}</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>

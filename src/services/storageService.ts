@@ -37,7 +37,14 @@ import { isGrade8or9Student, isUmmiEnrolledStudent, isClass7Bto7E, isLegacyDefau
 import { getGradeFromScore } from '../utils/gradeConversion';
 import { TermName } from '../types';
 import { getStudentStandardTermTarget, evaluateHafalanTerm, evaluateUmmiTerm } from '../data/targetTermData';
-import { KaldikData, ProsemSheet, INITIAL_KALDIK_DATA, INITIAL_PROSEM_SHEETS } from '../data/kaldikProsemData';
+import { 
+  KaldikData, 
+  KaldikCategory,
+  ProsemSheet, 
+  INITIAL_KALDIK_DATA, 
+  INITIAL_KALDIK_REGULER_DATA,
+  INITIAL_PROSEM_SHEETS 
+} from '../data/kaldikProsemData';
 import { 
   db, 
   collection, 
@@ -73,6 +80,7 @@ const STORAGE_KEYS = {
   ATTENDANCE: 'tahfizh_smpia21_attendance',
   EXAM_SUBMISSIONS: 'tahfizh_smpia21_exam_submissions',
   KALDIK: 'tahfizh_smpia21_kaldik_v1',
+  KALDIK_REGULER: 'tahfizh_smpia21_kaldik_reguler_v1',
   PROSEM: 'tahfizh_smpia21_prosem_v1',
   CLOUD_SYNCED: 'tahfizh_smpia21_cloud_synced',
   QUOTA_EXCEEDED: 'tahfizh_smpia21_quota_exceeded',
@@ -1437,10 +1445,17 @@ export const storageService = {
     this.notifyListeners();
   },
   deleteClass(id: string): void {
+    if (!id) return;
+    const idStr = String(id).trim();
+    markDeletedId(idStr);
     markDeletedId(id);
-    const list = this.getClasses().filter(c => c.id !== id);
-    setItem(STORAGE_KEYS.CLASSES, list);
-    deleteDocFromCloud('classes', id);
+    const rawList = getItem<ClassItem[]>(STORAGE_KEYS.CLASSES, INITIAL_CLASSES);
+    const deletedSet = getDeletedIdsSet();
+    const updatedList = (rawList || []).filter(
+      c => c && c.id && String(c.id).trim() !== idStr && c.id !== id && !deletedSet.has(String(c.id).trim())
+    );
+    setItem(STORAGE_KEYS.CLASSES, updatedList);
+    deleteDocFromCloud('classes', idStr);
     this.notifyListeners();
   },
 
@@ -2732,22 +2747,88 @@ export const storageService = {
   },
 
   // Kalender Pendidikan (Kaldik) & Program Semester (Prosem)
-  getKaldikData(): KaldikData {
-    return getItem<KaldikData>(STORAGE_KEYS.KALDIK, INITIAL_KALDIK_DATA);
+  getKaldikData(category: 'tahfizh' | 'reguler' = 'tahfizh'): KaldikData {
+    const defaultData = category === 'reguler' ? INITIAL_KALDIK_REGULER_DATA : INITIAL_KALDIK_DATA;
+    const rawData = category === 'reguler'
+      ? getItem<KaldikData>(STORAGE_KEYS.KALDIK_REGULER, defaultData)
+      : getItem<KaldikData>(STORAGE_KEYS.KALDIK, defaultData);
+
+    const settings = this.getSettings();
+    const correctHeadmasterName = settings.headmasterName || 'Muh Saifuddin, S.Si.';
+    const correctCoordinatorName = settings.tahfizhCoordinator || 'Ustadz Muhammad Yusrie Alfian, S.Ag.';
+    let modified = false;
+
+    // Synchronize headmaster signature
+    if (
+      !rawData.signHeadmasterName ||
+      rawData.signHeadmasterName.includes('Djauhari') ||
+      rawData.signHeadmasterName.includes('Ridwan')
+    ) {
+      rawData.signHeadmasterName = correctHeadmasterName;
+      modified = true;
+    }
+    if (!rawData.signHeadmasterTitle) {
+      rawData.signHeadmasterTitle = 'Kepala SMP Islam Al Azhar 21';
+      modified = true;
+    }
+
+    // Synchronize Koordinator Tahfizh signature
+    if (
+      !rawData.signRoleTitle ||
+      rawData.signRoleTitle === "Koordinator Al Qur'an" ||
+      rawData.signRoleTitle === 'Waka Kurikulum'
+    ) {
+      rawData.signRoleTitle = 'Koordinator Tahfizh';
+      modified = true;
+    }
+    if (
+      !rawData.signCoordinatorName ||
+      rawData.signCoordinatorName.includes('Sri Lestari') ||
+      rawData.signCoordinatorName.includes('Yusrie Alfian, S.Ag)')
+    ) {
+      rawData.signCoordinatorName = correctCoordinatorName;
+      modified = true;
+    }
+
+    // Synchronize 2 TM/pekan for Kaldik Reguler (replace legacy 35 jam values)
+    if (category === 'reguler') {
+      const hasOld35Jam = rawData.semester1Effective?.some(m => m.jamWeeks?.includes(35)) ||
+                          rawData.semester2Effective?.some(m => m.jamWeeks?.includes(35));
+      if (hasOld35Jam) {
+        rawData.semester1Effective = JSON.parse(JSON.stringify(INITIAL_KALDIK_REGULER_DATA.semester1Effective));
+        rawData.semester2Effective = JSON.parse(JSON.stringify(INITIAL_KALDIK_REGULER_DATA.semester2Effective));
+        modified = true;
+      }
+    }
+
+    if (modified) {
+      const key = category === 'reguler' ? STORAGE_KEYS.KALDIK_REGULER : STORAGE_KEYS.KALDIK;
+      setItem(key, rawData);
+    }
+
+    return rawData;
   },
-  saveKaldikData(data: KaldikData): void {
+  saveKaldikData(data: KaldikData, category?: 'tahfizh' | 'reguler'): void {
+    const cat = category || data.category || 'tahfizh';
     const updated: KaldikData = {
       ...data,
+      category: cat,
       updatedAt: new Date().toISOString()
     };
-    setItem(STORAGE_KEYS.KALDIK, updated);
-    syncDocToCloud('app_settings', 'kaldik_config', updated);
+    const key = cat === 'reguler' ? STORAGE_KEYS.KALDIK_REGULER : STORAGE_KEYS.KALDIK;
+    const cloudDoc = cat === 'reguler' ? 'kaldik_reguler_config' : 'kaldik_config';
+    setItem(key, updated);
+    syncDocToCloud('app_settings', cloudDoc, updated);
     this.notifyListeners();
   },
-  resetKaldikData(): KaldikData {
-    const fresh = JSON.parse(JSON.stringify(INITIAL_KALDIK_DATA)) as KaldikData;
-    setItem(STORAGE_KEYS.KALDIK, fresh);
-    syncDocToCloud('app_settings', 'kaldik_config', fresh);
+  resetKaldikData(category: 'tahfizh' | 'reguler' = 'tahfizh'): KaldikData {
+    const fresh = category === 'reguler'
+      ? JSON.parse(JSON.stringify(INITIAL_KALDIK_REGULER_DATA)) as KaldikData
+      : JSON.parse(JSON.stringify(INITIAL_KALDIK_DATA)) as KaldikData;
+    const key = category === 'reguler' ? STORAGE_KEYS.KALDIK_REGULER : STORAGE_KEYS.KALDIK;
+    const cloudDoc = category === 'reguler' ? 'kaldik_reguler_config' : 'kaldik_config';
+    setItem(key, fresh);
+    syncDocToCloud('app_settings', cloudDoc, fresh);
     this.notifyListeners();
     return fresh;
   },

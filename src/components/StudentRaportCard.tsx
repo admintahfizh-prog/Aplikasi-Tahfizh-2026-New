@@ -396,7 +396,7 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
 
   // Signatures & Settings (Synced with Admin Settings)
   const [headmasterName, setHeadmasterName] = useState<string>(
-    settings.headmasterName || settings.principalName || 'H. M. Ridwan, M.Pd.I'
+    settings.headmasterName || settings.principalName || 'Muh Saifuddin,S.Si'
   );
   const [headmasterNik, setHeadmasterNik] = useState<string>(
     settings.headmasterNik || '01.0125'

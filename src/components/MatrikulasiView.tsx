@@ -1629,7 +1629,7 @@ export const MatrikulasiView: React.FC<MatrikulasiViewProps> = ({
                 <p className="text-slate-500">Mengetahui,</p>
                 <p className="font-bold text-slate-800">Kepala Sekolah</p>
                 <div className="h-16 flex items-end justify-center">
-                  <p className="font-bold underline text-slate-900">{settings.headmasterName || 'Drs. H. Sulaiman Affandi, M.Pd.'}</p>
+                  <p className="font-bold underline text-slate-900">{settings.headmasterName || 'Muh Saifuddin,S.Si'}</p>
                 </div>
               </div>
 
