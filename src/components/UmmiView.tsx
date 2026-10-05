@@ -24,12 +24,15 @@ import {
   Edit3,
   Trash2,
   Eye,
-  Download
+  Download,
+  ScanLine
 } from 'lucide-react';
 import { UmmiRecord, Student, Teacher, ClassItem, Role } from '../types';
 import { UMMI_SYLLABUS, UMMI_JILIDS, UmmiTopicDetail } from '../data/ummiData';
 import { storageService } from '../services/storageService';
 import { AvatarBadge } from './AvatarBadge';
+import { CameraAndBarcodeScannerBox } from './CameraAndBarcodeScannerBox';
+import { buildStudentQrCodeBadgeId } from './QrAttendancePanel';
 import { getGradeFromScore, getGradeBadgeClass } from '../utils/gradeConversion';
 import { isGrade7Class, isUmmiEnrolledStudent, isGrade8or9Student } from '../utils/gradeHelper';
 
@@ -81,6 +84,7 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
   const [deleteConfirmRecord, setDeleteConfirmRecord] = useState<UmmiRecord | null>(null);
   const [resetConfirmStudent, setResetConfirmStudent] = useState<Student | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showBarcodeScannerModal, setShowBarcodeScannerModal] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -366,13 +370,25 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
           </button>
 
           {userRole !== 'wali' && (
-            <button
-              onClick={() => onOpenDailyInput()}
-              className="px-4 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <PlusCircle className="w-4 h-4 text-[#D4AF37]" />
-              <span>+ Input Setoran Ummi</span>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setShowBarcodeScannerModal(true)}
+                className="px-3.5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                title="Scan Barcode / QR Siswa untuk Absen Hadir sekaligus Input Metode Ummi"
+              >
+                <ScanLine className="w-4 h-4 text-amber-300" />
+                <span>Scan Barcode / QR</span>
+              </button>
+
+              <button
+                onClick={() => onOpenDailyInput()}
+                className="px-4 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <PlusCircle className="w-4 h-4 text-[#D4AF37]" />
+                <span>+ Input Setoran Ummi</span>
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -1384,6 +1400,62 @@ export const UmmiView: React.FC<UmmiViewProps> = ({
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Ya, Reset Capaian</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Scan Barcode / QR untuk Absen & Input Ummi */}
+      {showBarcodeScannerModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200">
+            <div className="bg-[#1E293B] text-white px-5 py-4 flex items-center justify-between border-b border-slate-700">
+              <div className="flex items-center gap-2.5">
+                <ScanLine className="w-5 h-5 text-[#D4AF37]" />
+                <div>
+                  <h3 className="text-sm font-black">
+                    Scan Barcode / QR Siswa (Absen &amp; Input Ummi)
+                  </h3>
+                  <p className="text-[11px] text-slate-300">
+                    Otomatis mencatat kehadiran hari ini &amp; membuka form evaluasi Metode Ummi
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBarcodeScannerModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5">
+              <CameraAndBarcodeScannerBox
+                students={students}
+                classes={classes}
+                onStudentScanned={(scannedStd) => {
+                  const todayStr = new Date().toISOString().split('T')[0];
+                  const timeStr = new Date().toLocaleTimeString('id-ID', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  });
+                  storageService.addAttendanceRecord({
+                    id: `att-${scannedStd.id}-${todayStr}`,
+                    studentId: scannedStd.id,
+                    teacherId: scannedStd.teacherId || teachers[0]?.id || 't-1',
+                    date: todayStr,
+                    status: 'Hadir',
+                    notes: `Scan Barcode/QR (${buildStudentQrCodeBadgeId(scannedStd)}) pukul ${timeStr}`
+                  });
+                  setShowBarcodeScannerModal(false);
+                  onRefreshData();
+                  showToast(
+                    `Scan Berhasil: ${scannedStd.name} tercatat HADIR & form setoran Ummi dibuka`
+                  );
+                  onOpenDailyInput(scannedStd.id);
+                }}
+              />
             </div>
           </div>
         </div>

@@ -687,7 +687,7 @@ export const DocumentQuickViewModal: React.FC<DocumentQuickViewModalProps> = ({
                           <td className="border border-slate-800 text-center">{sem1Stats.totalDays} Hari</td>
                           <td className="border border-slate-800 text-center">{sem1Stats.totalWeeks} Pekan</td>
                           <td colSpan={5} className="border border-slate-800 text-center">Total</td>
-                          <td className="border border-slate-800 text-center">{sem1Stats.totalJam} Jam</td>
+                          <td className="border border-slate-800 text-center">{sem1Stats.totalJam} {kaldikCategory === 'reguler' ? 'TM' : 'Jam'}</td>
                           <td className="border border-slate-800 text-center">{sem1Stats.totalJamWeeks} Pekan</td>
                         </tr>
                       </tbody>
@@ -699,7 +699,7 @@ export const DocumentQuickViewModal: React.FC<DocumentQuickViewModalProps> = ({
                     <div className="text-[10px] font-bold text-slate-900 mb-0.5 flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 inline-block" />
-                        <span>Perhitungan Hari &amp; Jam Efektif — Semester 2 (Genap)</span>
+                        <span>Perhitungan Hari &amp; {kaldikCategory === 'reguler' ? 'TM (2 TM/Pekan)' : 'Jam'} Efektif — Semester 2 (Genap)</span>
                       </span>
                       <span className="text-[9px] text-slate-500 font-semibold">{activeKaldik.academicYear}</span>
                     </div>
@@ -785,7 +785,7 @@ export const DocumentQuickViewModal: React.FC<DocumentQuickViewModalProps> = ({
                           <td className="border border-slate-800 text-center">{sem2Stats.totalDays} Hari</td>
                           <td className="border border-slate-800 text-center">{sem2Stats.totalWeeks} Pekan</td>
                           <td colSpan={5} className="border border-slate-800 text-center">Total</td>
-                          <td className="border border-slate-800 text-center">{sem2Stats.totalJam} Jam</td>
+                          <td className="border border-slate-800 text-center">{sem2Stats.totalJam} {kaldikCategory === 'reguler' ? 'TM' : 'Jam'}</td>
                           <td className="border border-slate-800 text-center">{sem2Stats.totalJamWeeks} Pekan</td>
                         </tr>
                       </tbody>

@@ -21,7 +21,8 @@ import {
   ShieldAlert,
   AlertTriangle,
   Target,
-  Trash2
+  Trash2,
+  History
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -34,6 +35,9 @@ import {
 } from 'recharts';
 import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, AppSettings, TahfizhViolation } from '../types';
 import { StudentRaportCard } from './StudentRaportCard';
+import { PreviousHafalanModal } from './PreviousHafalanModal';
+import { getCachedStudentQrDataUrl } from './QrAttendancePanel';
+import { printStudentQrCards } from '../utils/qrPrintAndScanUtils';
 import { JUZ_MAPPINGS } from '../data/quranData';
 import { storageService } from '../services/storageService';
 import { VIOLATION_PRESETS } from './ViolationsView';
@@ -80,6 +84,7 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
     label: string;
   } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showPreviousHafalanModal, setShowPreviousHafalanModal] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -200,7 +205,20 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
           <span>Kembali ke Daftar Santri</span>
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={async () => {
+              const qrUrl = await getCachedStudentQrDataUrl(student);
+              printStudentQrCards([student], classes, { [student.id]: qrUrl }, 'single');
+            }}
+            className="px-3.5 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-950 border border-[#D4AF37] font-extrabold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            title="Cetak / Print Kartu QR & Barcode Presensi Santri Ini"
+          >
+            <Printer className="w-4 h-4 text-[#8C7015]" />
+            <span>Cetak QR Siswa</span>
+          </button>
+
           <button
             onClick={handleWhatsAppParent}
             className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
@@ -208,6 +226,17 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
             <Phone className="w-4 h-4" />
             <span>Kirim Laporan WA ke Orang Tua</span>
           </button>
+
+          {userRole !== 'wali' && (
+            <button
+              onClick={() => setShowPreviousHafalanModal(true)}
+              className="px-3.5 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              title="Input hafalan sebelum-sebelumnya untuk santri ini"
+            >
+              <History className="w-4 h-4 text-amber-700" />
+              <span>+ Hafalan Sebelumnya</span>
+            </button>
+          )}
 
           <button
             onClick={() => onOpenDailyInput(student.id)}
@@ -549,16 +578,27 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
       {/* TAB 1: RIWAYAT HAFALAN AL-QURAN */}
       {activeTab === 'hafalan' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-wrap justify-between items-center gap-2">
             <h3 className="text-sm font-bold text-slate-800">
               Daftar Log Setoran Hafalan Siswa ({studentRecords.length} Setoran)
             </h3>
-            <button
-              onClick={() => onOpenDailyInput(student.id)}
-              className="text-xs text-[#8C7015] font-bold hover:underline cursor-pointer"
-            >
-              + Catat Setoran Baru
-            </button>
+            <div className="flex items-center gap-3">
+              {userRole !== 'wali' && (
+                <button
+                  onClick={() => setShowPreviousHafalanModal(true)}
+                  className="text-xs text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-lg font-bold transition cursor-pointer flex items-center gap-1"
+                >
+                  <History className="w-3.5 h-3.5 text-amber-700" />
+                  <span>+ Input Hafalan Sebelumnya</span>
+                </button>
+              )}
+              <button
+                onClick={() => onOpenDailyInput(student.id)}
+                className="text-xs text-[#8C7015] font-bold hover:underline cursor-pointer"
+              >
+                + Catat Setoran Baru
+              </button>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -907,6 +947,20 @@ export const StudentDetailView: React.FC<StudentDetailViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modal Input Hafalan Sebelum-Sebelumnya */}
+      <PreviousHafalanModal
+        isOpen={showPreviousHafalanModal}
+        onClose={() => setShowPreviousHafalanModal(false)}
+        students={students}
+        teachers={teachers}
+        classes={classes}
+        initialStudentId={student.id}
+        onSaved={() => {
+          onRefreshData?.();
+          showToast('Data hafalan sebelumnya berhasil disimpan');
+        }}
+      />
 
     </div>
   );

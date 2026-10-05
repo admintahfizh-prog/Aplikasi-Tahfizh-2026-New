@@ -15,7 +15,8 @@ import {
   BookMarked,
   Activity,
   UserCheck,
-  ChevronRight
+  ChevronRight,
+  Target
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -31,8 +32,10 @@ import {
   Pie, 
   Cell 
 } from 'recharts';
-import { Student, Teacher, MemorizationRecord, UmmiRecord, TargetProgress } from '../types';
+import { Student, Teacher, MemorizationRecord, UmmiRecord, TargetProgress, User } from '../types';
 import { AvatarBadge } from './AvatarBadge';
+import { storageService } from '../services/storageService';
+import { resolveCurrentTeacher } from '../utils/halaqahHelper';
 
 interface DashboardViewProps {
   students: Student[];
@@ -40,6 +43,7 @@ interface DashboardViewProps {
   records: MemorizationRecord[];
   ummiRecords: UmmiRecord[];
   targets: TargetProgress[];
+  currentUser?: User | null;
   onOpenDailyInput: () => void;
   onOpenStudentDetail: (studentId: string) => void;
   onNavigate: (view: string) => void;
@@ -51,10 +55,97 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   records,
   ummiRecords,
   targets,
+  currentUser: propCurrentUser,
   onOpenDailyInput,
   onOpenStudentDetail,
   onNavigate
 }) => {
+  const activeUser = React.useMemo(
+    () => propCurrentUser || storageService.getCurrentUser(),
+    [propCurrentUser]
+  );
+
+  const currentTeacher = React.useMemo(
+    () => resolveCurrentTeacher(activeUser, teachers),
+    [activeUser, teachers]
+  );
+
+  // Scoped students for the current user (wali -> child, guru -> halaqah students, admin -> all students)
+  const userScopedStudents = React.useMemo(() => {
+    if (!activeUser) return students;
+    if (activeUser.role === 'wali') {
+      const byId = students.filter(s => s.id === activeUser.studentId);
+      if (byId.length > 0) return byId;
+      const byParent = students.filter(
+        s =>
+          (s.parentName || '').toLowerCase() === (activeUser.name || '').toLowerCase() ||
+          (s.parentEmail && s.parentEmail.toLowerCase() === (activeUser.email || '').toLowerCase())
+      );
+      return byParent.length > 0 ? byParent : students.slice(0, 1);
+    }
+    if (activeUser.role === 'guru' && currentTeacher) {
+      const byTeacher = students.filter(s => s.teacherId === currentTeacher.id);
+      if (byTeacher.length > 0) return byTeacher;
+    }
+    return students;
+  }, [activeUser, students, currentTeacher]);
+
+  const [selectedTargetStudentId, setSelectedTargetStudentId] = React.useState<string>('user-default');
+
+  // Compute 'Target Capaian Hafalan' summary for the current user
+  const userTargetSummary = React.useMemo(() => {
+    const targetList =
+      selectedTargetStudentId !== 'user-default'
+        ? students.filter(s => s.id === selectedTargetStudentId)
+        : userScopedStudents.length > 0
+        ? userScopedStudents
+        : students;
+
+    const totalAchievedJuz = Number(
+      targetList.reduce((sum, s) => sum + (Number(s.totalJuzHafal) || 0), 0).toFixed(2)
+    );
+    const totalTargetJuz = Number(
+      targetList.reduce((sum, s) => sum + Math.max(0.5, Number(s.targetJuz) || 1), 0).toFixed(2)
+    );
+    const rawPercent = totalTargetJuz > 0 ? Math.round((totalAchievedJuz / totalTargetJuz) * 100) : 0;
+    const completedPercentage = Math.min(100, Math.max(0, rawPercent));
+    const remainingPercentage = Math.max(0, 100 - completedPercentage);
+    const remainingJuz = Number(Math.max(0, totalTargetJuz - totalAchievedJuz).toFixed(2));
+
+    const studentsMeetingTarget = targetList.filter(s => {
+      const tJuz = Math.max(0.5, Number(s.targetJuz) || 1);
+      const pct = Math.round(((Number(s.totalJuzHafal) || 0) / tJuz) * 100);
+      return pct >= 70;
+    }).length;
+
+    const singleStudent = targetList.length === 1 ? targetList[0] : null;
+
+    const scopeLabel = singleStudent
+      ? `Santri: ${singleStudent.name}`
+      : activeUser?.role === 'guru' && currentTeacher
+      ? `Halaqah ${currentTeacher.name} (${targetList.length} Santri)`
+      : `Target Kumulatif ${activeUser?.name || 'Koordinator'} (${targetList.length} Santri)`;
+
+    const statusBadge =
+      completedPercentage >= 70
+        ? { label: 'Sesuai Target (On-Track)', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+        : completedPercentage >= 45
+        ? { label: 'Progres Berjalan', color: 'bg-amber-50 text-amber-800 border-amber-200' }
+        : { label: 'Perlu Akselerasi', color: 'bg-rose-50 text-rose-700 border-rose-200' };
+
+    return {
+      totalAchievedJuz,
+      totalTargetJuz,
+      completedPercentage,
+      remainingPercentage,
+      remainingJuz,
+      studentsMeetingTarget,
+      totalCount: targetList.length,
+      singleStudent,
+      scopeLabel,
+      statusBadge
+    };
+  }, [selectedTargetStudentId, students, userScopedStudents, activeUser, currentTeacher]);
   const todayStr = new Date().toISOString().split('T')[0];
 
   // Calculate statistics
@@ -118,7 +209,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
             onClick={() => onNavigate('reports')}
             className="px-3.5 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-xs transition flex items-center gap-2 cursor-pointer"
@@ -200,6 +291,123 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
+      </div>
+
+      {/* Featured Summary Card: Target Capaian Hafalan (Current User) */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 relative overflow-hidden">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="space-y-1.5 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-amber-50 text-[#8C7015] border border-[#D4AF37]/40 text-[11px] font-extrabold uppercase tracking-wider">
+                <Target className="w-3.5 h-3.5 text-[#D4AF37]" />
+                Target Capaian Hafalan
+              </span>
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${userTargetSummary.statusBadge.color}`}>
+                {userTargetSummary.statusBadge.label}
+              </span>
+              <span className="text-xs font-semibold text-slate-500">
+                • {userTargetSummary.scopeLabel}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-baseline gap-3 pt-1">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
+                  {userTargetSummary.completedPercentage}%
+                </span>
+                <span className="text-xs font-bold text-slate-500 uppercase">
+                  Tercapai dari Target (100%)
+                </span>
+              </div>
+              <span className="text-slate-300 hidden sm:inline">|</span>
+              <div className="text-xs font-bold text-slate-700">
+                Capaian Saat Ini:{' '}
+                <span className="text-[#8C7015] font-extrabold">
+                  {userTargetSummary.totalAchievedJuz} Juz
+                </span>{' '}
+                dari Target{' '}
+                <span className="text-slate-900 font-extrabold">
+                  {userTargetSummary.totalTargetJuz} Juz
+                </span>{' '}
+                <span className="text-slate-500 font-normal">
+                  (Sisa {userTargetSummary.remainingJuz} Juz / {userTargetSummary.remainingPercentage}%)
+                </span>
+              </div>
+            </div>
+
+            {/* Progress Bar Comparing Completed vs Target */}
+            <div className="pt-2 max-w-3xl space-y-1.5">
+              <div className="w-full h-3.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200 relative">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-[#1E293B] via-[#8C7015] to-[#D4AF37] transition-all duration-500"
+                  style={{ width: `${userTargetSummary.completedPercentage}%` }}
+                />
+                {/* 70% On-Track Benchmark Marker */}
+                <div
+                  className="absolute top-0 bottom-0 w-0.5 bg-emerald-600/70"
+                  style={{ left: '70%' }}
+                  title="Batas Minimal Sesuai Target (70%)"
+                />
+              </div>
+              <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500">
+                <span>0% (Awal)</span>
+                <span className="text-emerald-700 font-bold">Target Minimal On-Track: 70%</span>
+                <span className="text-slate-800 font-bold">
+                  Target Penuh: 100% ({userTargetSummary.totalTargetJuz} Juz)
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Controls & Quick Metrics */}
+          <div className="flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-end justify-between gap-2.5 shrink-0 border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-100">
+            {activeUser?.role !== 'wali' && (
+              <div className="flex items-center gap-2">
+                <label className="text-[11px] font-bold text-slate-500 whitespace-nowrap">
+                  Fokus Target:
+                </label>
+                <select
+                  value={selectedTargetStudentId}
+                  onChange={e => setSelectedTargetStudentId(e.target.value)}
+                  className="py-1.5 px-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+                >
+                  <option value="user-default">
+                    {activeUser?.role === 'guru' && currentTeacher
+                      ? `Halaqah Saya (${userScopedStudents.length} Santri)`
+                      : `Semua Santri (${students.length} Santri)`}
+                  </option>
+                  {userScopedStudents.map(std => (
+                    <option key={std.id} value={std.id}>
+                      {std.name} ({std.totalJuzHafal}/{std.targetJuz} Juz)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2.5">
+              <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-right">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                  {userTargetSummary.singleStudent ? 'Hafalan Terakhir' : 'Santri On-Target'}
+                </span>
+                <span className="text-xs font-extrabold text-slate-800">
+                  {userTargetSummary.singleStudent
+                    ? userTargetSummary.singleStudent.lastHafalan || 'Belum ada'
+                    : `${userTargetSummary.studentsMeetingTarget} dari ${userTargetSummary.totalCount} Santri`}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onNavigate('targets')}
+                className="px-3.5 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white font-bold text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <span>Detail Target</span>
+                <ArrowUpRight className="w-3.5 h-3.5 text-[#D4AF37]" />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Dark Highlight Summary Card + Quick Action Highlights */}

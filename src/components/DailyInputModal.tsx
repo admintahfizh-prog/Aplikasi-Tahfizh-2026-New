@@ -18,7 +18,9 @@ import {
   CalendarCheck,
   UserX,
   Clock,
-  Save
+  Save,
+  ScanLine,
+  QrCode
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -53,6 +55,8 @@ import {
   GradeLetter 
 } from '../utils/gradeConversion';
 import { AvatarBadge } from './AvatarBadge';
+import { CameraAndBarcodeScannerBox } from './CameraAndBarcodeScannerBox';
+import { buildStudentQrCodeBadgeId } from './QrAttendancePanel';
 
 interface DailyInputModalProps {
   isOpen: boolean;
@@ -110,6 +114,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
   const [selectedClassId, setSelectedClassId] = useState<string>(classes[0]?.id || '');
   const [selectedStudentId, setSelectedStudentId] = useState<string>(effectiveInitialStudentId || students[0]?.id || '');
   const [recordDate, setRecordDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [showInlineBarcodeScanner, setShowInlineBarcodeScanner] = useState<boolean>(false);
 
   // Quran Form State: Surat Awal & Surat Akhir
   const [selectedStartSurahNumber, setSelectedStartSurahNumber] = useState<number>(78); // Default An-Naba
@@ -645,37 +650,82 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                 1. Pilih Sasaran & Siswa
               </span>
 
-              {/* Mode Filter Toggle */}
-              <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200">
+              {/* Mode Filter Toggle & Barcode/QR Scan Button */}
+              <div className="flex flex-wrap items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setFilterMode('class')}
-                  className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
-                    filterMode === 'class' ? 'bg-[#1E293B] text-white' : 'text-slate-600 hover:bg-slate-50'
+                  onClick={() => setShowInlineBarcodeScanner(prev => !prev)}
+                  className={`px-3 py-1 rounded-lg text-[11px] font-extrabold border transition flex items-center gap-1.5 cursor-pointer ${
+                    showInlineBarcodeScanner
+                      ? 'bg-[#D4AF37] text-slate-950 border-[#8C7015]'
+                      : 'bg-[#1E293B] text-white border-slate-800 hover:bg-slate-800'
                   }`}
+                  title="Scan Barcode / QR Code Santri untuk otomatis memilih santri & mencatat absen hadir"
                 >
-                  Per Kelas
+                  <ScanLine className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  <span>
+                    {showInlineBarcodeScanner
+                      ? 'Tutup Scanner Barcode/QR'
+                      : 'Scan Barcode / QR Siswa'}
+                  </span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterMode('halaqah')}
-                  className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
-                    filterMode === 'halaqah' ? 'bg-[#1E293B] text-white' : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  Halaqah Saya ({students.filter(s => s.teacherId === currentTeacher?.id).length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterMode('all')}
-                  className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
-                    filterMode === 'all' ? 'bg-[#1E293B] text-white' : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  Semua Siswa
-                </button>
+
+                <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setFilterMode('class')}
+                    className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
+                      filterMode === 'class' ? 'bg-[#1E293B] text-white' : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Per Kelas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterMode('halaqah')}
+                    className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
+                      filterMode === 'halaqah' ? 'bg-[#1E293B] text-white' : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Halaqah Saya ({students.filter(s => s.teacherId === currentTeacher?.id).length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFilterMode('all')}
+                    className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
+                      filterMode === 'all' ? 'bg-[#1E293B] text-white' : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Semua Siswa
+                  </button>
+                </div>
               </div>
             </div>
+
+            {showInlineBarcodeScanner && (
+              <div className="p-3 bg-white rounded-xl border-2 border-[#D4AF37] space-y-2 animate-in fade-in">
+                <CameraAndBarcodeScannerBox
+                  students={students}
+                  classes={classes}
+                  onStudentScanned={(scannedStd) => {
+                    setFilterMode('all');
+                    setSelectedClassId(scannedStd.classId);
+                    setSelectedStudentId(scannedStd.id);
+                    if (scannedStd.currentUmmiJilid && scannedStd.currentUmmiJilid !== '-') {
+                      setUmmiJilid(scannedStd.currentUmmiJilid);
+                    }
+                    if (scannedStd.currentUmmiPage) {
+                      setUmmiPage(scannedStd.currentUmmiPage);
+                    }
+                    handleMarkStudentAttendance(scannedStd, 'Hadir');
+                    setAttendanceSuccessMessage(
+                      `Scan QR/Barcode Berhasil: ${scannedStd.name} (${buildStudentQrCodeBadgeId(scannedStd)}) terpilih & otomatis tercatat HADIR pada ${recordDate}!`
+                    );
+                    setTimeout(() => setAttendanceSuccessMessage(''), 4500);
+                  }}
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* Class Selector (Active when filterMode === 'class') */}

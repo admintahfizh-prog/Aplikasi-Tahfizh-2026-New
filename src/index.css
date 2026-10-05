@@ -112,5 +112,27 @@
   .kaldik-print-container table td {
     padding: 1.5px 2px !important;
   }
+
+  /* Monthly Hafalan Recap PDF Print Styling */
+  .monthly-recap-print-sheet {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background-color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .monthly-recap-print-sheet table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  .monthly-recap-print-sheet tr {
+    page-break-inside: avoid !important;
+  }
 }
 

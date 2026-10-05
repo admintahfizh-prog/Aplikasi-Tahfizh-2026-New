@@ -936,7 +936,7 @@ export const KaldikSection: React.FC<KaldikSectionProps> = ({
                 <div className="text-[11px] font-bold text-slate-900 mb-1 flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-blue-600 inline-block" />
-                    <span>Perhitungan Hari &amp; Jam Efektif — Semester 1 (Gasal)</span>
+                    <span>Perhitungan Hari &amp; {activeCategory === 'reguler' ? 'Tatap Muka (2 TM/Pekan)' : 'Jam'} Efektif — Semester 1 (Gasal)</span>
                   </span>
                   <span className="text-[10px] text-slate-500 font-semibold">Tahun Ajaran {kaldik.academicYear}</span>
                 </div>
@@ -1059,7 +1059,7 @@ export const KaldikSection: React.FC<KaldikSectionProps> = ({
                       <td colSpan={5} className="border border-slate-800 text-center">
                         Total
                       </td>
-                      <td className="border border-slate-800 text-center">{sem1Stats.totalJam} Jam</td>
+                      <td className="border border-slate-800 text-center">{sem1Stats.totalJam} {activeCategory === 'reguler' ? 'TM' : 'Jam'}</td>
                       <td className="border border-slate-800 text-center">{sem1Stats.totalJamWeeks} Pekan</td>
                     </tr>
                   </tbody>
@@ -1071,7 +1071,7 @@ export const KaldikSection: React.FC<KaldikSectionProps> = ({
                 <div className="text-[11px] font-bold text-slate-900 mb-1 flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block" />
-                    <span>Perhitungan Hari &amp; Jam Efektif — Semester 2 (Genap)</span>
+                    <span>Perhitungan Hari &amp; {activeCategory === 'reguler' ? 'Tatap Muka (2 TM/Pekan)' : 'Jam'} Efektif — Semester 2 (Genap)</span>
                   </span>
                   <span className="text-[10px] text-slate-500 font-semibold">Tahun Ajaran {kaldik.academicYear}</span>
                 </div>
@@ -1194,7 +1194,7 @@ export const KaldikSection: React.FC<KaldikSectionProps> = ({
                       <td colSpan={5} className="border border-slate-800 text-center">
                         Total
                       </td>
-                      <td className="border border-slate-800 text-center">{sem2Stats.totalJam} Jam</td>
+                      <td className="border border-slate-800 text-center">{sem2Stats.totalJam} {activeCategory === 'reguler' ? 'TM' : 'Jam'}</td>
                       <td className="border border-slate-800 text-center">{sem2Stats.totalJamWeeks} Pekan</td>
                     </tr>
                   </tbody>

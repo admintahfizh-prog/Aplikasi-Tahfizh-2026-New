@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import QRCode from 'qrcode';
 import { 
   Search, 
   Filter, 
@@ -23,9 +24,14 @@ import {
   Share2,
   Save,
   EyeOff,
-  Users
+  Users,
+  QrCode,
+  ScanLine,
+  History,
+  Printer,
+  Camera
 } from 'lucide-react';
-import { Student, Teacher, ClassItem, Role, User, HalaqahGroup } from '../types';
+import { Student, Teacher, ClassItem, Role, User, HalaqahGroup, AttendanceRecord } from '../types';
 import { storageService } from '../services/storageService';
 import { UMMI_JILIDS } from '../data/ummiData';
 import { AvatarBadge } from './AvatarBadge';
@@ -37,6 +43,18 @@ import {
   resolveCurrentTeacher, 
   getStudentHalaqahInfo 
 } from '../utils/halaqahHelper';
+import {
+  QrAttendancePanel,
+  buildStudentAttendanceQrPayload,
+  buildStudentQrCodeBadgeId,
+  getCachedStudentQrDataUrl
+} from './QrAttendancePanel';
+import { ScannerView, ScannerWorkflowMode } from './ScannerView';
+import { PreviousHafalanModal } from './PreviousHafalanModal';
+import {
+  printStudentQrCards,
+  buildBarcodeSvgDataUrl
+} from '../utils/qrPrintAndScanUtils';
 
 interface StudentsViewProps {
   students: Student[];
@@ -47,7 +65,7 @@ interface StudentsViewProps {
   halaqahGroups?: HalaqahGroup[];
   onOpenStudentDetail: (studentId: string) => void;
   onRefreshData: () => void;
-  onOpenDailyInputWithStudent: (studentId: string) => void;
+  onOpenDailyInputWithStudent: (studentId: string, tab?: 'quran' | 'ummi' | 'presensi') => void;
 }
 
 export const StudentsView: React.FC<StudentsViewProps> = ({
@@ -77,6 +95,137 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Student | null>(null);
+
+  // Unified QR Code, Camera ScannerView & Previous Hafalan States inside Data Siswa
+  const [activeStudentSubTab, setActiveStudentSubTab] = useState<
+    'profil_dan_qr' | 'scanner_view' | 'panel_qr_absensi'
+  >('profil_dan_qr');
+  const [scannerWorkflowMode, setScannerWorkflowMode] =
+    useState<ScannerWorkflowMode>('lookup_and_attendance');
+  const [qrPanelInitialMode, setQrPanelInitialMode] = useState<
+    'qr_cards' | 'qr_scanner' | 'print_cards' | 'attendance_log'
+  >('qr_cards');
+  const [showPreviousHafalanModal, setShowPreviousHafalanModal] = useState(false);
+  const [previousHafalanStudentId, setPreviousHafalanStudentId] = useState<string | undefined>(undefined);
+  const [qrModalStudent, setQrModalStudent] = useState<Student | null>(null);
+  const [qrDataUrls, setQrDataUrls] = useState<Record<string, string>>({});
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(() =>
+    storageService.getAttendanceRecords()
+  );
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  useEffect(() => {
+    const refreshAtt = () => setAttendanceRecords(storageService.getAttendanceRecords());
+    const unsub = storageService.onSyncChange(refreshAtt);
+    return () => {
+      unsub();
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const genQr = async () => {
+      const next: Record<string, string> = {};
+      for (const s of students) {
+        if (!s || !s.id) continue;
+        const url = await getCachedStudentQrDataUrl(s);
+        if (url) {
+          next[s.id] = url;
+        }
+      }
+      if (mounted) setQrDataUrls(next);
+    };
+    genQr();
+    return () => {
+      mounted = false;
+    };
+  }, [students]);
+
+  const handleOpenPreviousHafalan = (studentId?: string) => {
+    setPreviousHafalanStudentId(studentId);
+    setShowPreviousHafalanModal(true);
+  };
+
+  const handleQuickMarkHadirToday = (student: Student) => {
+    const existing = attendanceRecords.find(
+      r => r.studentId === student.id && r.date === todayStr
+    );
+    const timeStr = new Date().toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    const rec: AttendanceRecord = {
+      id: existing?.id || `att-${student.id}-${todayStr}`,
+      studentId: student.id,
+      teacherId: currentTeacher?.id || student.teacherId || teachers[0]?.id || 't-1',
+      date: todayStr,
+      status: 'Hadir',
+      notes: `Scan QR Unik (${buildStudentQrCodeBadgeId(student)}) pukul ${timeStr}`
+    };
+    storageService.addAttendanceRecord(rec);
+    setAttendanceRecords(storageService.getAttendanceRecords());
+    onRefreshData();
+  };
+
+  const handleDownloadStudentQrPng = (student: Student) => {
+    const dataUrl = qrDataUrls[student.id];
+    if (!dataUrl) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = 480;
+    canvas.height = 600;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const clsName = classes.find(c => c.id === student.classId)?.name || '7A';
+    const badgeId = buildStudentQrCodeBadgeId(student);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#1E293B';
+    ctx.fillRect(0, 0, canvas.width, 95);
+    ctx.fillStyle = '#D4AF37';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('KARTU QR PRESENSI HARIAN TAHFIZH & UMMI', canvas.width / 2, 36);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.fillText('SMP ISLAM AL AZHAR 21 SOLO BARU', canvas.width / 2, 65);
+    ctx.fillStyle = '#D4AF37';
+    ctx.fillRect(0, 95, canvas.width, 6);
+
+    const img = new window.Image();
+    img.onload = () => {
+      ctx.strokeStyle = '#CBD5E1';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(110, 130, 260, 260);
+      ctx.drawImage(img, 120, 140, 240, 240);
+      ctx.fillStyle = '#0F172A';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.fillText(student.name, canvas.width / 2, 435);
+      ctx.fillStyle = '#475569';
+      ctx.font = 'bold 14px monospace';
+      ctx.fillText(`NIS: ${student.nis || '-'}  •  KELAS: ${clsName}`, canvas.width / 2, 465);
+      ctx.fillStyle = '#FEF3C7';
+      ctx.fillRect(130, 488, 220, 36);
+      ctx.strokeStyle = '#D4AF37';
+      ctx.strokeRect(130, 488, 220, 36);
+      ctx.fillStyle = '#92400E';
+      ctx.font = 'bold 15px monospace';
+      ctx.fillText(badgeId, canvas.width / 2, 511);
+      ctx.fillStyle = '#64748B';
+      ctx.font = '12px sans-serif';
+      ctx.fillText('Scan QR ini untuk absensi kehadiran halaqah harian', canvas.width / 2, 560);
+
+      const pngUrl = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = pngUrl;
+      link.download = `QR_Absensi_${student.name.replace(/\s+/g, '_')}_${student.nis || student.id}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+    img.src = dataUrl;
+  };
 
   // Student Password Modal State
   const [passwordModalStudent, setPasswordModalStudent] = useState<Student | null>(null);
@@ -320,20 +469,69 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
     <div className="space-y-5 animate-in fade-in">
       
       {/* Header & Main Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-[#D4AF37]" />
-            Data Santri / Siswa Tahfizh
+            Data Santri, QR Presensi &amp; Riwayat Hafalan
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Manajemen profil, target hafalan, pembagian kelas, dan jilid Metode Ummi ({students.length} santri)
+            Manajemen profil santri, QR Code unik absensi harian, input hafalan sebelum-sebelumnya, dan jilid Ummi ({students.length} santri)
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setScannerWorkflowMode('lookup_and_attendance');
+              setActiveStudentSubTab('scanner_view');
+            }}
+            className="px-3.5 py-2 rounded-lg bg-[#D4AF37] hover:bg-[#c49f2c] text-slate-950 text-xs font-black shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            title="Buka Kamera Scanner QR untuk Identifikasi Cepat (Quick Lookup) & Presensi Santri"
+          >
+            <Camera className="w-4 h-4 text-slate-950" />
+            <span>Kamera Scanner QR (Lookup &amp; Absen)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setQrPanelInitialMode('qr_scanner');
+              setActiveStudentSubTab('panel_qr_absensi');
+            }}
+            className="px-3.5 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white text-xs font-extrabold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            title="Scan Barcode / QR Siswa untuk Absen Harian sekaligus Input Hafalan atau Metode Ummi"
+          >
+            <ScanLine className="w-4 h-4 text-[#D4AF37]" />
+            <span>Scan &amp; Input Setoran</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setQrPanelInitialMode('print_cards');
+              setActiveStudentSubTab('panel_qr_absensi');
+            }}
+            className="px-3.5 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-950 border border-[#D4AF37] text-xs font-extrabold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            title="Cetak / Print Kartu QR & Barcode Siswa (Format A4 Siap Gunting)"
+          >
+            <Printer className="w-4 h-4 text-[#8C7015]" />
+            <span>Cetak / Print QR Siswa</span>
+          </button>
+
           {userRole !== 'wali' && (
             <>
+              <button
+                type="button"
+                onClick={() => handleOpenPreviousHafalan(undefined)}
+                className="px-3.5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-extrabold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                title="Input riwayat setoran hafalan sebelum-sebelumnya atau capaian awal santri"
+              >
+                <History className="w-4 h-4 text-amber-300" />
+                <span>+ Input Hafalan Sebelumnya</span>
+              </button>
+
               <button
                 id="btn-import-csv"
                 onClick={() => {
@@ -368,8 +566,114 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
         </div>
       </div>
 
-      {/* Halaqah Filter Bar with Halaqah Saya and Grouping Mode */}
-      <HalaqahFilterBar
+      {/* Mode Switcher Bar: Data Siswa vs ScannerView vs Panel QR Code & Cetak QR */}
+      <div className="bg-white p-1.5 rounded-xl border border-slate-200 shadow-2xs grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-1.5">
+        <button
+          type="button"
+          onClick={() => setActiveStudentSubTab('profil_dan_qr')}
+          className={`py-2.5 px-3 rounded-lg text-xs font-extrabold flex items-center justify-center gap-2 transition cursor-pointer ${
+            activeStudentSubTab === 'profil_dan_qr'
+              ? 'bg-[#1E293B] text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Users className="w-4 h-4 text-[#D4AF37]" />
+          <span>1. Daftar Kartu Santri ({filteredStudents.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setScannerWorkflowMode('lookup_and_attendance');
+            setActiveStudentSubTab('scanner_view');
+          }}
+          className={`py-2.5 px-3 rounded-lg text-xs font-extrabold flex items-center justify-center gap-2 transition cursor-pointer ${
+            activeStudentSubTab === 'scanner_view'
+              ? 'bg-[#1E293B] text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Camera className="w-4 h-4 text-[#D4AF37]" />
+          <span>2. Kamera Scanner QR (Lookup &amp; Absen)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setQrPanelInitialMode('qr_scanner');
+            setActiveStudentSubTab('panel_qr_absensi');
+          }}
+          className={`py-2.5 px-3 rounded-lg text-xs font-extrabold flex items-center justify-center gap-2 transition cursor-pointer ${
+            activeStudentSubTab === 'panel_qr_absensi' && qrPanelInitialMode === 'qr_scanner'
+              ? 'bg-[#1E293B] text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <ScanLine className="w-4 h-4 text-[#D4AF37]" />
+          <span>3. Panel Scan &amp; Input Hafalan/Ummi</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setQrPanelInitialMode('print_cards');
+            setActiveStudentSubTab('panel_qr_absensi');
+          }}
+          className={`py-2.5 px-3 rounded-lg text-xs font-extrabold flex items-center justify-center gap-2 transition cursor-pointer ${
+            activeStudentSubTab === 'panel_qr_absensi' && qrPanelInitialMode === 'print_cards'
+              ? 'bg-[#1E293B] text-white shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Printer className="w-4 h-4 text-[#D4AF37]" />
+          <span>4. Cetak / Print Kartu QR Siswa (A4)</span>
+        </button>
+      </div>
+
+      {activeStudentSubTab === 'scanner_view' ? (
+        <ScannerView
+          students={students}
+          teachers={teachers}
+          classes={classes}
+          currentUser={currentUser}
+          halaqahGroups={activeHalaqahGroups}
+          initialWorkflowMode={scannerWorkflowMode}
+          onOpenStudentDetail={onOpenStudentDetail}
+          onLookupStudentInList={(student) => {
+            setSearchTerm(student.nis || student.name);
+            setSelectedClassFilter('');
+            setSelectedTeacherFilter('');
+            setSelectedProgramFilter('');
+            setSelectedHalaqahFilter('all');
+            setActiveStudentSubTab('profil_dan_qr');
+          }}
+          onOpenDailyInputWithStudent={onOpenDailyInputWithStudent}
+          onOpenPreviousHafalan={handleOpenPreviousHafalan}
+          onAttendanceUpdated={() => {
+            setAttendanceRecords(storageService.getAttendanceRecords());
+            onRefreshData();
+          }}
+          onClose={() => setActiveStudentSubTab('profil_dan_qr')}
+        />
+      ) : activeStudentSubTab === 'panel_qr_absensi' ? (
+        <QrAttendancePanel
+          students={students}
+          teachers={teachers}
+          classes={classes}
+          currentUser={currentUser}
+          onOpenStudentDetail={onOpenStudentDetail}
+          onOpenDailyInputWithStudent={onOpenDailyInputWithStudent}
+          onOpenPreviousHafalan={handleOpenPreviousHafalan}
+          initialActiveMode={qrPanelInitialMode}
+          onAttendanceUpdated={() => {
+            setAttendanceRecords(storageService.getAttendanceRecords());
+            onRefreshData();
+          }}
+        />
+      ) : (
+        <>
+          {/* Halaqah Filter Bar with Halaqah Saya and Grouping Mode */}
+          <HalaqahFilterBar
         halaqahGroups={activeHalaqahGroups}
         teachers={teachers}
         currentUser={currentUser}
@@ -390,16 +694,30 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           
-          {/* Search Box */}
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Cari nama siswa, NIS, NISN..."
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
-            />
+          {/* Search Box + Quick Camera QR Lookup Button */}
+          <div className="flex gap-1.5">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Cari nama siswa, NIS, NISN..."
+                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setScannerWorkflowMode('quick_lookup');
+                setActiveStudentSubTab('scanner_view');
+              }}
+              className="px-2.5 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-[#D4AF37] text-xs font-bold flex items-center gap-1 shrink-0 cursor-pointer"
+              title="Scan QR Code dengan Kamera untuk Mencari / Identifikasi Siswa"
+            >
+              <Camera className="w-4 h-4" />
+              <span className="hidden sm:inline">Scan QR</span>
+            </button>
           </div>
 
           {/* Filter Kelas */}
@@ -496,7 +814,18 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        printStudentQrCards(group.students, classes, qrDataUrls, 'grid_8')
+                      }
+                      className="px-3 py-1 rounded-lg bg-[#D4AF37] hover:bg-[#c49f2c] text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                      title="Cetak / Print Kartu QR & Barcode Seluruh Anggota Halaqah Ini"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>Cetak QR Halaqah ({group.students.length})</span>
+                    </button>
                     <span className="px-3 py-1 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 text-xs font-bold">
                       {group.students.length} Santri Anggota
                     </span>
@@ -610,16 +939,101 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                                 <span className="text-slate-400">Hafalan Terakhir: </span>
                                 <strong className="text-slate-800">{std.lastHafalan}</strong>
                               </div>
+
+                              {/* Integrated QR Code & Attendance Status Row */}
+                              {(() => {
+                                const qrUrl = qrDataUrls[std.id];
+                                const badgeId = buildStudentQrCodeBadgeId(std);
+                                const todayRec = attendanceRecords.find(
+                                  r => r.studentId === std.id && r.date === todayStr
+                                );
+                                return (
+                                  <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between gap-2">
+                                    <div
+                                      onClick={() => setQrModalStudent(std)}
+                                      className="flex items-center gap-2 cursor-pointer group/qr min-w-0"
+                                      title="Klik untuk melihat / unduh Kartu QR Presensi Santri"
+                                    >
+                                      <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 group-hover/qr:border-[#D4AF37]">
+                                        {qrUrl?.trim() ? (
+                                          <img
+                                            src={qrUrl.trim()}
+                                            alt={`QR ${std.name}`}
+                                            className="w-full h-full object-contain"
+                                          />
+                                        ) : (
+                                          <QrCode className="w-4 h-4 text-slate-400" />
+                                        )}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <span className="block font-mono font-extrabold text-[10px] text-[#8C7015] truncate">
+                                          {badgeId}
+                                        </span>
+                                        <span className="block text-[9px] text-slate-400">
+                                          Klik Kartu QR Absensi
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleQuickMarkHadirToday(std)}
+                                      className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border transition flex items-center gap-1 cursor-pointer shrink-0 ${
+                                        todayRec?.status === 'Hadir'
+                                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                          : 'bg-white hover:bg-amber-50 text-slate-700 border-slate-200'
+                                      }`}
+                                      title="Scan / Tandai Hadir Hari Ini"
+                                    >
+                                      <ScanLine className="w-3 h-3 text-[#8C7015]" />
+                                      <span>{todayRec ? todayRec.status : 'Scan Hadir'}</span>
+                                    </button>
+                                  </div>
+                                );
+                              })()}
                             </div>
 
                             {/* Action Buttons */}
-                            <div className="flex items-center justify-between pt-1 gap-2">
+                            <div className="flex items-center justify-between pt-1 gap-1.5">
                               <button
                                 onClick={() => onOpenDailyInputWithStudent(std.id)}
-                                className="flex-1 py-1.5 px-3 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                                className="flex-1 py-1.5 px-2.5 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                                title="Input Setoran Harian"
                               >
                                 <span className="text-[#D4AF37] font-bold">+</span>
                                 <span>Setoran</span>
+                              </button>
+
+                              {userRole !== 'wali' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenPreviousHafalan(std.id)}
+                                  className="py-1.5 px-2.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 font-bold text-[11px] transition flex items-center justify-center gap-1 cursor-pointer"
+                                  title="Input Hafalan Sebelum-Sebelumnya (Riwayat Lampau / Capaian Awal)"
+                                >
+                                  <History className="w-3.5 h-3.5 text-emerald-700" />
+                                  <span>Sebelumnya</span>
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => setQrModalStudent(std)}
+                                className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition cursor-pointer"
+                                title="Kartu QR Code Presensi Santri"
+                              >
+                                <QrCode className="w-4 h-4 text-[#8C7015]" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  printStudentQrCards([std], classes, qrDataUrls, 'single')
+                                }
+                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition cursor-pointer"
+                                title="Cetak / Print Kartu QR & Barcode Santri Ini"
+                              >
+                                <Printer className="w-4 h-4 text-[#8C7015]" />
                               </button>
 
                               <button
@@ -771,16 +1185,101 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                     <span className="text-slate-400">Hafalan Terakhir: </span>
                     <strong className="text-slate-800">{std.lastHafalan}</strong>
                   </div>
+
+                  {/* Integrated QR Code & Attendance Status Row */}
+                  {(() => {
+                    const qrUrl = qrDataUrls[std.id];
+                    const badgeId = buildStudentQrCodeBadgeId(std);
+                    const todayRec = attendanceRecords.find(
+                      r => r.studentId === std.id && r.date === todayStr
+                    );
+                    return (
+                      <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between gap-2">
+                        <div
+                          onClick={() => setQrModalStudent(std)}
+                          className="flex items-center gap-2 cursor-pointer group/qr min-w-0"
+                          title="Klik untuk melihat / unduh Kartu QR Presensi Santri"
+                        >
+                          <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 group-hover/qr:border-[#D4AF37]">
+                            {qrUrl?.trim() ? (
+                              <img
+                                src={qrUrl.trim()}
+                                alt={`QR ${std.name}`}
+                                className="w-full h-full object-contain"
+                              />
+                            ) : (
+                              <QrCode className="w-4 h-4 text-slate-400" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="block font-mono font-extrabold text-[10px] text-[#8C7015] truncate">
+                              {badgeId}
+                            </span>
+                            <span className="block text-[9px] text-slate-400">
+                              Klik Kartu QR Absensi
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleQuickMarkHadirToday(std)}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-extrabold border transition flex items-center gap-1 cursor-pointer shrink-0 ${
+                            todayRec?.status === 'Hadir'
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                              : 'bg-white hover:bg-amber-50 text-slate-700 border-slate-200'
+                          }`}
+                          title="Scan / Tandai Hadir Hari Ini"
+                        >
+                          <ScanLine className="w-3 h-3 text-[#8C7015]" />
+                          <span>{todayRec ? todayRec.status : 'Scan Hadir'}</span>
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex items-center justify-between pt-1 gap-2">
+                <div className="flex items-center justify-between pt-1 gap-1.5">
                   <button
                     onClick={() => onOpenDailyInputWithStudent(std.id)}
-                    className="flex-1 py-1.5 px-3 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                    className="flex-1 py-1.5 px-2.5 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                    title="Input Setoran Harian"
                   >
                     <span className="text-[#D4AF37] font-bold">+</span>
                     <span>Setoran</span>
+                  </button>
+
+                  {userRole !== 'wali' && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenPreviousHafalan(std.id)}
+                      className="py-1.5 px-2.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 font-bold text-[11px] transition flex items-center justify-center gap-1 cursor-pointer"
+                      title="Input Hafalan Sebelum-Sebelumnya (Riwayat Lampau / Capaian Awal)"
+                    >
+                      <History className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>Sebelumnya</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setQrModalStudent(std)}
+                    className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition cursor-pointer"
+                    title="Kartu QR Code Presensi Santri"
+                  >
+                    <QrCode className="w-4 h-4 text-[#8C7015]" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      printStudentQrCards([std], classes, qrDataUrls, 'single')
+                    }
+                    className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition cursor-pointer"
+                    title="Cetak / Print Kartu QR & Barcode Santri Ini"
+                  >
+                    <Printer className="w-4 h-4 text-[#8C7015]" />
                   </button>
 
                   <button
@@ -834,6 +1333,8 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
           <p className="font-bold text-slate-700">Tidak ada santri yang cocok dengan filter pencarian.</p>
           <p className="text-xs text-slate-400 mt-1">Coba sesuaikan kata kunci atau reset filter.</p>
         </div>
+      )}
+        </>
       )}
 
       {/* MODAL: ADD / EDIT STUDENT */}
@@ -1005,6 +1506,83 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                       ))}
                     </select>
                   )}
+                </div>
+              </div>
+
+              {/* Data Hafalan Sebelumnya / Capaian Awal Santri */}
+              <div className="p-4 bg-amber-50/70 rounded-xl border border-amber-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <History className="w-4 h-4 text-[#8C7015]" />
+                      <span>Data Hafalan Sebelumnya / Capaian Awal Santri</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      Isi jika santri sudah memiliki tabungan hafalan dari waktu/semester sebelumnya
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Juz Sudah Dihafal
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="30"
+                      value={formData.totalJuzHafal ?? 0}
+                      onChange={(e) =>
+                        setFormData({ ...formData, totalJuzHafal: Number(e.target.value) })
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Jumlah Surat Hafal
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="114"
+                      value={formData.totalSurahHafal ?? 0}
+                      onChange={(e) =>
+                        setFormData({ ...formData, totalSurahHafal: Number(e.target.value) })
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Total Ayat Hafal
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="6236"
+                      value={formData.totalAyahHafal ?? 0}
+                      onChange={(e) =>
+                        setFormData({ ...formData, totalAyahHafal: Number(e.target.value) })
+                      }
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Batas Hafalan Terakhir
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.lastHafalan || ''}
+                      onChange={(e) =>
+                        setFormData({ ...formData, lastHafalan: e.target.value })
+                      }
+                      placeholder="Contoh: An-Naba : 40"
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1266,6 +1844,142 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: INPUT HAFALAN SEBELUM-SEBELUMNYA */}
+      <PreviousHafalanModal
+        isOpen={showPreviousHafalanModal}
+        onClose={() => setShowPreviousHafalanModal(false)}
+        students={students}
+        teachers={teachers}
+        classes={classes}
+        initialStudentId={previousHafalanStudentId}
+        onSaved={onRefreshData}
+      />
+
+      {/* MODAL: KARTU QR CODE UNIK SANTRI */}
+      {qrModalStudent && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-sm w-full overflow-hidden shadow-2xl border border-slate-200">
+            <div className="bg-[#1E293B] text-white p-4 text-center relative">
+              <button
+                type="button"
+                onClick={() => setQrModalStudent(null)}
+                className="absolute right-3 top-3 p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <p className="text-[10px] font-extrabold uppercase tracking-widest text-[#D4AF37]">
+                Kartu QR Presensi Harian Santri
+              </p>
+              <h3 className="text-sm font-black mt-0.5">
+                SMP ISLAM AL AZHAR 21 SOLO BARU
+              </h3>
+            </div>
+
+            <div className="p-6 text-center space-y-4">
+              <div className="w-52 h-52 mx-auto p-3 rounded-2xl bg-white border-2 border-[#D4AF37] shadow-xs flex items-center justify-center">
+                {qrDataUrls[qrModalStudent.id]?.trim() ? (
+                  <img
+                    src={qrDataUrls[qrModalStudent.id].trim()}
+                    alt={qrModalStudent.name}
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <QrCode className="w-16 h-16 text-slate-300" />
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 max-w-[220px] mx-auto">
+                  <img
+                    src={buildBarcodeSvgDataUrl(buildStudentQrCodeBadgeId(qrModalStudent))}
+                    alt="Barcode"
+                    className="h-5 w-full object-fill"
+                  />
+                  <span className="block font-mono font-black text-xs text-[#8C7015] mt-0.5">
+                    {buildStudentQrCodeBadgeId(qrModalStudent)}
+                  </span>
+                </div>
+                <h4 className="text-base font-black text-slate-900 pt-1">
+                  {qrModalStudent.name}
+                </h4>
+                <p className="text-xs font-semibold text-slate-500">
+                  NIS: {qrModalStudent.nis || '-'} • Kelas{' '}
+                  {classes.find(c => c.id === qrModalStudent.classId)?.name || '7A'}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() =>
+                    printStudentQrCards([qrModalStudent], classes, qrDataUrls, 'single')
+                  }
+                  className="py-2 px-3 rounded-xl bg-[#1E293B] hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Printer className="w-4 h-4 text-[#D4AF37]" />
+                  <span>Cetak / Print Kartu</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDownloadStudentQrPng(qrModalStudent)}
+                  className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Download className="w-4 h-4 text-[#8C7015]" />
+                  <span>Unduh PNG</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleQuickMarkHadirToday(qrModalStudent);
+                    setQrModalStudent(null);
+                  }}
+                  className="py-2 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <ScanLine className="w-4 h-4 text-amber-300" />
+                  <span>Scan Absen Hadir Sekarang</span>
+                </button>
+
+                {userRole !== 'wali' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleQuickMarkHadirToday(qrModalStudent);
+                        const sid = qrModalStudent.id;
+                        setQrModalStudent(null);
+                        onOpenDailyInputWithStudent(sid, 'quran');
+                      }}
+                      className="py-2 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <BookOpen className="w-3.5 h-3.5 text-[#8C7015]" />
+                      <span>+ Input Hafalan</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleQuickMarkHadirToday(qrModalStudent);
+                        const sid = qrModalStudent.id;
+                        setQrModalStudent(null);
+                        onOpenDailyInputWithStudent(sid, 'ummi');
+                      }}
+                      className="py-2 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <BookMarked className="w-3.5 h-3.5 text-blue-700" />
+                      <span>+ Input Ummi</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

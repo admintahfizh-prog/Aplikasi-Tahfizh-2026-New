@@ -19,7 +19,11 @@ import {
   Clock, 
   Eye, 
   AlertCircle,
-  Users
+  Users,
+  Printer,
+  History,
+  ScanLine,
+  X
 } from 'lucide-react';
 import { MemorizationRecord, Student, Teacher, ClassItem, Role, HalaqahGroup, User } from '../types';
 import { storageService } from '../services/storageService';
@@ -28,6 +32,10 @@ import { AvatarBadge } from './AvatarBadge';
 import { getGradeFromScore, getGradeBadgeClass } from '../utils/gradeConversion';
 import { HalaqahFilterBar } from './HalaqahFilterBar';
 import { filterStudentsByHalaqah, groupStudentsByHalaqah, resolveCurrentTeacher, DEFAULT_HALAQAH_GROUPS } from '../utils/halaqahHelper';
+import { MonthlyHafalanRecapModal } from './MonthlyHafalanRecapModal';
+import { PreviousHafalanModal } from './PreviousHafalanModal';
+import { CameraAndBarcodeScannerBox } from './CameraAndBarcodeScannerBox';
+import { buildStudentQrCodeBadgeId } from './QrAttendancePanel';
 
 interface HafalanViewProps {
   records: MemorizationRecord[];
@@ -58,8 +66,8 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
   onEditRecord,
   onDeleteRecord
 }) => {
-  // View mode: 'all-classes' (Primary) vs 'log' (Full history)
-  const [activeTab, setActiveTab] = useState<'all-classes' | 'log'>('all-classes');
+  // View mode: 'all-classes' (Primary) vs 'log' (Full history) vs 'monthly-recap' (Printable Monthly PDF Recap)
+  const [activeTab, setActiveTab] = useState<'all-classes' | 'log' | 'monthly-recap'>('all-classes');
 
   // Halaqah filter states
   const [selectedHalaqahFilter, setSelectedHalaqahFilter] = useState<string>('all');
@@ -78,6 +86,8 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
   const [sortBy, setSortBy] = useState<'class-asc' | 'class-desc' | 'date-desc' | 'date-asc' | 'name-asc' | 'score-desc' | 'juz-asc'>('class-asc');
   const [deleteConfirmRecord, setDeleteConfirmRecord] = useState<MemorizationRecord | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showPreviousHafalanModal, setShowPreviousHafalanModal] = useState(false);
+  const [showBarcodeScannerModal, setShowBarcodeScannerModal] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -489,7 +499,7 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
     <div className="space-y-5 animate-in fade-in">
       
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-xl border border-slate-200 shadow-xs no-print">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-[#D4AF37]" />
@@ -501,12 +511,26 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
           <p className="text-xs text-slate-500 mt-0.5">
             {userRole === 'wali'
               ? "Riwayat lengkap setoran Ziyadah (Hafalan Baru), Muroja'ah berkala, dan Ujian Tasmi' Al-Qur'an ananda tercinta."
-              : "Capaian terkini seluruh kelas & nama santri lengkap dengan tanggal setoran, nilai huruf (A-D), serta fitur edit dan hapus."
+              : "Capaian terkini seluruh kelas & nama santri lengkap dengan tanggal setoran, nilai huruf (A-D), rekap bulanan PDF, serta fitur edit dan hapus."
             }
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('monthly-recap')}
+            className={`px-3.5 py-2 rounded-lg font-bold text-xs border shadow-xs transition flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'monthly-recap'
+                ? 'bg-[#D4AF37] text-slate-950 border-[#D4AF37]'
+                : 'bg-amber-50 hover:bg-amber-100 text-amber-950 border-[#D4AF37]'
+            }`}
+            title="Buka & Cetak Rekap Perkembangan Hafalan Bulanan Santri dalam format PDF yang rapi"
+          >
+            <Printer className="w-3.5 h-3.5 text-[#8C7015]" />
+            <span>Cetak Rekap Bulanan (PDF)</span>
+          </button>
+
           <button
             onClick={handleExportCSV}
             className="px-3.5 py-2 rounded-lg bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs border border-slate-200 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
@@ -516,20 +540,41 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
           </button>
 
           {userRole !== 'wali' && (
-            <button
-              onClick={() => onOpenDailyInput()}
-              className="px-4 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <PlusCircle className="w-4 h-4 text-[#D4AF37]" />
-              <span>+ Catat Setoran</span>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setShowBarcodeScannerModal(true)}
+                className="px-3.5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                title="Scan Barcode / QR Siswa untuk Absen Hadir sekaligus Input Hafalan"
+              >
+                <ScanLine className="w-4 h-4 text-amber-300" />
+                <span>Scan Barcode / QR</span>
+              </button>
+
+              <button
+                onClick={() => setShowPreviousHafalanModal(true)}
+                className="px-3.5 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                title="Input hafalan sebelum-sebelumnya, riwayat lampau, atau capaian awal santri"
+              >
+                <History className="w-4 h-4 text-amber-700" />
+                <span>+ Input Hafalan Sebelumnya</span>
+              </button>
+
+              <button
+                onClick={() => onOpenDailyInput()}
+                className="px-4 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-700 text-white font-semibold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <PlusCircle className="w-4 h-4 text-[#D4AF37]" />
+                <span>+ Catat Setoran</span>
+              </button>
+            </>
           )}
         </div>
       </div>
 
       {/* Primary View Switcher Tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs no-print">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setActiveTab('all-classes')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
@@ -563,98 +608,134 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
               {records.length} Setoran
             </span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('monthly-recap')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              activeTab === 'monthly-recap'
+                ? 'bg-[#1E293B] text-white shadow-xs'
+                : 'bg-amber-50/80 text-amber-950 hover:bg-amber-100 border border-amber-200'
+            }`}
+          >
+            <Printer className="w-4 h-4 text-[#D4AF37]" />
+            <span>Rekap Bulanan &amp; Cetak PDF</span>
+          </button>
         </div>
 
         {/* Quick Class Selector Bar */}
-        <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-          <button
-            onClick={() => setSelectedClassFilter('')}
-            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer shrink-0 ${
-              selectedClassFilter === '' 
-                ? 'bg-slate-900 text-white' 
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Semua Kelas
-          </button>
-          {classes.map(c => (
+        {activeTab !== 'monthly-recap' && (
+          <div className="flex items-center gap-1.5 overflow-x-auto py-1">
             <button
-              key={c.id}
-              onClick={() => setSelectedClassFilter(selectedClassFilter === c.id ? '' : c.id)}
+              onClick={() => setSelectedClassFilter('')}
               className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer shrink-0 ${
-                selectedClassFilter === c.id
-                  ? 'bg-[#D4AF37] text-slate-950 font-black shadow-2xs'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                selectedClassFilter === '' 
+                  ? 'bg-slate-900 text-white' 
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              Kelas {c.name}
+              Semua Kelas
             </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Summary KPI Badges */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-[11px] font-bold text-slate-400 uppercase">Total Setoran</span>
-          <p className="text-xl font-bold text-slate-800 mt-1">{filteredRecords.length} Kali</p>
-        </div>
-        <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-[11px] font-bold text-slate-400 uppercase">Total Ayat Disetor</span>
-          <p className="text-xl font-bold text-[#8C7015] mt-1">{totalAyahs} Ayat</p>
-        </div>
-        <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-[11px] font-bold text-slate-400 uppercase">Rata-rata Nilai</span>
-          <p className="text-xl font-bold text-emerald-700 mt-1">{avgScore} / 100</p>
-        </div>
-        <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-[11px] font-bold text-slate-400 uppercase">Ujian Tasmi'</span>
-          <p className="text-xl font-bold text-[#1E293B] mt-1">{tasmiCount} Sesi</p>
-        </div>
-      </div>
-
-      {/* Halaqah Filter Bar */}
-      {userRole !== 'wali' && (
-        <HalaqahFilterBar
-          halaqahGroups={activeHalaqahGroups}
-          teachers={activeTeachers}
-          currentUser={currentUser}
-          selectedHalaqahFilter={selectedHalaqahFilter}
-          onHalaqahFilterChange={(val) => {
-            setSelectedHalaqahFilter(val);
-            if (val === 'my-halaqah' || val !== 'all') {
-              setViewGroupingMode('halaqah');
-            }
-          }}
-          viewGroupingMode={viewGroupingMode}
-          onViewGroupingModeChange={setViewGroupingMode}
-          totalFilteredCount={studentsFilteredByHalaqah.length}
-          showGroupingToggle={true}
-        />
-      )}
-
-      {/* Search Toolbar */}
-      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Cari nama santri, NIS, surat, atau catatan..."
-            className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
-          />
-        </div>
-
-        {searchTerm && (
-          <button
-            onClick={() => setSearchTerm('')}
-            className="text-xs text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
-          >
-            Hapus Pencarian
-          </button>
+            {classes.map(c => (
+              <button
+                key={c.id}
+                onClick={() => setSelectedClassFilter(selectedClassFilter === c.id ? '' : c.id)}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer shrink-0 ${
+                  selectedClassFilter === c.id
+                    ? 'bg-[#D4AF37] text-slate-950 font-black shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Kelas {c.name}
+              </button>
+            ))}
+          </div>
         )}
       </div>
+
+      {activeTab !== 'monthly-recap' && (
+        <>
+          {/* Summary KPI Badges */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 no-print">
+            <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
+              <span className="text-[11px] font-bold text-slate-400 uppercase">Total Setoran</span>
+              <p className="text-xl font-bold text-slate-800 mt-1">{filteredRecords.length} Kali</p>
+            </div>
+            <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
+              <span className="text-[11px] font-bold text-slate-400 uppercase">Total Ayat Disetor</span>
+              <p className="text-xl font-bold text-[#8C7015] mt-1">{totalAyahs} Ayat</p>
+            </div>
+            <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
+              <span className="text-[11px] font-bold text-slate-400 uppercase">Rata-rata Nilai</span>
+              <p className="text-xl font-bold text-emerald-700 mt-1">{avgScore} / 100</p>
+            </div>
+            <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs">
+              <span className="text-[11px] font-bold text-slate-400 uppercase">Ujian Tasmi'</span>
+              <p className="text-xl font-bold text-[#1E293B] mt-1">{tasmiCount} Sesi</p>
+            </div>
+          </div>
+
+          {/* Halaqah Filter Bar */}
+          {userRole !== 'wali' && (
+            <div className="no-print">
+              <HalaqahFilterBar
+                halaqahGroups={activeHalaqahGroups}
+                teachers={activeTeachers}
+                currentUser={currentUser}
+                selectedHalaqahFilter={selectedHalaqahFilter}
+                onHalaqahFilterChange={(val) => {
+                  setSelectedHalaqahFilter(val);
+                  if (val === 'my-halaqah' || val !== 'all') {
+                    setViewGroupingMode('halaqah');
+                  }
+                }}
+                viewGroupingMode={viewGroupingMode}
+                onViewGroupingModeChange={setViewGroupingMode}
+                totalFilteredCount={studentsFilteredByHalaqah.length}
+                showGroupingToggle={true}
+              />
+            </div>
+          )}
+
+          {/* Search Toolbar */}
+          <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-3 no-print">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Cari nama santri, NIS, surat, atau catatan..."
+                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+              />
+            </div>
+
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="text-xs text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
+              >
+                Hapus Pencarian
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 3: REKAP PERKEMBANGAN HAFALAN BULANAN SANTRI (CETAK PDF RAPI)         */}
+      {/* ========================================================================= */}
+      {activeTab === 'monthly-recap' && (
+        <MonthlyHafalanRecapModal
+          students={studentsFilteredByHalaqah}
+          teachers={activeTeachers}
+          classes={classes}
+          records={records}
+          halaqahGroups={activeHalaqahGroups}
+          userRole={userRole}
+          initialClassId={selectedClassFilter}
+          initialHalaqahId={selectedHalaqahFilter === 'my-halaqah' ? 'all' : selectedHalaqahFilter}
+        />
+      )}
 
       {/* ========================================================================= */}
       {/* TAB 1: UI SEMUA KELAS / HALAQAH -> DAFTAR SANTRI + CAPAIAN TERAKHIR */}
@@ -1197,6 +1278,75 @@ export const HafalanView: React.FC<HafalanViewProps> = ({
         </div>
       )}
 
+      {/* Modal Input Hafalan Sebelum-Sebelumnya */}
+      <PreviousHafalanModal
+        isOpen={showPreviousHafalanModal}
+        onClose={() => setShowPreviousHafalanModal(false)}
+        students={students}
+        teachers={activeTeachers}
+        classes={classes}
+        currentUser={currentUser}
+        onSaved={() => {
+          onRefreshData();
+          showToast('Data hafalan sebelumnya berhasil disimpan dan rekap santri diperbarui');
+        }}
+      />
+
+      {/* Modal Scan Barcode / QR untuk Absen & Input Hafalan */}
+      {showBarcodeScannerModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200">
+            <div className="bg-[#1E293B] text-white px-5 py-4 flex items-center justify-between border-b border-slate-700">
+              <div className="flex items-center gap-2.5">
+                <ScanLine className="w-5 h-5 text-[#D4AF37]" />
+                <div>
+                  <h3 className="text-sm font-black">
+                    Scan Barcode / QR Siswa (Absen &amp; Input Hafalan)
+                  </h3>
+                  <p className="text-[11px] text-slate-300">
+                    Otomatis mencatat kehadiran hari ini &amp; membuka form setoran hafalan santri
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBarcodeScannerModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5">
+              <CameraAndBarcodeScannerBox
+                students={students}
+                classes={classes}
+                onStudentScanned={(scannedStd) => {
+                  const todayStr = new Date().toISOString().split('T')[0];
+                  const timeStr = new Date().toLocaleTimeString('id-ID', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  });
+                  storageService.addAttendanceRecord({
+                    id: `att-${scannedStd.id}-${todayStr}`,
+                    studentId: scannedStd.id,
+                    teacherId: scannedStd.teacherId || activeTeachers[0]?.id || 't-1',
+                    date: todayStr,
+                    status: 'Hadir',
+                    notes: `Scan Barcode/QR (${buildStudentQrCodeBadgeId(scannedStd)}) pukul ${timeStr}`
+                  });
+                  setShowBarcodeScannerModal(false);
+                  onRefreshData();
+                  showToast(
+                    `Scan Berhasil: ${scannedStd.name} tercatat HADIR & form setoran hafalan dibuka`
+                  );
+                  onOpenDailyInput(scannedStd.id);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

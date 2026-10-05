@@ -82,6 +82,7 @@ export default function App() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isQuotaBannerDismissed, setIsQuotaBannerDismissed] = useState(false);
   const [prefilledStudentId, setPrefilledStudentId] = useState<string | undefined>(undefined);
+  const [dailyInputTab, setDailyInputTab] = useState<'quran' | 'ummi' | 'presensi' | undefined>(undefined);
   const [editingMemorizationRecord, setEditingMemorizationRecord] = useState<MemorizationRecord | null>(null);
   const [editingUmmiRecord, setEditingUmmiRecord] = useState<UmmiRecord | null>(null);
 
@@ -184,10 +185,11 @@ export default function App() {
     setCurrentView('dashboard');
   };
 
-  const handleOpenDailyInput = (studentId?: string) => {
+  const handleOpenDailyInput = (studentId?: string, initialTab?: 'quran' | 'ummi' | 'presensi') => {
     setEditingMemorizationRecord(null);
     setEditingUmmiRecord(null);
     setPrefilledStudentId(studentId);
+    setDailyInputTab(initialTab);
     setIsDailyInputOpen(true);
   };
 
@@ -396,6 +398,7 @@ export default function App() {
               records={records}
               ummiRecords={ummiRecords}
               targets={targets}
+              currentUser={currentUser}
               onOpenDailyInput={() => handleOpenDailyInput()}
               onOpenStudentDetail={handleOpenStudentDetail}
               onNavigate={(v) => setCurrentView(v)}
@@ -645,6 +648,7 @@ export default function App() {
         onClose={() => {
           setIsDailyInputOpen(false);
           setPrefilledStudentId(undefined);
+          setDailyInputTab(undefined);
           setEditingMemorizationRecord(null);
           setEditingUmmiRecord(null);
         }}
@@ -678,7 +682,7 @@ export default function App() {
         }}
         preSelectedStudentId={prefilledStudentId}
         initialStudentId={prefilledStudentId}
-        defaultTab={currentView === 'ummi' ? 'ummi' : 'quran'}
+        defaultTab={dailyInputTab || (currentView === 'ummi' ? 'ummi' : 'quran')}
         onSaveSuccess={() => {
           loadAllData();
         }}

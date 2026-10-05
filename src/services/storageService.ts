@@ -142,9 +142,11 @@ function markQuotaExceeded(exceeded: boolean): void {
   }
 }
 
-// Immediately disable Firestore network on startup if daily quota was already marked exceeded today
+// Defer Firestore network disable check until after module initialization
 if (checkQuotaExceeded()) {
-  disableFirestoreNetwork();
+  Promise.resolve().then(() => {
+    disableFirestoreNetwork().catch(() => {});
+  });
 }
 
 function withWriteTimeout<T>(promise: Promise<T>, ms = 3500): Promise<T> {
@@ -2267,6 +2269,21 @@ export const storageService = {
     this.recalculateStudentMemorizationStats(record.studentId, record);
     this.notifyListeners();
   },
+  addBulkMemorizationRecords(recordsToAdd: MemorizationRecord[]): void {
+    if (!recordsToAdd || recordsToAdd.length === 0) return;
+    const list = this.getMemorizationRecords();
+    const merged = [...recordsToAdd, ...list];
+    setItem(STORAGE_KEYS.MEMORIZATION, merged);
+    syncCollectionToCloud('memorization_records', recordsToAdd).catch(e =>
+      console.warn('[Cloud Sync] Failed syncing bulk memorization records:', e)
+    );
+
+    const uniqueStudentIds = Array.from(new Set(recordsToAdd.map(r => r.studentId)));
+    uniqueStudentIds.forEach(studentId => {
+      this.recalculateStudentMemorizationStats(studentId);
+    });
+    this.notifyListeners();
+  },
   updateMemorizationRecord(record: MemorizationRecord): void {
     const list = this.getMemorizationRecords();
     const idx = list.findIndex(r => r.id === record.id);
@@ -2495,29 +2512,68 @@ export const storageService = {
   getAttendanceRecords(): AttendanceRecord[] {
     return getItem(STORAGE_KEYS.ATTENDANCE, INITIAL_ATTENDANCE_RECORDS);
   },
+  syncStudentAttendanceToProfile(studentId: string): void {
+    const std = this.getStudentById(studentId);
+    if (!std) return;
+    const counts = this.getAttendanceCounts(studentId);
+    this.saveStudent({
+      ...std,
+      raportSakit: counts.sakit,
+      raportIzin: counts.izin,
+      raportAlpha: counts.alfa
+    });
+  },
   addAttendanceRecord(record: AttendanceRecord): void {
     const list = this.getAttendanceRecords();
-    list.unshift(record);
+    const existingIdx = list.findIndex(
+      r => r.id === record.id || (r.studentId === record.studentId && r.date === record.date)
+    );
+    let savedRecord = record;
+    if (existingIdx >= 0) {
+      savedRecord = {
+        ...list[existingIdx],
+        ...record,
+        id: list[existingIdx].id
+      };
+      list[existingIdx] = savedRecord;
+    } else {
+      list.unshift(savedRecord);
+    }
     setItem(STORAGE_KEYS.ATTENDANCE, list);
-    syncDocToCloud('attendance_records', record.id, record);
+    syncDocToCloud('attendance_records', savedRecord.id, savedRecord);
+    this.syncStudentAttendanceToProfile(savedRecord.studentId);
     this.notifyListeners();
   },
   updateAttendanceRecord(record: AttendanceRecord): void {
     const list = this.getAttendanceRecords();
-    const idx = list.findIndex(r => r.id === record.id);
+    const idx = list.findIndex(
+      r => r.id === record.id || (r.studentId === record.studentId && r.date === record.date)
+    );
+    let savedRecord = record;
     if (idx >= 0) {
-      list[idx] = record;
+      savedRecord = {
+        ...list[idx],
+        ...record,
+        id: list[idx].id
+      };
+      list[idx] = savedRecord;
     } else {
-      list.unshift(record);
+      list.unshift(savedRecord);
     }
     setItem(STORAGE_KEYS.ATTENDANCE, list);
-    syncDocToCloud('attendance_records', record.id, record);
+    syncDocToCloud('attendance_records', savedRecord.id, savedRecord);
+    this.syncStudentAttendanceToProfile(savedRecord.studentId);
     this.notifyListeners();
   },
   deleteAttendanceRecord(id: string): void {
-    const list = this.getAttendanceRecords().filter(r => r.id !== id);
+    const all = this.getAttendanceRecords();
+    const target = all.find(r => r.id === id);
+    const list = all.filter(r => r.id !== id);
     setItem(STORAGE_KEYS.ATTENDANCE, list);
     deleteDocFromCloud('attendance_records', id);
+    if (target?.studentId) {
+      this.syncStudentAttendanceToProfile(target.studentId);
+    }
     this.notifyListeners();
   },
   getAttendanceByStudent(studentId: string): AttendanceRecord[] {
@@ -2790,11 +2846,12 @@ export const storageService = {
       modified = true;
     }
 
-    // Synchronize 2 TM/pekan for Kaldik Reguler (replace legacy 35 jam values)
+    // Synchronize 2 TM/pekan for Kaldik Reguler (replace legacy 35 jam or >2 TM values)
     if (category === 'reguler') {
-      const hasOld35Jam = rawData.semester1Effective?.some(m => m.jamWeeks?.includes(35)) ||
-                          rawData.semester2Effective?.some(m => m.jamWeeks?.includes(35));
-      if (hasOld35Jam) {
+      const hasInvalidRegulerTM =
+        rawData.semester1Effective?.some(m => m.jamWeeks?.some(v => typeof v === 'number' && v > 2)) ||
+        rawData.semester2Effective?.some(m => m.jamWeeks?.some(v => typeof v === 'number' && v > 2));
+      if (hasInvalidRegulerTM) {
         rawData.semester1Effective = JSON.parse(JSON.stringify(INITIAL_KALDIK_REGULER_DATA.semester1Effective));
         rawData.semester2Effective = JSON.parse(JSON.stringify(INITIAL_KALDIK_REGULER_DATA.semester2Effective));
         modified = true;

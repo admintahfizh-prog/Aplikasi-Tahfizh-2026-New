@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { AppSettings, Role, User, Student, Teacher } from '../types';
 import { storageService } from '../services/storageService';
+import { AvatarBadge } from './AvatarBadge';
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -979,10 +980,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           {/* Name & Avatar */}
                           <td className="p-3.5">
                             <div className="flex items-center gap-2.5">
-                              <img
-                                src={u.avatar}
-                                alt={u.name}
-                                className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
+                              <AvatarBadge
+                                name={u.name}
+                                photoUrl={u.avatar}
+                                role={u.role}
+                                size="sm"
+                                className="shrink-0"
                               />
                               <div>
                                 <p className="font-bold text-slate-900">{u.name}</p>
@@ -1221,9 +1224,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
               <div className="w-40 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
-                {formData.headmasterSignatureUrl ? (
+                {formData.headmasterSignatureUrl?.trim() ? (
                   <img
-                    src={formData.headmasterSignatureUrl}
+                    src={formData.headmasterSignatureUrl.trim()}
                     alt="TTD Kepala Sekolah"
                     className="w-full h-full object-contain p-2"
                   />
@@ -1281,9 +1284,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
               <div className="w-40 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
-                {formData.tahfizhCoordinatorSignatureUrl ? (
+                {formData.tahfizhCoordinatorSignatureUrl?.trim() ? (
                   <img
-                    src={formData.tahfizhCoordinatorSignatureUrl}
+                    src={formData.tahfizhCoordinatorSignatureUrl.trim()}
                     alt="TTD Koordinator Tahfizh"
                     className="w-full h-full object-contain p-2"
                   />
@@ -1342,9 +1345,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
               {/* Logo Preview */}
               <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
-                {formData.customLogoUrl ? (
+                {formData.customLogoUrl?.trim() ? (
                   <img
-                    src={formData.customLogoUrl}
+                    src={formData.customLogoUrl.trim()}
                     alt="Logo Sekolah"
                     className="w-full h-full object-contain p-1"
                   />
@@ -1404,9 +1407,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
               {/* Logo Preview */}
               <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
-                {formData.yayasanLogoUrl ? (
+                {formData.yayasanLogoUrl?.trim() ? (
                   <img
-                    src={formData.yayasanLogoUrl}
+                    src={formData.yayasanLogoUrl.trim()}
                     alt="Logo Yayasan"
                     className="w-full h-full object-contain p-1"
                   />
@@ -1466,9 +1469,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
               {/* Bismillah Preview */}
               <div className="w-48 h-20 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
-                {formData.bismillahImgUrl ? (
+                {formData.bismillahImgUrl?.trim() ? (
                   <img
-                    src={formData.bismillahImgUrl}
+                    src={formData.bismillahImgUrl.trim()}
                     alt="Kaligrafi Bismillah PNG"
                     className="w-full h-full object-contain p-2"
                   />
@@ -1528,9 +1531,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 pt-1">
               {/* Frame Preview */}
               <div className="w-24 h-32 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-xs relative">
-                {formData.raportFrameUrl ? (
+                {formData.raportFrameUrl?.trim() ? (
                   <img
-                    src={formData.raportFrameUrl}
+                    src={formData.raportFrameUrl.trim()}
                     alt="Bingkai Raport PNG"
                     className="w-full h-full object-contain p-1"
                   />

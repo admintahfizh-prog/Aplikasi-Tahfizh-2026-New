@@ -10,6 +10,39 @@
     <meta property="og:description" content="Sistem Monitoring Tahfizh Al-Qur'an dan Pembelajaran Metode Ummi SMPIA 21" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      window.addEventListener(
+        'error',
+        function (e) {
+          var msg = String((e && e.message) || '');
+          if (
+            msg === 'Script error.' ||
+            msg === 'Script error' ||
+            msg.indexOf('ResizeObserver loop') !== -1
+          ) {
+            e.stopImmediatePropagation();
+            e.preventDefault();
+            return false;
+          }
+        },
+        true
+      );
+      window.addEventListener(
+        'unhandledrejection',
+        function (e) {
+          var reason = String((e && e.reason && (e.reason.message || e.reason)) || '').toLowerCase();
+          if (
+            reason.indexOf('resource-exhausted') !== -1 ||
+            reason.indexOf('quota') !== -1 ||
+            reason.indexOf('firestore') !== -1
+          ) {
+            e.stopImmediatePropagation();
+            e.preventDefault();
+          }
+        },
+        true
+      );
+    </script>
   </head>
   <body>
     <div id="root"></div>

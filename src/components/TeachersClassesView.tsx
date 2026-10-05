@@ -163,7 +163,7 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
     phone: '0812',
     email: '',
     ummiCertified: true,
-    photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    photo: '',
     specialization: 'Tahfizh 30 Juz & Ummi Dewasa'
   });
 
@@ -315,7 +315,7 @@ export const TeachersClassesView: React.FC<TeachersClassesViewProps> = ({
       phone: '0812',
       email: '',
       ummiCertified: true,
-      photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      photo: '',
       specialization: 'Tahfizh Al-Qur\'an & Metode Ummi'
     });
     setShowTeacherModal(true);
