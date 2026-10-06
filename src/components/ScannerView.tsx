@@ -83,7 +83,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
   currentUser,
   halaqahGroups = [],
   initialWorkflowMode = 'lookup_and_attendance',
-  autoStartCamera = false,
+  autoStartCamera = true,
   onOpenStudentDetail,
   onLookupStudentInList,
   onOpenDailyInputWithStudent,
@@ -99,7 +99,10 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
 
   // Camera state
   const [cameraActive, setCameraActive] = useState<boolean>(false);
+  const [isStartingCamera, setIsStartingCamera] = useState<boolean>(false);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
   const [cameraError, setCameraError] = useState<string | null>(null);
 
   // Manual / Barcode Gun input state
@@ -173,8 +176,26 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
     setCameraActive(false);
+    setIsStartingCamera(false);
   };
+
+  // Ensure video element always receives streamRef when active
+  useEffect(() => {
+    if (cameraActive && streamRef.current && videoRef.current) {
+      const video = videoRef.current;
+      if (video.srcObject !== streamRef.current) {
+        video.srcObject = streamRef.current;
+      }
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('webkit-playsinline', 'true');
+      video.muted = true;
+      video.play().catch(() => {});
+    }
+  }, [cameraActive]);
 
   // Record attendance for a student
   const handleMarkAttendance = (
@@ -267,50 +288,107 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
   };
 
   // Start browser camera and continuous QR scan loop
-  const startCamera = async (preferredFacingMode = facingMode) => {
+  const startCamera = async (
+    preferredFacingMode: 'environment' | 'user' = facingMode,
+    customDeviceId?: string
+  ) => {
     stopCamera();
     setCameraError(null);
+    setIsStartingCamera(true);
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setCameraError(
         'Browser pada perangkat ini tidak mendukung akses kamera langsung. Gunakan fitur Upload Gambar QR atau input kode di bawah.'
       );
+      setIsStartingCamera(false);
       return;
     }
 
     try {
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
+      let stream: MediaStream | null = null;
+      const devId = customDeviceId !== undefined ? customDeviceId : selectedDeviceId;
+
+      const constraintCandidates: MediaStreamConstraints[] = [];
+      if (devId) {
+        constraintCandidates.push({
+          video: { deviceId: { exact: devId }, width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false
+        });
+      }
+      constraintCandidates.push(
+        {
           video: {
             facingMode: { ideal: preferredFacingMode },
             width: { ideal: 640 },
             height: { ideal: 480 }
           },
           audio: false
-        });
-      } catch {
-        stream = await navigator.mediaDevices.getUserMedia({
+        },
+        {
+          video: { facingMode: preferredFacingMode },
+          audio: false
+        },
+        {
           video: true,
           audio: false
-        });
+        }
+      );
+
+      let lastErr: unknown = null;
+      for (const constraints of constraintCandidates) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          if (stream) break;
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+
+      if (!stream) {
+        throw lastErr || new Error('Camera stream unavailable');
       }
 
       streamRef.current = stream;
       setCameraActive(true);
+      setIsStartingCamera(false);
 
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
+        const video = videoRef.current;
+        video.srcObject = stream;
+        video.setAttribute('playsinline', 'true');
+        video.setAttribute('webkit-playsinline', 'true');
+        video.muted = true;
+        try {
+          await video.play();
+        } catch {
+          video.onloadedmetadata = () => {
+            video.play().catch(() => {});
+          };
+        }
+      }
+
+      if (navigator.mediaDevices.enumerateDevices) {
+        navigator.mediaDevices
+          .enumerateDevices()
+          .then(devices => {
+            const cams = devices.filter(d => d.kind === 'videoinput');
+            setVideoDevices(cams);
+          })
+          .catch(() => {});
       }
 
       // Optional native BarcodeDetector alongside jsQR
       const NativeDetector = (window as unknown as { BarcodeDetector?: any }).BarcodeDetector;
-      const nativeDetector = NativeDetector
-        ? new NativeDetector({
+      let nativeDetector: any = null;
+      if (NativeDetector) {
+        try {
+          nativeDetector = new NativeDetector({
             formats: ['qr_code', 'code_128', 'code_39', 'ean_13']
-          })
-        : null;
+          });
+        } catch {
+          nativeDetector = null;
+        }
+      }
 
       const scanFrame = async () => {
         if (!videoRef.current || !streamRef.current) return;
@@ -329,7 +407,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
               ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
               const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
               const qrResult = jsQR(imageData.data, imageData.width, imageData.height, {
-                inversionAttempts: 'dontInvert'
+                inversionAttempts: 'attemptBoth'
               });
               if (qrResult && qrResult.data) {
                 detectedText = qrResult.data;
@@ -368,11 +446,23 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
       };
 
       rafRef.current = requestAnimationFrame(scanFrame);
-    } catch {
-      setCameraError(
-        'Tidak dapat mengakses kamera. Pastikan izin kamera (Allow Camera) telah diaktifkan di browser Anda.'
-      );
+    } catch (err: any) {
+      setIsStartingCamera(false);
       setCameraActive(false);
+      const errName = err?.name || '';
+      if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+        setCameraError(
+          'Izin kamera ditolak oleh browser. Klik ikon kamera/gembok pada bilah alamat browser dan pilih "Allow / Izinkan", lalu klik Aktifkan Kamera.'
+        );
+      } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+        setCameraError(
+          'Perangkat kamera tidak ditemukan. Gunakan fitur Upload Gambar QR atau input kode di bawah.'
+        );
+      } else {
+        setCameraError(
+          'Tidak dapat mengakses kamera. Pastikan izin kamera telah diaktifkan dan kamera tidak sedang dipakai aplikasi lain.'
+        );
+      }
     }
   };
 
@@ -388,9 +478,8 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
   const handleToggleFacingMode = () => {
     const nextMode = facingMode === 'environment' ? 'user' : 'environment';
     setFacingMode(nextMode);
-    if (cameraActive) {
-      startCamera(nextMode);
-    }
+    setSelectedDeviceId('');
+    startCamera(nextMode, '');
   };
 
   // Decode uploaded QR Code image
@@ -626,7 +715,26 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {videoDevices.length > 1 && cameraActive && (
+                    <select
+                      value={selectedDeviceId}
+                      onChange={e => {
+                        const id = e.target.value;
+                        setSelectedDeviceId(id);
+                        startCamera(facingMode, id);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 text-[11px] font-bold focus:outline-none"
+                    >
+                      <option value="">Pilih Kamera ({videoDevices.length})</option>
+                      {videoDevices.map((dev, idx) => (
+                        <option key={dev.deviceId || idx} value={dev.deviceId}>
+                          {dev.label || `Kamera ${idx + 1}`}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
                   {cameraActive ? (
                     <>
                       <button
@@ -650,11 +758,12 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                   ) : (
                     <button
                       type="button"
+                      disabled={isStartingCamera}
                       onClick={() => startCamera(facingMode)}
                       className="px-3 py-1.5 rounded-lg bg-[#D4AF37] hover:bg-[#c49f2c] text-slate-950 text-xs font-black flex items-center gap-1.5 shadow-xs cursor-pointer"
                     >
                       <Camera className="w-3.5 h-3.5" />
-                      <span>Aktifkan Kamera QR</span>
+                      <span>{isStartingCamera ? 'Membuka Kamera...' : 'Aktifkan Kamera QR'}</span>
                     </button>
                   )}
 
@@ -675,11 +784,21 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
               <div className="relative aspect-video bg-slate-950 flex items-center justify-center overflow-hidden">
                 <video
                   ref={videoRef}
+                  autoPlay
                   playsInline
                   muted
-                  className={`w-full h-full object-cover ${cameraActive ? 'block' : 'hidden'}`}
+                  className={`w-full h-full object-cover transition-opacity duration-200 ${
+                    cameraActive ? 'opacity-100' : 'opacity-0 pointer-events-none absolute inset-0'
+                  }`}
                 />
                 <canvas ref={canvasRef} className="hidden" />
+
+                {isStartingCamera && !cameraActive && (
+                  <div className="relative z-10 p-6 text-center space-y-2 text-white">
+                    <RefreshCw className="w-7 h-7 text-[#D4AF37] animate-spin mx-auto" />
+                    <p className="text-xs font-bold">Mengaktifkan kamera perangkat...</p>
+                  </div>
+                )}
 
                 {cameraActive ? (
                   <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
@@ -694,8 +813,8 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                       Posisikan Kartu QR Code Santri di dalam kotak target
                     </span>
                   </div>
-                ) : (
-                  <div className="p-6 text-center space-y-3 max-w-sm">
+                ) : !isStartingCamera ? (
+                  <div className="relative z-10 p-6 text-center space-y-3 max-w-sm">
                     <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 text-[#D4AF37] flex items-center justify-center mx-auto">
                       <QrCode className="w-7 h-7" />
                     </div>
@@ -704,7 +823,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                         Kamera Pemindai QR Code Santri
                       </p>
                       <p className="text-xs text-slate-400 mt-1">
-                        Klik tombol <strong>Aktifkan Kamera QR</strong> di bawah untuk memindai
+                        Klik tombol <strong>Aktifkan Kamera Sekarang</strong> di bawah untuk memindai
                         kartu santri menggunakan kamera laptop, tablet, atau smartphone.
                       </p>
                     </div>
@@ -729,7 +848,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                       </label>
                     </div>
                   </div>
-                )}
+                ) : null}
               </div>
 
               {cameraError && (
