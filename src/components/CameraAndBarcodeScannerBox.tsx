@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import jsQR from 'jsqr';
 import {
   Camera,
   CameraOff,
@@ -16,6 +15,10 @@ import {
   findStudentByScannedCode,
   playScanSuccessBeep
 } from '../utils/qrPrintAndScanUtils';
+import {
+  decodeQrFromVideoFrame,
+  decodeQrFromImageElement
+} from '../utils/qrImageProcessor';
 import { buildStudentQrCodeBadgeId } from './QrAttendancePanel';
 
 interface CameraAndBarcodeScannerBoxProps {
@@ -230,35 +233,20 @@ export const CameraAndBarcodeScannerBox: React.FC<CameraAndBarcodeScannerBoxProp
           }
         }
 
+        let frameCounter = 0;
         const tick = async () => {
           const video = videoRef.current;
           const canvas = canvasRef.current;
           if (video && canvas && video.readyState >= 2) {
-            const w = video.videoWidth || 480;
-            const h = video.videoHeight || 360;
-            if (w > 0 && h > 0) {
-              canvas.width = w;
-              canvas.height = h;
-              const ctx = canvas.getContext('2d', { willReadFrequently: true });
-              if (ctx) {
-                ctx.drawImage(video, 0, 0, w, h);
-                const imgData = ctx.getImageData(0, 0, w, h);
-                const qrResult = jsQR(imgData.data, imgData.width, imgData.height, {
-                  inversionAttempts: 'attemptBoth'
-                });
-                if (qrResult && qrResult.data) {
-                  handleDecodedString(qrResult.data);
-                } else if (nativeDetector) {
-                  try {
-                    const codes = await nativeDetector.detect(canvas);
-                    if (codes && codes.length > 0 && codes[0].rawValue) {
-                      handleDecodedString(codes[0].rawValue);
-                    }
-                  } catch {
-                    // ignore frame detector error
-                  }
-                }
-              }
+            frameCounter += 1;
+            const decoded = await decodeQrFromVideoFrame(
+              video,
+              canvas,
+              frameCounter,
+              nativeDetector
+            );
+            if (decoded && decoded.text) {
+              handleDecodedString(decoded.text);
             }
           }
           if (streamRef.current) {
@@ -323,18 +311,9 @@ export const CameraAndBarcodeScannerBox: React.FC<CameraAndBarcodeScannerBoxProp
       if (!dataUrl) return;
       const img = new window.Image();
       img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: 'attemptBoth'
-        });
-        if (code && code.data) {
-          handleDecodedString(code.data);
+        const decoded = decodeQrFromImageElement(img);
+        if (decoded && decoded.text) {
+          handleDecodedString(decoded.text);
         } else {
           setScanMessage({
             type: 'error',

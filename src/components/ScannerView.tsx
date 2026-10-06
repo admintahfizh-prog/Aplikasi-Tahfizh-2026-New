@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import jsQR from 'jsqr';
 import {
   Camera,
   CameraOff,
@@ -45,6 +44,10 @@ import {
   playScanSuccessBeep,
   printStudentQrCards
 } from '../utils/qrPrintAndScanUtils';
+import {
+  decodeQrFromVideoFrame,
+  decodeQrFromImageElement
+} from '../utils/qrImageProcessor';
 
 export type ScannerWorkflowMode = 'lookup_and_attendance' | 'quick_lookup' | 'auto_attendance';
 
@@ -96,6 +99,9 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
   const [workflowMode, setWorkflowMode] = useState<ScannerWorkflowMode>(initialWorkflowMode);
   const [defaultAttendanceStatus, setDefaultAttendanceStatus] =
     useState<AttendanceStatus>('Hadir');
+  const [autoRedirectToProfile, setAutoRedirectToProfile] = useState<boolean>(true);
+  const [redirectingStudent, setRedirectingStudent] = useState<Student | null>(null);
+  const [lastDecodeEngine, setLastDecodeEngine] = useState<string>('');
 
   // Camera state
   const [cameraActive, setCameraActive] = useState<boolean>(false);
@@ -127,7 +133,10 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
+  const frameCounterRef = useRef<number>(0);
+  const redirectTimeoutRef = useRef<number | null>(null);
   const lastScannedCodeRef = useRef<{ code: string; time: number }>({ code: '', time: 0 });
+  const handleDecodedQrCodeRef = useRef<(rawCode: string, engine?: string) => void>(() => {});
 
   const currentTeacher = useMemo(
     () => resolveCurrentTeacher(currentUser, teachers) || teachers[0],
@@ -231,7 +240,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
   };
 
   // Core handler when any QR Code / Barcode is decoded
-  const handleDecodedQrCode = (rawCode: string) => {
+  const handleDecodedQrCode = (rawCode: string, engineLabel?: string) => {
     const trimmed = rawCode.trim();
     if (!trimmed) return;
 
@@ -247,6 +256,9 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
 
     playScanSuccessBeep();
     setIdentifiedStudent(matched);
+    if (engineLabel) {
+      setLastDecodeEngine(engineLabel);
+    }
 
     const timeStr = new Date().toLocaleTimeString('id-ID', {
       hour: '2-digit',
@@ -285,7 +297,21 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
       },
       ...prev.slice(0, 24)
     ]);
+
+    // Automatic redirect to Student Detail Profile Page upon successful QR scan
+    if (autoRedirectToProfile && onOpenStudentDetail) {
+      setRedirectingStudent(matched);
+      if (redirectTimeoutRef.current) {
+        window.clearTimeout(redirectTimeoutRef.current);
+      }
+      redirectTimeoutRef.current = window.setTimeout(() => {
+        stopCamera();
+        onOpenStudentDetail(matched.id);
+      }, 450);
+    }
   };
+
+  handleDecodedQrCodeRef.current = handleDecodedQrCode;
 
   // Start browser camera and continuous QR scan loop
   const startCamera = async (
@@ -394,48 +420,29 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
         if (!videoRef.current || !streamRef.current) return;
         const video = videoRef.current;
 
-        if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
-          let detectedText: string | null = null;
+        if (
+          video.readyState >= 2 &&
+          video.videoWidth > 0 &&
+          video.videoHeight > 0 &&
+          canvasRef.current
+        ) {
+          frameCounterRef.current += 1;
+          const decoded = await decodeQrFromVideoFrame(
+            video,
+            canvasRef.current,
+            frameCounterRef.current,
+            nativeDetector
+          );
 
-          // 1. Decode 2D QR Code via jsQR
-          if (canvasRef.current) {
-            const canvas = canvasRef.current;
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            if (ctx) {
-              canvas.width = video.videoWidth;
-              canvas.height = video.videoHeight;
-              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-              const qrResult = jsQR(imageData.data, imageData.width, imageData.height, {
-                inversionAttempts: 'attemptBoth'
-              });
-              if (qrResult && qrResult.data) {
-                detectedText = qrResult.data;
-              }
-            }
-          }
-
-          // 2. Fallback to native BarcodeDetector if available
-          if (!detectedText && nativeDetector) {
-            try {
-              const barcodes = await nativeDetector.detect(video);
-              if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
-                detectedText = String(barcodes[0].rawValue);
-              }
-            } catch {
-              // ignore frame error
-            }
-          }
-
-          if (detectedText) {
+          if (decoded && decoded.text) {
             const now = Date.now();
             // Prevent duplicate rapid-fire scans of the same QR within 2.2 seconds
             if (
-              detectedText !== lastScannedCodeRef.current.code ||
+              decoded.text !== lastScannedCodeRef.current.code ||
               now - lastScannedCodeRef.current.time > 2200
             ) {
-              lastScannedCodeRef.current = { code: detectedText, time: now };
-              handleDecodedQrCode(detectedText);
+              lastScannedCodeRef.current = { code: decoded.text, time: now };
+              handleDecodedQrCodeRef.current(decoded.text, decoded.engine);
             }
           }
         }
@@ -482,7 +489,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
     startCamera(nextMode, '');
   };
 
-  // Decode uploaded QR Code image
+  // Decode uploaded QR Code image using multi-scale & contrast-enhanced image processor
   const handleImageQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -493,16 +500,9 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
       if (!dataUrl) return;
       const img = new window.Image();
       img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const qrResult = jsQR(imageData.data, imageData.width, imageData.height);
-        if (qrResult && qrResult.data) {
-          handleDecodedQrCode(qrResult.data);
+        const decoded = decodeQrFromImageElement(img);
+        if (decoded && decoded.text) {
+          handleDecodedQrCode(decoded.text, decoded.engine);
         } else {
           setScanFeedback({
             type: 'error',
@@ -630,7 +630,10 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
 
             <button
               type="button"
-              onClick={() => setWorkflowMode('auto_attendance')}
+              onClick={() => {
+                setWorkflowMode('auto_attendance');
+                setAutoRedirectToProfile(false);
+              }}
               className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition flex items-center gap-1.5 cursor-pointer ${
                 workflowMode === 'auto_attendance'
                   ? 'bg-[#D4AF37] text-slate-950 shadow-xs'
@@ -639,6 +642,22 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>Presensi Cepat Beruntun</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAutoRedirectToProfile(prev => !prev)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition flex items-center gap-1.5 border cursor-pointer ${
+                autoRedirectToProfile
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/50'
+                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+              }`}
+              title="Jika aktif, aplikasi otomatis membuka halaman profil santri segera setelah scan QR berhasil"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>
+                Auto-Buka Profil Santri: {autoRedirectToProfile ? 'AKTIF' : 'NONAKTIF'}
+              </span>
             </button>
           </div>
 
@@ -666,6 +685,38 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
 
       {/* Main Content Grid */}
       <div className="p-4 sm:p-6 space-y-5">
+        {/* Auto-Redirecting Banner */}
+        {redirectingStudent && (
+          <div className="p-4 rounded-xl bg-[#1E293B] border-2 border-[#D4AF37] text-white flex items-center justify-between gap-3 animate-in fade-in shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#D4AF37] text-slate-950 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs font-black text-[#D4AF37] uppercase tracking-wider">
+                  QR Code Berhasil Dikenali {lastDecodeEngine ? `(${lastDecodeEngine})` : ''}
+                </p>
+                <p className="text-sm font-extrabold text-white">
+                  Mengalihkan otomatis ke halaman profil {redirectingStudent.name}...
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (redirectTimeoutRef.current) {
+                  window.clearTimeout(redirectTimeoutRef.current);
+                  redirectTimeoutRef.current = null;
+                }
+                setRedirectingStudent(null);
+              }}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 border border-slate-700 cursor-pointer shrink-0"
+            >
+              Tetap di Scanner
+            </button>
+          </div>
+        )}
+
         {/* Feedback Banner */}
         {scanFeedback && (
           <div
