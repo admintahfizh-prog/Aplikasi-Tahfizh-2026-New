@@ -309,6 +309,7 @@ export interface AppSettings {
   syahadahTemplateUrl?: string;
   syahadahOverlayMode?: 'full_content' | 'no_kop' | 'data_only' | 'full_text';
   syahadahTopOffset?: number;
+  syahadahFontScale?: number;
 }
 
 export type AttendanceStatus = 'Hadir' | 'Sakit' | 'Izin' | 'Alfa';
@@ -335,6 +336,7 @@ export interface ExamScoreDetails {
 export interface ExamParticipantItem {
   studentId: string;
   studentName: string;
+  studentArabicName?: string;
   studentNis?: string;
   classId: string;
   className: string;

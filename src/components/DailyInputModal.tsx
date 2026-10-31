@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   CheckCircle2, 
@@ -72,9 +72,11 @@ interface DailyInputModalProps {
   preSelectedStudentId?: string;
   initialStudentId?: string;
   onSaveSuccess?: () => void;
+  onSelectNextStudent?: (studentId: string) => void;
   editRecord?: MemorizationRecord | null;
   editUmmiRecord?: UmmiRecord | null;
   defaultTab?: 'quran' | 'ummi' | 'presensi';
+  initialOpenScanner?: boolean;
 }
 
 export const DailyInputModal: React.FC<DailyInputModalProps> = ({
@@ -91,9 +93,11 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
   preSelectedStudentId,
   initialStudentId,
   onSaveSuccess,
+  onSelectNextStudent,
   editRecord = null,
   editUmmiRecord = null,
-  defaultTab = 'quran'
+  defaultTab = 'quran',
+  initialOpenScanner = false
 }) => {
   // Mode: 'quran' | 'ummi' | 'presensi'
   const [activeTab, setActiveTab] = useState<'quran' | 'ummi' | 'presensi'>(() => {
@@ -114,7 +118,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
   const [selectedClassId, setSelectedClassId] = useState<string>(classes[0]?.id || '');
   const [selectedStudentId, setSelectedStudentId] = useState<string>(effectiveInitialStudentId || students[0]?.id || '');
   const [recordDate, setRecordDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [showInlineBarcodeScanner, setShowInlineBarcodeScanner] = useState<boolean>(false);
+  const [showInlineBarcodeScanner, setShowInlineBarcodeScanner] = useState<boolean>(initialOpenScanner);
 
   // Quran Form State: Surat Awal & Surat Akhir
   const [selectedStartSurahNumber, setSelectedStartSurahNumber] = useState<number>(78); // Default An-Naba
@@ -150,11 +154,21 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
   // Verification Modal Step
   const [showVerificationModal, setShowVerificationModal] = useState<boolean>(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [successFeedback, setSuccessFeedback] = useState<string | null>(null);
 
-  // Sync state when editRecord or editUmmiRecord changes
+  // Ref to ensure student is only initialized once upon opening modal, preventing reset on re-renders
+  const hasInitializedStudentRef = useRef<boolean>(false);
+
+  // Sync state when editRecord, editUmmiRecord or modal open state changes
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      hasInitializedStudentRef.current = false;
+      setSuccessFeedback(null);
+      return;
+    }
+
     if (editRecord) {
+      hasInitializedStudentRef.current = true;
       setActiveTab('quran');
       const std = students.find(s => s.id === editRecord.studentId || s.nis === editRecord.studentId);
       setSelectedStudentId(std ? std.id : editRecord.studentId);
@@ -173,6 +187,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
       }
       if (std) setSelectedClassId(std.classId);
     } else if (editUmmiRecord) {
+      hasInitializedStudentRef.current = true;
       setActiveTab('ummi');
       const std = students.find(s =>
         s.id === editUmmiRecord.studentId ||
@@ -188,11 +203,15 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
       setUmmiStatus(editUmmiRecord.status);
       setUmmiNotes(editUmmiRecord.notes || '');
       if (std) setSelectedClassId(std.classId);
-    } else {
+    } else if (!hasInitializedStudentRef.current) {
+      // First time opening the modal
+      hasInitializedStudentRef.current = true;
       setActiveTab(defaultTab);
-      if (preSelectedStudentId) {
-        const std = students.find(s => s.id === preSelectedStudentId || s.nis === preSelectedStudentId);
-        setSelectedStudentId(std ? std.id : preSelectedStudentId);
+      setShowInlineBarcodeScanner(Boolean(initialOpenScanner));
+      const targetId = preSelectedStudentId || initialStudentId;
+      if (targetId) {
+        const std = students.find(s => s.id === targetId || s.nis === targetId);
+        setSelectedStudentId(std ? std.id : targetId);
         if (std) {
           setSelectedClassId(std.classId);
           if (std.currentUmmiJilid && std.currentUmmiJilid !== '-') {
@@ -204,7 +223,7 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
         }
       }
     }
-  }, [isOpen, editRecord?.id, editUmmiRecord?.id, preSelectedStudentId, defaultTab]);
+  }, [isOpen, editRecord?.id, editUmmiRecord?.id, preSelectedStudentId, initialStudentId, defaultTab, initialOpenScanner]);
 
   if (!isOpen) return null;
 
@@ -488,9 +507,10 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
   // Step 2: Confirmed Save
   const handleConfirmSave = (continueToNextStudent: boolean = false) => {
     const teacherId = currentTeacher?.id || selectedStudent?.teacherId || allTeachers[0]?.id || 't-1';
+    const savedStudentName = selectedStudent?.name || 'Santri';
 
     if (activeTab === 'quran') {
-      if (editRecord && onUpdateMemorization) {
+      if (editRecord) {
         const updatedRecord: MemorizationRecord = {
           ...editRecord,
           studentId: selectedStudent.id,
@@ -510,10 +530,12 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
           notes: notes.trim(),
           tasmiHalamanCount: setoranType === 'Tasmi\'' ? tasmiHalaman : undefined
         };
-        onUpdateMemorization(updatedRecord);
-      } else if (onSaveMemorization) {
+        // Directly persist to storageService
+        storageService.updateMemorizationRecord(updatedRecord);
+        if (onUpdateMemorization) onUpdateMemorization(updatedRecord);
+      } else {
         const newRecord: MemorizationRecord = {
-          id: 'rec-' + Date.now(),
+          id: 'rec-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
           studentId: selectedStudent.id,
           teacherId: teacherId,
           date: recordDate,
@@ -533,10 +555,12 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
           verified: true,
           tasmiHalamanCount: setoranType === 'Tasmi\'' ? tasmiHalaman : undefined
         };
-        onSaveMemorization(newRecord);
+        // Directly persist to storageService
+        storageService.addMemorizationRecord(newRecord);
+        if (onSaveMemorization) onSaveMemorization(newRecord);
       }
     } else {
-      if (editUmmiRecord && onUpdateUmmi) {
+      if (editUmmiRecord) {
         const updatedUmmiRecord: UmmiRecord = {
           ...editUmmiRecord,
           studentId: selectedStudent.id,
@@ -548,10 +572,12 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
           status: ummiStatus,
           notes: ummiNotes.trim()
         };
-        onUpdateUmmi(updatedUmmiRecord);
-      } else if (onSaveUmmi) {
+        // Directly persist to storageService
+        storageService.updateUmmiRecord(updatedUmmiRecord);
+        if (onUpdateUmmi) onUpdateUmmi(updatedUmmiRecord);
+      } else {
         const newUmmiRecord: UmmiRecord = {
-          id: 'ummi-' + Date.now(),
+          id: 'ummi-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
           studentId: selectedStudent.id,
           teacherId: teacherId,
           date: recordDate,
@@ -562,7 +588,9 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
           status: ummiStatus,
           notes: ummiNotes.trim()
         };
-        onSaveUmmi(newUmmiRecord);
+        // Directly persist to storageService
+        storageService.addUmmiRecord(newUmmiRecord);
+        if (onSaveUmmi) onSaveUmmi(newUmmiRecord);
       }
     }
 
@@ -587,12 +615,28 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
       if (currentIndex >= 0 && currentIndex < filteredStudents.length - 1) {
         const nextStudent = filteredStudents[currentIndex + 1];
         setSelectedStudentId(nextStudent.id);
-        if (nextStudent.currentUmmiJilid) {
+        if (onSelectNextStudent) {
+          onSelectNextStudent(nextStudent.id);
+        }
+
+        // Reset notes and initialize for next student
+        setNotes('');
+        setUmmiNotes('');
+
+        if (nextStudent.currentUmmiJilid && nextStudent.currentUmmiJilid !== '-') {
           setUmmiJilid(nextStudent.currentUmmiJilid);
+          const nextPage = (nextStudent.currentUmmiPage || 0) + 1;
+          setUmmiPage(nextPage);
+          setUmmiMaterial(`${nextStudent.currentUmmiJilid} Hal. ${nextPage}`);
+        } else {
+          setUmmiPage(1);
+          setUmmiMaterial('');
         }
-        if (nextStudent.currentUmmiPage) {
-          setUmmiPage(nextStudent.currentUmmiPage);
-        }
+
+        setSuccessFeedback(`Data setoran ananda ${savedStudentName} berhasil disimpan! Beralih ke santri berikutnya: ${nextStudent.name}.`);
+        setTimeout(() => {
+          setSuccessFeedback(null);
+        }, 5000);
       } else {
         onClose();
       }
@@ -602,20 +646,20 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in">
-      <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-1.5 sm:p-4 md:p-6 animate-in fade-in">
+      <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[96vh] sm:max-h-[92vh]">
         
         {/* Modal Header */}
-        <div className="bg-[#1E293B] text-white px-5 py-4 flex items-center justify-between border-b border-slate-700">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#D4AF37] text-white flex items-center justify-center font-bold">
-              <Sparkles className="w-4 h-4 text-[#1E293B]" />
+        <div className="bg-[#1E293B] text-white px-3.5 sm:px-5 py-3 sm:py-4 flex items-center justify-between border-b border-slate-700">
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#D4AF37] text-white flex items-center justify-center font-bold shrink-0">
+              <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#1E293B]" />
             </div>
             <div>
-              <h2 className="text-base font-bold flex items-center gap-2">
-                Setoran Hari Ini (Fast Input iPad)
+              <h2 className="text-sm sm:text-base font-bold flex items-center gap-2">
+                Setoran Hari Ini (Fast Input iPad/Mobile)
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-[11px] sm:text-xs text-slate-400">
                 Pencatatan Hafalan Al-Qur'an & Evaluasi Metode Ummi
               </p>
             </div>
@@ -629,11 +673,22 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1">
+        <div className="p-3 sm:p-5 md:p-6 overflow-y-auto space-y-4 sm:space-y-5 flex-1">
+
+          {/* Success Feedback Banner */}
+          {successFeedback && (
+            <div className="p-3 sm:p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 flex items-start gap-2.5 text-xs text-emerald-900 font-semibold shadow-xs animate-in slide-in-from-top-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <span className="font-bold block text-emerald-800">Tersimpan Berhasil:</span>
+                <span>{successFeedback}</span>
+              </div>
+            </div>
+          )}
 
           {/* Validation Error Banner */}
           {validationError && (
-            <div className="p-3.5 rounded-lg bg-red-50 border border-red-200 flex items-start gap-2.5 text-xs text-red-700 animate-in slide-in-from-top-2">
+            <div className="p-3 sm:p-3.5 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2.5 text-xs text-red-700 animate-in slide-in-from-top-2">
               <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold">Periksa Kembali Data Input:</p>
@@ -703,10 +758,47 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
             </div>
 
             {showInlineBarcodeScanner && (
-              <div className="p-3 bg-white rounded-xl border-2 border-[#D4AF37] space-y-2 animate-in fade-in">
+              <div className="p-3.5 bg-white rounded-xl border-2 border-[#D4AF37] space-y-3 animate-in fade-in">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                  <span className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+                    <ScanLine className="w-4 h-4 text-[#8C7015]" />
+                    <span>
+                      Mode Scan Aktif:{' '}
+                      {activeTab === 'ummi'
+                        ? 'Absen + Input Metode Ummi'
+                        : 'Absen + Input Hafalan Al-Qur\'an'}
+                    </span>
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleTabSwitch('quran')}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition cursor-pointer ${
+                        activeTab === 'quran'
+                          ? 'bg-emerald-700 text-white'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      Hafalan Al-Qur&apos;an
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleTabSwitch('ummi')}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition cursor-pointer ${
+                        activeTab === 'ummi'
+                          ? 'bg-blue-700 text-white'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      Metode Ummi
+                    </button>
+                  </div>
+                </div>
+
                 <CameraAndBarcodeScannerBox
                   students={students}
                   classes={classes}
+                  autoStart={true}
                   onStudentScanned={(scannedStd) => {
                     setFilterMode('all');
                     setSelectedClassId(scannedStd.classId);
@@ -721,9 +813,16 @@ export const DailyInputModal: React.FC<DailyInputModalProps> = ({
                     setAttendanceSuccessMessage(
                       `Scan QR/Barcode Berhasil: ${scannedStd.name} (${buildStudentQrCodeBadgeId(scannedStd)}) terpilih & otomatis tercatat HADIR pada ${recordDate}!`
                     );
-                    setTimeout(() => setAttendanceSuccessMessage(''), 4500);
+                    setTimeout(() => setAttendanceSuccessMessage(''), 5000);
                   }}
                 />
+              </div>
+            )}
+
+            {attendanceSuccessMessage && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-extrabold flex items-center gap-2 animate-in fade-in">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{attendanceSuccessMessage}</span>
               </div>
             )}
 

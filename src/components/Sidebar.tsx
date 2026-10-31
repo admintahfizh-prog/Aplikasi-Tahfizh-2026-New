@@ -21,7 +21,8 @@ import {
   X,
   Award,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Menu
 } from 'lucide-react';
 import { Role, User, Teacher } from '../types';
 import { AvatarBadge } from './AvatarBadge';
@@ -40,6 +41,7 @@ interface SidebarProps {
   onToggle?: () => void;
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
+  onOpenMobile?: () => void;
 }
 
 interface NavItemConfig {
@@ -63,7 +65,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpen = true,
   onToggle,
   isMobileOpen = false,
-  onCloseMobile
+  onCloseMobile,
+  onOpenMobile
 }) => {
   const current = activeView || currentView || 'dashboard';
   const isExamViewActive =
@@ -405,23 +408,104 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* Mobile Bottom Navigation Bar */}
-      <nav className="no-print md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1E293B] border-t border-slate-700 px-2 py-1 flex items-center justify-around">
-        {navItems.slice(0, 5).map((item) => {
-          const Icon = item.icon;
-          const isActive = current === item.id || (item.id === 'parent-portal' && current === 'portal-wali');
-          return (
+      <nav className="no-print md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1E293B] border-t border-slate-700 px-2 py-1 flex items-center justify-around shadow-2xl">
+        {userRole === 'wali' ? (
+          <>
             <button
-              key={item.id}
-              onClick={() => handleSelectView(item.id)}
+              onClick={() => handleSelectView('parent-portal')}
               className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
-                isActive ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+                current === 'parent-portal' ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <Icon className="w-4 h-4 mb-0.5" />
-              <span className="truncate max-w-[60px]">{item.label}</span>
+              <HeartHandshake className="w-4 h-4 mb-0.5" />
+              <span>Beranda</span>
             </button>
-          );
-        })}
+            <button
+              onClick={() => handleSelectView('hafalan')}
+              className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
+                current === 'hafalan' ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <BookOpen className="w-4 h-4 mb-0.5" />
+              <span>Hafalan</span>
+            </button>
+            <button
+              onClick={() => handleSelectView('ummi')}
+              className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
+                current === 'ummi' ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <BookMarked className="w-4 h-4 mb-0.5" />
+              <span>Ummi</span>
+            </button>
+            <button
+              onClick={() => handleSelectView('reports')}
+              className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
+                current === 'reports' ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4 mb-0.5" />
+              <span>Raport</span>
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => handleSelectView('dashboard')}
+              className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
+                current === 'dashboard' ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <LayoutDashboard className="w-4 h-4 mb-0.5" />
+              <span>Dashboard</span>
+            </button>
+            <button
+              onClick={() => handleSelectView('students')}
+              className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
+                current === 'students' ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <GraduationCap className="w-4 h-4 mb-0.5" />
+              <span>Santri</span>
+            </button>
+            <button
+              onClick={() => handleSelectView('hafalan')}
+              className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
+                current === 'hafalan' ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <BookOpen className="w-4 h-4 mb-0.5" />
+              <span>Hafalan</span>
+            </button>
+            <button
+              onClick={() => handleSelectView('ummi')}
+              className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
+                current === 'ummi' ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <BookMarked className="w-4 h-4 mb-0.5" />
+              <span>Ummi</span>
+            </button>
+          </>
+        )}
+
+        {/* Menu Drawer Toggle Button */}
+        <button
+          onClick={() => {
+            if (onOpenMobile) {
+              onOpenMobile();
+            } else if (onToggle) {
+              onToggle();
+            }
+          }}
+          className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
+            isMobileOpen ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+          }`}
+          title="Buka Menu Lengkap"
+        >
+          <Menu className="w-4 h-4 mb-0.5 text-[#D4AF37]" />
+          <span>Menu</span>
+        </button>
       </nav>
     </>
   );

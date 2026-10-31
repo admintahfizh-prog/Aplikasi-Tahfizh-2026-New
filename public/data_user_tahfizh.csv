@@ -1,0 +1,382 @@
+nama,pengguna,peran,nis,nisn,kelas,term,nama_ortu,no_hp
+"Ustadz Muh. Saifuddin,S.Si (Admin)",admin,admin,01.0125,-,-,Term 1,-,081329047795
+"Ustadz Ahmad Fauzan, Lc.",fauzan,guru,198805122015011001,-,7A Tahfizh / 8 Tahfizh Unggulan,Term 1,-,081298765432
+"Ustadzah Siti Maryam, S.Pd.I",maryam,guru,199203152018022003,-,7B Bilingual / 8 Tahfizh Unggulan,Term 1,-,081311223344
+"Ustadz M. Ridwan, M.Ag.",zulkifli,guru,198511202012011002,-,8 Tahfizh Unggulan,Term 1,-,081577889900
+"Ustadz Muhammad Yusrie Alfian, S.Ag.",guru.0413,guru,04.0413,-,8C Bilingual Digital / 8E Digital,Term 1,-,085325786527
+"Ustadzah Laras Nastiti, S.Pd.",guru.0401,guru,04.0401,-,8A Tahfizh,Term 1,-,+62 822-3455-7444
+"Ustadz Nurhadi, S.Pd",guru.0444,guru,16.03.0444,-,7E Digital / 9A Tahfizh,Term 1,-,+62 877-2596-0891
+"Ustadzah Mutiarsih Khairrul Bari, S.Ag., S.Pd.I.",guru.0112,guru,06.02.0112,-,7A Tahfizh,Term 1,-,081393025198
+"Ustadz Dede Yusup Sapwatulloh, S.Ag",guru.0552,guru,04.0552,-,8D Bilingual Digital / 7B Bilingual,Term 1,-,085312807352
+Ustadzah Aisyah Nur Hasanah,guru.0498,guru,04.0498,-,7D Bilingual Digital / 9E Digital,Term 1,-,085743288985
+"Ustadz Muhammad Azharuddin Rozi, S.Ag",guru.0537,guru,04.0537,-,9C Bilingual Digital / 9D Bilingual Digital,Term 1,-,081215962603
+"Ustadzah Cahaya Harum Mashitah, S.Sos",guru.0590,guru,04.0590,-,7C Bilingual Digital / 8B BIlingual / 9B Bilingual,Term 1,-,+62 812-2687-2277
+Afiya Yumna Fajriya,4321-2627260,wali,4321-2627260,0142194274,7A Tahfizh,Term 1,Ery Perdana,081232730030
+Ahmad Rayhan Al-Fatih,wali.rayhan,wali,2607001,0112345671,7A Tahfizh,Term 1,Bpk. Hendra Gunawan,081399887766
+Alecia Mikayla Dafania,4321-2627264,wali,4321-2627264,0146518163,7A Tahfizh,Term 1,Muhammad Afifudin,082226600220
+Aqila Qaisara Salsabila,4321-2627270,wali,4321-2627270,0131195187,7A Tahfizh,Term 1,Akmal Asari,085223004622
+Arka Keandra Alvarylo,4321-2627272,wali,4321-2627272,0139431783,7A Tahfizh,Term 1,Bayu Nofrida Sri Adiputra,085875148874
+Aulya Nur Lutfhi Az Zahra,4321-2627274,wali,4321-2627274,3135901285,7A Tahfizh,Term 1,Rifandi,085775690917
+Azka Darrel Adhiatmadja,4321-2627275,wali,4321-2627275,0133941522,7A Tahfizh,Term 1,Yoyok Sugito,081229292013
+Azura Carissa Wandri,4321-2627279,wali,4321-2627279,0148449379,7A Tahfizh,Term 1,Rades Wandri,08129771906
+Cahaya Putri Andin,4321-2627281,wali,4321-2627281,0135653787,7A Tahfizh,Term 1,Nazarudin,082278982363
+Fatih Ibra Anwar,4321-2627292,wali,4321-2627292,0135992232,7A Tahfizh,Term 1,Agus Arifin Anwar,081548679959
+Firdaus Aan Fauzzaky,4321-2627294,wali,4321-2627294,0149998934,7A Tahfizh,Term 1,Ahmad Sabarakywan Fauzzaky,082335592784
+Genta Satria Wicaksono,4321-2627296,wali,4321-2627296,0143520501,7A Tahfizh,Term 1,Nanang Lagiono,085645161041
+Karaissa Naraya,4321-2627312,wali,4321-2627312,0141709289,7A Tahfizh,Term 1,Duwi Syamsul Anang,085641122882
+Keenan Al Biruni Sanjaya,4321-2627316,wali,4321-2627316,0137807032,7A Tahfizh,Term 1,Gading Fitra Sanjaya,08972005476
+Maheswari Arsylla Ramadhani,4321-2627325,wali,4321-2627325,3136502375,7A Tahfizh,Term 1,Sriyanto,081225896999
+Muhammad Adlan Fadhlurrahman,4321-2627331,wali,4321-2627331,3141294950,7A Tahfizh,Term 1,Priyadi Nugroho Hafid,082136632330
+Mutiara Zahra,4321-2627339,wali,4321-2627339,3146750418,7A Tahfizh,Term 1,Ari Yakup,0882003537925
+Nabila Khanza Hamidah,4321-2627342,wali,4321-2627342,0132742618,7A Tahfizh,Term 1,Totok Hartopo,081326510010
+Naline Kahla Primawandani,4321-2627374,wali,4321-2627374,0146015371,7A Tahfizh,Term 1,Nugroho Setyawan,081329211377
+Nazila Azzahratusyita Wibowo,4321-2627349,wali,4321-2627349,3136461753,7A Tahfizh,Term 1,Jangkung Wibowo,08128221507
+Raisa Fahmida Ghania,4321-2627353,wali,4321-2627353,0136109106,7A Tahfizh,Term 1,Ervan Kusuma Putra,082135961943
+Salsabila Lubna Nur Luthfiah,4321-2627358,wali,4321-2627358,0135969231,7A Tahfizh,Term 1,Mohamad Nurcholis,085161619794
+Shofiya Adzkia Zahra,4321-2627360,wali,4321-2627360,0143850544,7A Tahfizh,Term 1,Hartanto Dwi Nugroho,085647051656
+Abyantara Mazka Mahatma,4321-2627254,wali,4321-2627254,139108485,7B Bilingual,Term 1,Hadi Sutiyo,085867218905
+Adeeva Naya Alfatanisa,4321-2627255,wali,4321-2627255,149926247,7B Bilingual,Term 1,Nanang Adi Nugroho,085701453266
+Al Ghazali Bagas Haziq Mintoro,4321-2627263,wali,4321-2627263,3147805429,7B Bilingual,Term 1,Huring Sanji Mintoro,08122421048
+Alhafiizh Bintang Fathii Ramadhan,4321-2627265,wali,4321-2627265,143238725,7B Bilingual,Term 1,Effendi Harahap,081327367618
+Alisha Harini Yudiman,4321-2627266,wali,4321-2627266,3140080382,7B Bilingual,Term 1,Twody Yudiman,081391736149
+Anindito Abimanyu Yudica,4321-2627269,wali,4321-2627269,148656694,7B Bilingual,Term 1,Rustamaji Yudica Adi Nugraha,0821836616699
+Athar Rafief Wiratama,4321-2627273,wali,4321-2627273,135559334,7B Bilingual,Term 1,Yoga Graha Pratama,081215611133
+Bilqis Kamila Baiq,4321-2627280,wali,4321-2627280,148517042,7B Bilingual,Term 1,Sutomo,085349645874
+Faizal Putra Wijaya,4321-2627289,wali,4321-2627289,134876100,7B Bilingual,Term 1,Muh. Abdurohim,082138717410
+Finsha Putri Natasha,4321-2627293,wali,4321-2627293,136731316,7B Bilingual,Term 1,Lilik Sugiarto,085647373789
+Haidar Muzakki Hermawan,4321-2627297,wali,4321-2627297,134271996,7B Bilingual,Term 1,M Rofiq Hermawan,081329631985
+Hamizan Arcturus Wardhana,4321-2627299,wali,4321-2627299,3132950762,7B Bilingual,Term 1,Sulistiya Jaya Wardhana,081226462639
+Ihsan Muhammad Faruq,4321-2627304,wali,4321-2627304,3130457708,7B Bilingual,Term 1,Agus Purbayu,081328420898
+Ilham Dzaky Avicena,4321-2627305,wali,4321-2627305,134000358,7B Bilingual,Term 1,Basuri,085702424166
+Jaris Badru Tamam,4321-2627306,wali,4321-2627306,143053193,7B Bilingual,Term 1,Taufik Amin Suryanto,085728129099
+Jonathan Fahreza,4321-2627307,wali,4321-2627307,132555840,7B Bilingual,Term 1,Puguh Ratyanto,08122598999
+Kaisa Almasakhi Sumarah,4321-2627310,wali,4321-2627310,3148253325,7B Bilingual,Term 1,Darmadi Joko Sumarah,082160008008
+Karina Rara Kirana,4321-2627313,wali,4321-2627313,3140848034,7B Bilingual,Term 1,Prasetyo Arief Wibowo,082138599990
+Kenzie Dzakwan Erlan Waradana,4321-2627318,wali,4321-2627318,137576457,7B Bilingual,Term 1,Herlan Murtiyanto,081243573059
+Maryam Khairunnisa,2508002,wali,2508002,0102345682,7B Bilingual,Term 1,Bpk. Ir. Danang Priyanto,081377889911
+Muhammad Dzaky Ramadhan,4321-2627332,wali,4321-2627332,134455622,7B Bilingual,Term 1,Budi Mujiyanto,087734691693
+Muhammad Pandu Satrio Dewanto,4321-2627336,wali,4321-2627336,141533392,7B Bilingual,Term 1,Sriyono,081327220583
+Nabil Razqa Nayottama,4321-2627341,wali,4321-2627341,146671218,7B Bilingual,Term 1,"Krismianto, S.Si",-
+Rajendra Mahardika Purwanto,4321-2627354,wali,4321-2627354,131506632,7B Bilingual,Term 1,Sri Purwanto,08122596122
+Sheehan Adline Maysandy,4321-2627359,wali,4321-2627359,144082917,7B Bilingual,Term 1,Azmi Salis Kusdian,081291110882
+Syafiq Khairul Anam,4321-2627361,wali,4321-2627361,0142380854,7B Bilingual,Term 1,"Heru Hadiyono, S.Pd",-
+Tegar Sakha Adinata,4321-2627362,wali,4321-2627362,133962452,7B Bilingual,Term 1,Bella Nusa Putra,081329440003
+Tristan Adhyaksa Rahman,4321-2627363,wali,4321-2627363,145701085,7B Bilingual,Term 1,Jarot Hari Rahman,085227371117
+Ulfira Zahra Latifa,4321-2627364,wali,4321-2627364,141070994,7B Bilingual,Term 1,Muhammad Ulin Nuha,081234561603
+Zahid Affan Rusdi,4321-2627367,wali,4321-2627367,126211881,7B Bilingual,Term 1,Rusdiyanto,082242313738
+Zaidan Sulthon Akhsanuddin,4321-2627369,wali,4321-2627369,3137495204,7B Bilingual,Term 1,Muh. Heru Susanto,085229460739
+Adinda Kharisma Putri Kencono,4321-2627258,wali,4321-2627258,0146615800,7C Bilingual Digital,Term 1,"Slamet Wibowo, S.S",-
+Akbar Caesar Firdaus,4321-2627262,wali,4321-2627262,0137707010,7C Bilingual Digital,Term 1,Azwar Irawan,082210820556
+Aliyya,4321-2627267,wali,4321-2627267,0137926826,7C Bilingual Digital,Term 1,Husan,081228555171
+Azlan Waffi Khaizan,4321-2627278,wali,4321-2627278,0141153830,7C Bilingual Digital,Term 1,Alfian Wahyu Pratama,081328084632
+Deandra Almeera Charmaraiza,4321-2627284,wali,4321-2627284,0142145839,7C Bilingual Digital,Term 1,Rhony Widya Prasetya,085853701111
+Dhia Syarafana Adifa,4321-2627285,wali,4321-2627285,0143192052,7C Bilingual Digital,Term 1,Bambang Gunadi,08122633382
+Enzo Arasy Nareswara,4321-2627287,wali,4321-2627287,0144397859,7C Bilingual Digital,Term 1,Brago Adijaya Putranto,081223311991
+Fajria Nada Salsabilla Fawzy,4321-2627290,wali,4321-2627290,0135419025,7C Bilingual Digital,Term 1,Muhammad Fawzy,08112539747
+Fitrah Rizky Akbar,4321-2627295,wali,4321-2627295,0143444564,7C Bilingual Digital,Term 1,Susanto,0821-3885-4005
+Juanita Rahma Putri Anggraeni,4321-2627308,wali,4321-2627308,0135830308,7C Bilingual Digital,Term 1,Juwanto. SS,081227004444
+Kanaya Nareswari Azzalia,4321-2627311,wali,4321-2627311,0139995908,7C Bilingual Digital,Term 1,Agus Supriyanto,081227084356
+Kayla Elsa Kaneswari,4321-2627314,wali,4321-2627314,0147268852,7C Bilingual Digital,Term 1,Imam Safi'i,082134343435
+Kinanti Fayra Allynisa Arrifda,4321-2627321,wali,4321-2627321,3135626750,7C Bilingual Digital,Term 1,Arief Ardiansyah,082182529023
+Luvinna Sarah Pramesti,4321-2627324,wali,4321-2627324,0135158101,7C Bilingual Digital,Term 1,Sanyoto Widagdo,08562516607
+Marsha Anindya Tabitha,4321-2627327,wali,4321-2627327,0145129932,7C Bilingual Digital,Term 1,Muhammad Arifa'i,08112883808
+Mazenava Faloren Veremya,4321-2627329,wali,4321-2627329,3142777115,7C Bilingual Digital,Term 1,Budi Hermawan,085647001391
+Muhammad Abbyan Satria Prabaswara,4321-2627330,wali,4321-2627330,3145319406,7C Bilingual Digital,Term 1,Widodo,081327961015
+Muhammad Kun Al-Faqih,4321-2627333,wali,4321-2627333,0139213130,7C Bilingual Digital,Term 1,Ukun Rukaendi,081229121537
+Musyafa Asa Muttaqin A.I,4321-2627338,wali,4321-2627338,0145373714,7C Bilingual Digital,Term 1,Wisnu Dewantoro,081391056820
+Naafisah Almaira Khrisna,4321-2627340,wali,4321-2627340,3136409878,7C Bilingual Digital,Term 1,Yulie Khrisna,082133814317
+Naura Janna Harcha,4321-2627348,wali,4321-2627348,3144483168,7C Bilingual Digital,Term 1,dr Taufiq Nur Hariadi.,081222405757
+Puanda Alfatih Kirana,4321-2627350,wali,4321-2627350,0132014777,7C Bilingual Digital,Term 1,Septian Raharjo,0813-9279-0555
+Raffasya Azhareka Dafirizqy,4321-2627352,wali,4321-2627352,3149720276,7C Bilingual Digital,Term 1,Gadafi Agung,08995233613
+Rakhel Tatto Oktobria,4321-2627355,wali,4321-2627355,0136312787,7C Bilingual Digital,Term 1,Kristian Nico Purnomo,081329585865
+Zahirah Tsani Rojabi Nahar,4321-2627368,wali,4321-2627368,0145769307,7C Bilingual Digital,Term 1,Aan Abdul Zanim,0811269705
+Zaki Mohammad Basalamah,4321-2627370,wali,4321-2627370,0131585278,7C Bilingual Digital,Term 1,Mohammad Hafidh,081225026891
+Abdurrahman Fawwaz Apriyudi,4321-2627252,wali,4321-2627252,0134994428,7D Bilingual Digital,Term 1,Eka Apriyudi,081239238883
+Abidzar Fawwaz Azzamy,4321-2627253,wali,4321-2627253,0139648472,7D Bilingual Digital,Term 1,Arif Cahyadi,08112610337
+Adhyastha Syafin Aqilla Pratama,4321-2627257,wali,4321-2627257,0131010330,7D Bilingual Digital,Term 1,Muhammad Syafii,085930984774
+Airin Khalisha Fiandri Tabu,4321-2627261,wali,4321-2627261,0136287727,7D Bilingual Digital,Term 1,Agus Jufri Siswanto,081286068384
+Arini Hendri Arto,4321-2627271,wali,4321-2627271,0135237059,7D Bilingual Digital,Term 1,Hendri Arto Setyo Handoko,081237608963
+Azka Naufal Atharizz Calief,4321-2627277,wali,4321-2627277,0147007592,7D Bilingual Digital,Term 1,Eko Fitriono,082243532359
+Celestial Navy Pradana Santoso,4321-2627282,wali,4321-2627282,0137935667,7D Bilingual Digital,Term 1,Rahmad Santoso,081225422253
+Chayra Sirin Izzaty,4321-2627283,wali,4321-2627283,0143771373,7D Bilingual Digital,Term 1,Tri Heri,081384217142
+Diajeng Prameswari Nugroho,4321-2627286,wali,4321-2627286,3135039897,7D Bilingual Digital,Term 1,Ambrusius Ruspujianto Nugroho,082174127242
+Hanania Tabina Ariyanto,4321-2627301,wali,4321-2627301,0132675768,7D Bilingual Digital,Term 1,Yuli Dwi Ariyanto,082154866652
+Kaisa Aliya Azzalfa Kuncoro,4321-2627309,wali,4321-2627309,3148324259,7D Bilingual Digital,Term 1,Bima Sri Kuncoro,08122613225
+Kayla Nafisha Ramadhania,4321-2627315,wali,4321-2627315,0134244407,7D Bilingual Digital,Term 1,Bayu Armujito,081284516687
+Keisha Almira Pratiwi,4321-2627317,wali,4321-2627317,3148739536,7D Bilingual Digital,Term 1,"Ari Angga Pratama, S.T",-
+Khanisa Alesha Az Zahra,4321-2627319,wali,4321-2627319,0138880635,7D Bilingual Digital,Term 1,Eka Yulianta,082226250152
+Khayla Batrisya Indrawan,4321-2627320,wali,4321-2627320,0135468149,7D Bilingual Digital,Term 1,Indra Marza Indrawan,087774289296
+Laire Alfath Qaireen Nasywa,4321-2627322,wali,4321-2627322,0132464093,7D Bilingual Digital,Term 1,Djoko Supriyanto,081547383077
+Lilly Anna Purnawan,4321-2627323,wali,4321-2627323,0146318952,7D Bilingual Digital,Term 1,Sabdo purnawan,08156742845
+Maritza Amirah Ainunmahya,4321-2627326,wali,4321-2627326,0146025399,7D Bilingual Digital,Term 1,Kuncoro Adi Wiguno,081228176385
+Mayshara Jasmina Salsabila,4321-2627328,wali,4321-2627328,0146629148,7D Bilingual Digital,Term 1,Totok Nalongso,082341310600
+Muhammad Zaidan,4321-2627337,wali,4321-2627337,0147870616,7D Bilingual Digital,Term 1,Ahmad Firza,085290709005
+Nadhif Al Zaim Ajka,4321-2627343,wali,4321-2627343,0143492047,7D Bilingual Digital,Term 1,Gawang Sudrajat,085728023099
+Nadhira Milanoura Perdana,4321-2627344,wali,4321-2627344,0148903561,7D Bilingual Digital,Term 1,Rangga Perdana,081316299915
+Nafisa Victoria Susanto,4321-2627346,wali,4321-2627346,0143780614,7D Bilingual Digital,Term 1,Wawan Susanto,081393223797
+Naura Adzkiya Zahida,4321-2627347,wali,4321-2627347,3139110520,7D Bilingual Digital,Term 1,Arief Harseno,081393393340
+Ramadhan El Rumi,4321-2627356,wali,4321-2627356,3130346050,7D Bilingual Digital,Term 1,Setiawan Ananto,085216888200
+Rezqianno Gibran Dewangkara,4321-2627357,wali,4321-2627357,3138341439,7D Bilingual Digital,Term 1,Ebit Triwibowo,081327547537
+Wahyu Baroto Putro,4321-2627366,wali,4321-2627366,0142880042,7D Bilingual Digital,Term 1,Mayor CKM dr.Eko Sri Baroto Sp.AN,085372566564
+Adelia Azzahra Rahmadhani,4321-2627256,wali,4321-2627256,0145092147,7E Digital,Term 1,Sony Agnes Dwi Hartanto,085643792237
+Afiqa Qiran Hufaida,4321-2627259,wali,4321-2627259,0141919957,7E Digital,Term 1,Nanang Yudi Pratama,082133178383
+Almas Yafi' Haidar Wardoyo,4321-2627268,wali,4321-2627268,0145017040,7E Digital,Term 1,Anjar Wardoyo.S.T.,085226400614
+Azka Haidar Al Fath,4321-2627276,wali,4321-2627276,0137333989,7E Digital,Term 1,Arifin Dwi Handoko,081329411144
+Fachri Hanung Ramadhan,4321-2627288,wali,4321-2627288,0138134261,7E Digital,Term 1,Hari Muhrawan,+97455067185
+Farah Dyasafa Putri Mulyono,4321-2627291,wali,4321-2627291,3131232241,7E Digital,Term 1,Edi Mulyono,081390377274
+Haikal Anindito Argani,4321-2627298,wali,4321-2627298,0147258842,7E Digital,Term 1,Sony Indra Aditya,085700328116
+Hanan At Tahiyyah,4321-2627300,wali,4321-2627300,3135112055,7E Digital,Term 1,Ido Baskoro,087835756222
+Hanka Budi Ibrahim,4321-2627302,wali,4321-2627302,0133901910,7E Digital,Term 1,Iwan Budi Winaryoko,081931966136
+Ibnu Tsany Azka Maulana,4321-2627303,wali,4321-2627303,0143269645,7E Digital,Term 1,Adhi setiyarta,081226029191
+Muhammad Mawla Loudiansyah,4321-2627334,wali,4321-2627334,3141541283,7E Digital,Term 1,"Lobrin Agung Qurniawan, S.IP",-
+Muhammad Nizam Fakhri Haikal,4321-2627335,wali,4321-2627335,0138438345,7E Digital,Term 1,Sukarmin,08111263800
+Qiana Maulid Dinar Anwar,4321-2627351,wali,4321-2627351,0143026368,7E Digital,Term 1,Mulyadi Anwar Dewang Belopadang,08114885783
+Wafida Shafiya Hanim,4321-2627365,wali,4321-2627365,0136159067,7E Digital,Term 1,Wijiyanto,081255552081
+Abdurrahman Farih Alanshori,2607075,wali,2607075,0112345617,8 Tahfizh Unggulan,Term 1,Ayub Anshori,08587772616
+Muhammad Farhan Ramadhan,2409001,wali,2409001,0092345691,8 Tahfizh Unggulan,Term 1,Bpk. H. Bambang Irawan,081288990011
+Muhammad Ziyad Al-Farisi,2607003,wali,2607003,0112345673,8 Tahfizh Unggulan,Term 1,Bpk. Dr. Irfan Hakim,081122334455
+Naura Salsabila Firdaus,2607007,wali,2607007,0112345677,8 Tahfizh Unggulan,Term 1,Ibu Hj. Ernawati,081911224466
+Abdurrahman Farih Al-Anshari,4321-2526127,wali,4321-2526127,3139880636,8A Tahfizh,Term 1,Ayub Anshari,085877722616
+Alvaro Nathan Fajar Pratama,4321-2526140,wali,4321-2526140,0122051832,8A Tahfizh,Term 1,Wachid Mei Prihantoro,081327261494
+Alya Nur Azizah,4321-2526247,wali,4321-2526247,0134496479,8A Tahfizh,Term 1,Mohamad Agus Cahyono,081226269090
+Azzam Robbani,4321-2526151,wali,4321-2526151,0121773885,8A Tahfizh,Term 1,Abdul Basith Adnan,081805535010
+Farros Arkan Shahzada,4321-2526168,wali,4321-2526168,0132528918,8A Tahfizh,Term 1,Mubasir,081329779883
+Fathan Khairy Ahsan,4321-2526170,wali,4321-2526170,3132865653,8A Tahfizh,Term 1,Arip Budi Cahyono,081321120002
+Faza Hidayat Al Kafi,4321-2526171,wali,4321-2526171,3124257461,8A Tahfizh,Term 1,Wahyu Hidayat,085647418201
+Felycia Lathifa Wandoyo,4321-2526172,wali,4321-2526172,0138141860,8A Tahfizh,Term 1,Endry Tri Wandoyo,081393237778
+Freya Nafeeza La Rose,4321-2526175,wali,4321-2526175,0125599899,8A Tahfizh,Term 1,Rosid Nugroho,081393666660
+Hasna Syifa Angelia,4321-2526182,wali,4321-2526182,0121124080,8A Tahfizh,Term 1,Hartanto Dwi Nugroho,085229697869
+Jerreld Fadlurahman,4321-2526188,wali,4321-2526188,0124745218,8A Tahfizh,Term 1,Rahman,082220069909
+Khaira Rizki Putri Ajik,4321-2526195,wali,4321-2526195,0131285089,8A Tahfizh,Term 1,Cancoyo Ajik,081227930777
+Muhammad Djibran Hanif Jagratara,4321-2526205,wali,4321-2526205,0134460454,8A Tahfizh,Term 1,Soeryana Yudha Asmara,08121500150
+Muhammad Ezra Ramadhan,4321-2526206,wali,4321-2526206,0134897644,8A Tahfizh,Term 1,Aftian Abdul Adhim,081215570594
+Muhammad Favio Fausta,4321-2526209,wali,4321-2526209,0121847850,8A Tahfizh,Term 1,Sumardi,081387539543
+Sultan Zaki Aurelio Ahmad,4321-2526250,wali,4321-2526250,0124256171,8A Tahfizh,Term 1,"Ahmad Sunardi, SE",-
+Yusuf Abdillah,4321-2526243,wali,4321-2526243,0126617328,8A Tahfizh,Term 1,Sazadi Abdilah,085647271010
+Abdurrahman Al Faqih,4321-2526126,wali,4321-2526126,0121627783,8B BIlingual,Term 1,Gatot Yuni Ervianto,081378079155
+Aishasita Ramadhani Arya,4321-2526133,wali,4321-2526133,0136156255,8B BIlingual,Term 1,"Erwin Ariyanto AS, ST",-
+Aisyah Prita Zahira,4321-2526134,wali,4321-2526134,0132676296,8B BIlingual,Term 1,K. Primandoko,08112959266
+Almira Safiya Ezzah Safrudin,4321-2526139,wali,4321-2526139,0136883297,8B BIlingual,Term 1,"Safrudin Cahyanto, SE",-
+Azharenka Calya Az Zahra,4321-2526149,wali,4321-2526149,0133625973,8B BIlingual,Term 1,"Suryantoko Dwi Putro, SE",-
+Cyril Jasmine Nugroho,4321-2526160,wali,4321-2526160,0135916355,8B BIlingual,Term 1,Oki Adrian Nugroho,082220064919
+Dharmasena Wiryawiguna,4321-2526164,wali,4321-2526164,3126007641,8B BIlingual,Term 1,Dipto Djatmiko,085965979612
+El Kareema Quinsha Ardeechaka,4321-2526166,wali,4321-2526166,0121882890,8B BIlingual,Term 1,Muhammad Sarwani,087775419900
+Evan Arfa Aldita,4321-2526167,wali,4321-2526167,3135170304,8B BIlingual,Term 1,"Labuh Budi Santoso, ST",-
+Feyishara Fedidihatu Al Jannah,4321-2526173,wali,4321-2526173,0134242845,8B BIlingual,Term 1,Tantri Dwi Kaesti,081328797005
+Gendhis Basyasya Ufaira,4321-2526177,wali,4321-2526177,3136299783,8B BIlingual,Term 1,Satrio Budi Setiawan,089638510045
+Hafis Areza Hardiyansa Putra,4321-2526180,wali,4321-2526180,0137545762,8B BIlingual,Term 1,Catur Hardiyanto,0816417033
+Hikari Reinata Andi,4321-2526184,wali,4321-2526184,0138515651,8B BIlingual,Term 1,Andi Prasetyo,081329981102
+Izzati Safa Maulidina,4321-2526187,wali,4321-2526187,0135278051,8B BIlingual,Term 1,"Letkol Inf. Supri Siswanto SH, MIP",-
+Kinar Kanaya Satrio,4321-2526196,wali,4321-2526196,0122736465,8B BIlingual,Term 1,R. Panji Satrio,081225919765
+Michelle Aruna Mulyawati Wardoyo,4321-2526202,wali,4321-2526202,3122058533,8B BIlingual,Term 1,Wardoyo,081334421117
+Muhammad Fauzul Hakim,4321-2526208,wali,4321-2526208,0123877686,8B BIlingual,Term 1,Sahid Budi Santoso,085606540466
+Muhammad Rizky Muazzam Hadi,4321-2526212,wali,4321-2526212,3127519517,8B BIlingual,Term 1,Rachmad Hadi,081259267367
+Naura Rania Azzahra,4321-2526216,wali,4321-2526216,0127282309,8B BIlingual,Term 1,Dimas Permana,082231394910
+Nawaya Naffa Fikri,4321-2526217,wali,4321-2526217,0131569881,8B BIlingual,Term 1,Irfan Azam Fikri,082142824071
+Nayottama Akhtar Satria,4321-2526218,wali,4321-2526218,0123997471,8B BIlingual,Term 1,Arif Budi Satria,081393433514
+Nuraina Faiza Hariyanto,4321-2526219,wali,4321-2526219,0135810443,8B BIlingual,Term 1,"Susilo Hariyanto, M.Si",-
+Queneisya Almira Dzakira,4321-2526220,wali,4321-2526220,0128147371,8B BIlingual,Term 1,Muhamad Ulin Nuha,081234561603
+Raisya Salma Naura,4321-2526223,wali,4321-2526223,3124374756,8B BIlingual,Term 1,Muh. Heru Susanto,085229460739
+RR Millaniristy Budi Winata,4321-2526229,wali,4321-2526229,0137360411,8B BIlingual,Term 1,Riswan Wisudha Winata,081318166510
+Satria Gustarama Villa Indrangga,4321-2526232,wali,4321-2526232,0125575272,8B BIlingual,Term 1,Sakti Rangga Gustana Sugiarto,087783300001
+Trisagita Melvine Riyanto,4321-2526238,wali,4321-2526238,0136850254,8B BIlingual,Term 1,"Novi Riyanto, SH",-
+Tsabita Bilqis Ufaira,4321-2526239,wali,4321-2526239,3133308906,8B BIlingual,Term 1,Saiful Izam,081228073277
+Waskito Aji Wiryawan,4321-2526240,wali,4321-2526240,0124289229,8B BIlingual,Term 1,"Sugeng Riyadi, SH",-
+Wastin Clyfar Agnesi,4321-2526241,wali,4321-2526241,0121905013,8B BIlingual,Term 1,Wiswaskito Nugroho,08895401931231
+Zulfathan Umar Rudywi,4321-2526244,wali,4321-2526244,0121625636,8B BIlingual,Term 1,Rudy Widodo S.Kom,085647082654
+Ainun Citra Sentosa,4321-2526131,wali,4321-2526131,0139912538,8C Bilingual Digital,Term 1,Budi Santoso,081215511144
+Akmal Maulana Hariz Susanto,4321-2526136,wali,4321-2526136,0124988904,8C Bilingual Digital,Term 1,Joko Susanto,081325233184
+Arfa Rifqi Mardiansyah,4321-2526144,wali,4321-2526144,0133243314,8C Bilingual Digital,Term 1,Herry Mardiansyah,081258406442
+Assyifa Mutiara Akbar,4321-2526146,wali,4321-2526146,0126372752,8C Bilingual Digital,Term 1,"Gunadi, SE",-
+Aswangga Danish Nugroho,4321-2526147,wali,4321-2526147,0137053942,8C Bilingual Digital,Term 1,Rohmat Nugroho,081235736161
+Callysta Alesha Salaksa,4321-2526154,wali,4321-2526154,0138209873,8C Bilingual Digital,Term 1,Guntur Salaksa,081329747736
+Carl Vicky Hadden Indratno,4321-2526156,wali,4321-2526156,0134320033,8C Bilingual Digital,Term 1,"Okyawan Dwi Indratno Ssi, MM",-
+Charissa Mutia Azmi,4321-2526158,wali,4321-2526158,3136224923,8C Bilingual Digital,Term 1,Muh Mukti Jauhari,08112640443
+Clarissa Malika Azzahra Rasyid,4321-2526159,wali,4321-2526159,0135882838,8C Bilingual Digital,Term 1,Zen Rosyidi,08113434129
+Daffa Feiza Azka,4321-2526161,wali,4321-2526161,0133742066,8C Bilingual Digital,Term 1,Andri Khadafi,085225091590
+Dasa Soechy Darmawangsa,4321-2526163,wali,4321-2526163,3124394934,8C Bilingual Digital,Term 1,Daryanto,081276501830
+Fathan Ataya El-Arsyad,4321-2526169,wali,4321-2526169,3126924921,8C Bilingual Digital,Term 1,Agung Kunto Adinugroho,085725295880
+Fidella Jeslyn Nurkhairin,4321-2526174,wali,4321-2526174,0138022234,8C Bilingual Digital,Term 1,Is Barli Ariwibowo,08886701505
+Hafizhah Sabela Ardhiona,4321-2526181,wali,4321-2526181,0131835517,8C Bilingual Digital,Term 1,Dhana Ardianto,082110774469
+Icasia Kalea Safara,4321-2526185,wali,4321-2526185,3131403016,8C Bilingual Digital,Term 1,Jamal,081393450488
+Kalisha Rahmadani Susetio,4321-2526190,wali,4321-2526190,3138740062,8C Bilingual Digital,Term 1,Novi arianto susetio,081234501609
+Kayla Panamera Putri Cipta,4321-2526191,wali,4321-2526191,0136566265,8C Bilingual Digital,Term 1,Rizki Cipto Prakoso,082327228686
+Khaira Decapella Putri Crisyapinka,4321-2526194,wali,4321-2526194,3126809701,8C Bilingual Digital,Term 1,Hafis Asro Romadhona,081252982162
+Lakeisha Kannaya Azzahwa,4321-2526197,wali,4321-2526197,3139633007,8C Bilingual Digital,Term 1,M. Handoko Widyo Putro,08112630317
+M Danendra Putra Mahardika,4321-2526199,wali,4321-2526199,0121885571,8C Bilingual Digital,Term 1,Rifa Mahardika,085842419412
+Mayditya Gibraltar Haqqani,4321-2526201,wali,4321-2526201,3136300577,8C Bilingual Digital,Term 1,Risky Widitya Pratama,081228089333
+Raffa Pradipta Al Rasyid,4321-2526222,wali,4321-2526222,0136093058,8C Bilingual Digital,Term 1,"Ari Fansunis, ST",-
+Rakha Virendra Hartawan,4321-2526224,wali,4321-2526224,0127182711,8C Bilingual Digital,Term 1,AD Bank Harta,082134746775
+Sabrina Syahla Kuncoro,4321-2526230,wali,4321-2526230,3128968394,8C Bilingual Digital,Term 1,Y Kuncoro Sakti,081234908686
+Satria Hugo Pradana,4321-2526233,wali,4321-2526233,0134878902,8C Bilingual Digital,Term 1,Imam Mursid Teguh Saputra,082268888560
+Shafira Ashalina Putri Nofiyanto,4321-2526234,wali,4321-2526234,0138889897,8C Bilingual Digital,Term 1,Arif Nofiyanto,081329646889
+Shakira Riyadi Pambangun,4321-2526235,wali,4321-2526235,0131090050,8C Bilingual Digital,Term 1,Riyadi,081326452900
+Syarifah Jasmine Shahab,4321-2526237,wali,4321-2526237,0129149023,8C Bilingual Digital,Term 1,Cosa Rianda Shahab,081383128791
+Adelia Ardwi Rizqi,4321-2526129,wali,4321-2526129,3124030300,8D Bilingual Digital,Term 1,Edi Kristiono,085642191299
+Ainun Mulyani Wibowo,4321-2526132,wali,4321-2526132,0139822505,8D Bilingual Digital,Term 1,Bravo Drajat Niti Totowibowo,081287067753
+Aisyah Qistina Azzalea,4321-2526135,wali,4321-2526135,3125990483,8D Bilingual Digital,Term 1,"dr. Kusmardanu Setyo Sejati, Sp. PD",-
+Alea Kanaya Vitabella Dzakirah,4321-2526137,wali,4321-2526137,0131308897,8D Bilingual Digital,Term 1,Iwan Cahyono Setyanto Nugroho,085100101052
+Anarghya Danish Arditra Atmaja,4321-2526141,wali,4321-2526141,0135442632,8D Bilingual Digital,Term 1,Prayudicia Tantra Atmaja,08563407688
+Annisa Larasati Arwik,4321-2526142,wali,4321-2526142,0132786862,8D Bilingual Digital,Term 1,Andi Arwik,081222731000
+Aqila Nur Karimah,4321-2526143,wali,4321-2526143,0123752110,8D Bilingual Digital,Term 1,Agung Waskito Putro,081327180200
+Asyaima Naurayya Maritza Danesh,4321-2526148,wali,4321-2526148,3131167290,8D Bilingual Digital,Term 1,"Jumadi, ST",-
+Azka Thalita Dzakya Rahmad,4321-2526150,wali,4321-2526150,3127629422,8D Bilingual Digital,Term 1,Rahmad Hadi Sutarmin,085727394111
+Berlianna Zarolla Felady,4321-2627373,wali,4321-2627373,0134483457,8D Bilingual Digital,Term 1,Anjas Felady,081229295555
+Brillian Putra Prahmana,4321-2526152,wali,4321-2526152,3127006583,8D Bilingual Digital,Term 1,Joko Pramhono,082237388867
+Calista Putri Pratama,4321-2526153,wali,4321-2526153,0128251688,8D Bilingual Digital,Term 1,Bany Setyawan,085728720444
+Calya Ayunindya Salaksa,4321-2526155,wali,4321-2526155,0134461223,8D Bilingual Digital,Term 1,Guntur Salaksa,081329747736
+Daffa Raffiandra Pradana,4321-2526162,wali,4321-2526162,3137101154,8D Bilingual Digital,Term 1,Gunawan Yudi Iswanto,08562846878
+Dhoifullah Al Azka Saputro,4321-2526165,wali,4321-2526165,0131281461,8D Bilingual Digital,Term 1,Rachmad Fahmi Saputro,082210319335
+Gathan Alfitrah Kuddah,4321-2526176,wali,4321-2526176,0132782861,8D Bilingual Digital,Term 1,"Farhan Soeprapto, S.KM",-
+Hafidz Aufar Musyafa,4321-2526179,wali,4321-2526179,3136970252,8D Bilingual Digital,Term 1,Sakur,081548573948
+Hatta Mahasin Tamam,4321-2526183,wali,4321-2526183,0122228586,8D Bilingual Digital,Term 1,Aris Setyawan,081348328348
+Ilham Habibie Adnan,4321-2526186,wali,4321-2526186,3132549116,8D Bilingual Digital,Term 1,Habibie Arifianto,081215801707
+Kenar Nazma Prameswari,4321-2627371,wali,4321-2627371,0136081128,8D Bilingual Digital,Term 1,Muhammad Sholeh Suryawan,08179479544
+Kenzhie Azka Ahsan Aqila,4321-2526192,wali,4321-2526192,0126981089,8D Bilingual Digital,Term 1,Sigit Tri Waloyo,081223221756
+Malaika Shakila Annara,4321-2526200,wali,4321-2526200,0135443584,8D Bilingual Digital,Term 1,Wahyu Pamungkas,087739655151
+Mikhayla Azzahra Adeeva Farujung,4321-2526203,wali,4321-2526203,0134354603,8D Bilingual Digital,Term 1,Heru Hermanto,085282288832
+Naufal Larry Ardiansyah,4321-2526215,wali,4321-2526215,0128145256,8D Bilingual Digital,Term 1,Lie Ardiansyah,081229268888
+Raya Adelicia Perwira Perdamaian,4321-2526226,wali,4321-2526226,3129377138,8D Bilingual Digital,Term 1,Lasino Amd.G,081329169979
+Razqa Aidan Arkana Faza,4321-2526227,wali,4321-2526227,0131326421,8D Bilingual Digital,Term 1,Wahyu Agung Febrianto,081215346677
+Sultan Muhammad Al Fath,4321-2526236,wali,4321-2526236,3123146835,8D Bilingual Digital,Term 1,H Fu'ad,082136089287
+Yumna Reswara Maulana Putrie,4321-2526242,wali,4321-2526242,0127132936,8D Bilingual Digital,Term 1,Muhammad Fendi Maulana,082133622888
+Abyasa Rizki Safaraz,4321-2526128,wali,4321-2526128,0128437712,8E Digital,Term 1,Andila Tri Widhana,082136740218
+Afrisal Arfa Wahyudi,4321-2526130,wali,4321-2526130,0132777976,8E Digital,Term 1,Arif Wahyudi,081226237214
+Alkhalifi Tsaqib Narayana Pulungan,4321-2526138,wali,4321-2526138,0139954425,8E Digital,Term 1,Noviariandi Pulungan,085806774443
+Carollina Presticia Rahmadhani,4321-2526157,wali,4321-2526157,3125509813,8E Digital,Term 1,Rahmat Hidayat,083104590823
+Guruh Wahyu Aji Saputra,4321-2526178,wali,4321-2526178,3136524425,8E Digital,Term 1,Anton Purwo Saputro,085877999444
+Kaisa Aluna Chiquita,4321-2526189,wali,4321-2526189,0132685885,8E Digital,Term 1,Alun Presmaji,085728855587
+Kenzo Ghasley Cavalera,4321-2526193,wali,4321-2526193,0126550035,8E Digital,Term 1,Sapto Suparno,085100983635
+Lucky Fatir Abbiyu,4321-2526198,wali,4321-2526198,3133343250,8E Digital,Term 1,M. Onesta Adesembe,085228586628
+Muhammad Bagus Rainathan,4321-2526204,wali,4321-2526204,0133231372,8E Digital,Term 1,Achmad Bagus Panuntun,082314111441
+Muhammad Fadhil Arezky,4321-2526207,wali,4321-2526207,0127242933,8E Digital,Term 1,Joko Triyanto Maryoto,082225553530
+Muhammad Naufal Arkhan Widodo,4321-2526210,wali,4321-2526210,0129101656,8E Digital,Term 1,Sri Widodo,085728564896
+Muhammad Rizal Abdillah,4321-2526211,wali,4321-2526211,0125025665,8E Digital,Term 1,Twin Amzadi,081228899677
+Muhammad Sahlan,4321-2526213,wali,4321-2526213,0123331888,8E Digital,Term 1,Sumarno,087836345652
+Qanita Poetry Masrur,4321-2526249,wali,4321-2526249,3137998699,8E Digital,Term 1,Abdullah Masrur,085893859340
+Rachel Aydina Hasworo,4321-2526221,wali,4321-2526221,0125928590,8E Digital,Term 1,Wahyu Hasworo,082227892780
+Rangga Arya Jati,4321-2526225,wali,4321-2526225,0138204907,8E Digital,Term 1,H. Hanan Ghani Sutrisno,082137735298
+Rifky Nur Muhammad Akbar,4321-2526228,wali,4321-2526228,0139882630,8E Digital,Term 1,Hari Ismarwanto,081329629199
+Saka Firaz Fadillah,4321-2526231,wali,4321-2526231,0123000668,8E Digital,Term 1,Fendi Hatmoko,087736129080
+Shahih Arra'uf Wibowo,4321-2526246,wali,4321-2526246,3129338106,8E Digital,Term 1,Budi wibowo,082180317254
+Adhwa Nabil Ardiyan,0119039540,wali,0119039540,0119039540,9A Tahfizh,Term 1,Mukhammad Useb Ardiyan,082325035135
+Almeira Carissa Putri Santosa,0128216821,wali,0128216821,0128216821,9A Tahfizh,Term 1,Agung santosa,081229917390
+Atiqa Aqila Khalisa,0113666310,wali,0113666310,0113666310,9A Tahfizh,Term 1,Galang Bastiono,082192753687
+Banyu Arya Pratomo,0129682468,wali,0129682468,0129682468,9A Tahfizh,Term 1,Febri Koco Pratomo,081215408187
+Chayyira Lubna Faiqatuzzihni,0119683505,wali,0119683505,0119683505,9A Tahfizh,Term 1,"Heri Setiawan, SE",-
+Daffa Maulana Putra Kurniawan,0115788639,wali,0115788639,0115788639,9A Tahfizh,Term 1,Henry Kurniawan Fitrianto,081329419329
+El Farabi Santika Abimanyu,0128787687,wali,0128787687,0128787687,9A Tahfizh,Term 1,"Dhonny Santika, ST",-
+Fadhil Akma Haidar Wardoyo,0113671600,wali,0113671600,0113671600,9A Tahfizh,Term 1,"Anjar wardoyo, ST",-
+Fadhil Muhamad Irham,0114685781,wali,0114685781,0114685781,9A Tahfizh,Term 1,"Achmad Zaenuri, S.ST",-
+Faqih Azzam Mussaqaf,0118132226,wali,0118132226,0118132226,9A Tahfizh,Term 1,"Priyadi Nugroho Hafid, S.T",082136632330
+Fayza Lubna Dwi Almira,3112332007,wali,3112332007,3112332007,9A Tahfizh,Term 1,"Helmi Agung Nugroho, ST",-
+Keisha Alfa Agesty,0123674667,wali,0123674667,0123674667,9A Tahfizh,Term 1,Supardi,082241560114
+Maryam Faqieh,0124543847,wali,0124543847,0124543847,9A Tahfizh,Term 1,Abdulloh Faqieh,081393025198
+Muhammad Azzam Rambun Aufklarung,0124294365,wali,0124294365,0124294365,9A Tahfizh,Term 1,"Hendra, S.T.",-
+Muhammad Mahardika Chris Zuanda,0124377863,wali,0124377863,0124377863,9A Tahfizh,Term 1,Kristanto Joko Susilo,081226909137
+Naffauzta Uno Sanjaya,0122371031,wali,0122371031,0122371031,9A Tahfizh,Term 1,Yan Arif Sanjaya,085725157785
+Rayhan Dharma Irawan,0111629160,wali,0111629160,0111629160,9A Tahfizh,Term 1,"Andri Yuwono, AMd",-
+Rifqi Muhammad Ziggy,0129690564,wali,0129690564,0129690564,9A Tahfizh,Term 1,Syarif Hidayat,081210200233
+Senandika Himada,0125807755,wali,0125807755,0125807755,9A Tahfizh,Term 1,Suradi,081390553919
+Shaquilla Alexandria Raditha,0129596310,wali,0129596310,0129596310,9A Tahfizh,Term 1,Andrean Raditha,08112637161
+Sheza Syaquila Rayhana Nuryanto,0111717932,wali,0111717932,0111717932,9A Tahfizh,Term 1,"Sri Suyanto, ST",-
+Siti Fatimah,3116644223,wali,3116644223,3116644223,9A Tahfizh,Term 1,Dian Achmad,085389385710
+Tasnim Majidah,0118559332,wali,0118559332,0118559332,9A Tahfizh,Term 1,Muhammad Adhari,085728536009
+Alvaro Moissanite Wardhana,0122842523,wali,0122842523,0122842523,9B Bilingual,Term 1,"Sulistiya Jaya Wardhana, ST.",081226462639
+Alya Jazirah,0119346150,wali,0119346150,0119346150,9B Bilingual,Term 1,Sri Eko Purnomo,085863861205
+Azizah Uswah,0118975461,wali,0118975461,0118975461,9B Bilingual,Term 1,Tony Hartadi,08195522233
+Fahmi Hakim,0114811602,wali,0114811602,0114811602,9B Bilingual,Term 1,Dedy Purnomo,087835105794
+Farhan Adhyatma Himawan,0113023541,wali,0113023541,0113023541,9B Bilingual,Term 1,Fuad Rahadi,085229487272
+Hilmi Syahmufti Muzakki,3126812671,wali,3126812671,3126812671,9B Bilingual,Term 1,Fitriansyah,08112635017
+Howie Renggali,0167461370,wali,0167461370,0167461370,9B Bilingual,Term 1,"Ridha Adi Putra, SE. Akt",-
+Jadis Rekha Carina,0115544663,wali,0115544663,0115544663,9B Bilingual,Term 1,Muhammad Yusuf Hari Hartika Suharto,081228410168
+Kaylila Aisha Putri,0128761564,wali,0128761564,0128761564,9B Bilingual,Term 1,H. Rachmat Budiharso,08112638625
+Lady Aure Melodi,0113797210,wali,0113797210,0113797210,9B Bilingual,Term 1,Firman Melodi,08562594924
+Levi Ananda Saputra,0128186886,wali,0128186886,0128186886,9B Bilingual,Term 1,Bagus Prabowo Saputro,085799636424
+Mahatma Ghaisan Sigit,0115702354,wali,0115702354,0115702354,9B Bilingual,Term 1,Bambang Sigit Wiyanto,081289333709
+Nadjla Racheleisha Maulana,0115269317,wali,0115269317,0115269317,9B Bilingual,Term 1,"Faqih Andy Maulana, S.T.",-
+Nalini Faaiza Khirani,0125904818,wali,0125904818,0125904818,9B Bilingual,Term 1,Rama Ananda Putra,087784648889
+Nasya Oktavia Pramudita,0123713592,wali,0123713592,0123713592,9B Bilingual,Term 1,Suyitno,085356607766
+Rafie Brillyant Anindito,0125193149,wali,0125193149,0125193149,9B Bilingual,Term 1,"Duma Roy Bryllyanto, SE",-
+Rasya Alvaro,0114837250,wali,0114837250,0114837250,9B Bilingual,Term 1,Gugun Gunarto,081327212148
+Widjojo Hadi Widjojo,0108578818,wali,0108578818,0108578818,9B Bilingual,Term 1,Agung Heru Santosa,088801964627
+Aisha Emeraldi Yusuf,3122025745,wali,3122025745,3122025745,9C Bilingual Digital,Term 1,Yusuf Maretanto,082146764985
+Alifya Azzahra Widyanugroho,0128607067,wali,0128607067,0128607067,9C Bilingual Digital,Term 1,"Dr. dr. Andy Nugroho, Sp.An-TI",-
+Alisha Tori Madhani,0129020800,wali,0129020800,0129020800,9C Bilingual Digital,Term 1,Bambang Wiyanto,08121902099
+Arka Nawae Narayasetya,0111892500,wali,0111892500,0111892500,9C Bilingual Digital,Term 1,Ir Darmono Eko Setyanto,081277779500
+Aryasatya Setianwar,0111468031,wali,0111468031,0111468031,9C Bilingual Digital,Term 1,Setiawan,081217665037
+Belvana Puspamaya Indriyanto,3125865165,wali,3125865165,3125865165,9C Bilingual Digital,Term 1,Wiwik Indriyanto,085642055215
+Dareen Andreano,0123889841,wali,0123889841,0123889841,9C Bilingual Digital,Term 1,Sigit Prianta,087736008552
+Dearly Athaadhia Yahya Marcahyono,0123034458,wali,0123034458,0123034458,9C Bilingual Digital,Term 1,Endro Marcahyono,081290500993
+Fahriza Ardi Oktavian,0112158997,wali,0112158997,0112158997,9C Bilingual Digital,Term 1,Sutardi,082136125101
+Fattan Syahuma Ibrahim,0121115952,wali,0121115952,0121115952,9C Bilingual Digital,Term 1,"Hariyono, S.SiT",-
+Fitania Zakiah,0116279354,wali,0116279354,0116279354,9C Bilingual Digital,Term 1,Yanu Pantiyoga,081393065280
+Haidar Arya Maheswara,0126931422,wali,0126931422,0126931422,9C Bilingual Digital,Term 1,"Bagus Maulana Ishaq, SE",-
+Khadija Zahira Adnan,0114497062,wali,0114497062,0114497062,9C Bilingual Digital,Term 1,"Dr. Habibie Arifianto, dr.",081215801707
+Khansa Faradina Hafla,0117570373,wali,0117570373,0117570373,9C Bilingual Digital,Term 1,Suwito,081329320585
+Ladiva Keishya Putri,0128497822,wali,0128497822,0128497822,9C Bilingual Digital,Term 1,M. Rofiq Fauzi,085559561210
+Mazea Sekar Arundanti,0127011738,wali,0127011738,0127011738,9C Bilingual Digital,Term 1,Joko Surwanto,082140948773
+Michelle Queenara El Addyas,0121714705,wali,0121714705,0121714705,9C Bilingual Digital,Term 1,Addyas Figgi,085727372900
+Muhamad Irfan Master,0129489867,wali,0129489867,0129489867,9C Bilingual Digital,Term 1,Norman Master,081329279411
+Muhammad Affan Luthfie Zaidan,0128904011,wali,0128904011,0128904011,9C Bilingual Digital,Term 1,Muh Farid Syahroni,081357565338
+Muhammad Kenzie Hanandyka,0125428333,wali,0125428333,0125428333,9C Bilingual Digital,Term 1,"Andy Inaryono, S.Kel",-
+Najwa Khaira Pratama,0125536456,wali,0125536456,0125536456,9C Bilingual Digital,Term 1,Diego Pratama Putra,08112637708
+Naura Anindya Arum Notokusumo,0113311073,wali,0113311073,0113311073,9C Bilingual Digital,Term 1,Suryadi,081363967199
+Naura Ardelia Harmaya,0113310254,wali,0113310254,0113310254,9C Bilingual Digital,Term 1,"dr Andri Kusuma Harmaya, SpU",-
+Raiqa Vicky Andriyan,0127445884,wali,0127445884,0127445884,9C Bilingual Digital,Term 1,Novi Andriyanto,085799583787
+Sincera Alesha Antwijaya,3114981266,wali,3114981266,3114981266,9C Bilingual Digital,Term 1,"Wargiyanto, S.S",-
+Sofiyaah Al Sabeeyah Van Der Pol,0114078116,wali,0114078116,0114078116,9C Bilingual Digital,Term 1,Herbert van der Pol,08112644625
+Sultan Gibran Prasraya Subagyo,0124678399,wali,0124678399,0124678399,9C Bilingual Digital,Term 1,Tuntas Subagyo,081327583659
+Veronika Nata Saputri,0128399691,wali,0128399691,0128399691,9C Bilingual Digital,Term 1,Iwan Setyawan,085800002564
+Wildan Jorda Abipraya,0122997410,wali,0122997410,0122997410,9C Bilingual Digital,Term 1,Joko Mulyono,081289300523
+Alena Syakirah Demayfa,0125974619,wali,0125974619,0125974619,9D Bilingual Digital,Term 1,Miyana,081575475045
+Alisha Faqihah Rahmania,0118936078,wali,0118936078,0118936078,9D Bilingual Digital,Term 1,Muhammad Nur Adintyo Rahman,08112552824
+Alyaa Zahraa Yulianto,0132392153,wali,0132392153,0132392153,9D Bilingual Digital,Term 1,Tri Yulianto,081391859616
+Anindita Kartika Dewi Zulfiqar,0129933443,wali,0129933443,0129933443,9D Bilingual Digital,Term 1,Decky Zulfiqar,082135157189
+Anindyra Feza,0125298605,wali,0125298605,0125298605,9D Bilingual Digital,Term 1,Riza Kusrindra Nurfatah,085335487777
+Dean Moreno Robert,0127449092,wali,0127449092,0127449092,9D Bilingual Digital,Term 1,Robert,081329188282
+Dzaki Fauzan Ramadhan,0122552390,wali,0122552390,0122552390,9D Bilingual Digital,Term 1,"Agus Riyanto, S.T",-
+Faeyza Nizam Athalla,0121703444,wali,0121703444,0121703444,9D Bilingual Digital,Term 1,Agus Suharto,085890004098
+Haekal Azzam Shahdeva,0118332585,wali,0118332585,0118332585,9D Bilingual Digital,Term 1,Noviadi Widiawanto,081802558822
+Haikal Maulana Putra,3126629685,wali,3126629685,3126629685,9D Bilingual Digital,Term 1,Puguh Kirnawan,+60179088382
+Hanifah Adhwa Nur Azizah,0117618603,wali,0117618603,0117618603,9D Bilingual Digital,Term 1,Irvan mahendra,087804944886
+Keanu Regan Azzarel,0124464487,wali,0124464487,0124464487,9D Bilingual Digital,Term 1,Hendra Yuli Hasmi,081326883080
+Khairunnisa Shafa Kinara Hasan,3119967533,wali,3119967533,3119967533,9D Bilingual Digital,Term 1,Hasanudin,08112871697
+Khayla Zarreena Indratno,0118175168,wali,0118175168,0118175168,9D Bilingual Digital,Term 1,"Okyawan Dwi Indratno, SSi.MM",-
+Muhammad Alif Bayu Rizky,0123768893,wali,0123768893,0123768893,9D Bilingual Digital,Term 1,H. Muhamad Harun SP,085264481350
+Muhammad Rayyan Haziq Mintoro,0111142852,wali,0111142852,0111142852,9D Bilingual Digital,Term 1,Huring Sanji Mintoro,08122421048
+Muhammad Saadan Aydin Arkaan Setiadi,3123786035,wali,3123786035,3123786035,9D Bilingual Digital,Term 1,Bayu setiadi,081326218720
+Naila Aisya Hammida,0127160656,wali,0127160656,0127160656,9D Bilingual Digital,Term 1,Arif Suseno,08992224711
+Najwa Ken Luthfianti,0108733137,wali,0108733137,0108733137,9D Bilingual Digital,Term 1,Ukun Rukaendi,082335836071
+Nawa Surya Setiansyah,0118834108,wali,0118834108,0118834108,9D Bilingual Digital,Term 1,Wahyu Setiawan,085229442425
+Nerissa Aristawati Khrisna,0111590438,wali,0111590438,0111590438,9D Bilingual Digital,Term 1,"Kompol Yulie Khrisna, ST",082133814317
+Nindya Annisa Kamallia,0125191125,wali,0125191125,0125191125,9D Bilingual Digital,Term 1,Heru Susanto,081298706349
+Nizar Lutfi Mahardika,0122182461,wali,0122182461,0122182461,9D Bilingual Digital,Term 1,Agung Supriyono,085329000082
+Qenzie Elang Ansandy,0122981147,wali,0122981147,0122981147,9D Bilingual Digital,Term 1,Azmi Salis Kusdian,081291110882
+Qotrunnada Audrey Hermawan,0128208135,wali,0128208135,0128208135,9D Bilingual Digital,Term 1,Apri Harmawan Saksono,082139110550
+Rafi Admiral Putra,0125397557,wali,0125397557,0125397557,9D Bilingual Digital,Term 1,M.A.A.Admiral Ayub,085334299525
+Raysa Nur Azzahra,0124516766,wali,0124516766,0124516766,9D Bilingual Digital,Term 1,Teguh Widodo,081227882695
+Salsa Diva Nada Raizela,0114037816,wali,0114037816,0114037816,9D Bilingual Digital,Term 1,Suryadi (Alm),081282806397
+Syahnia Putri Arofah,0124059661,wali,0124059661,0124059661,9D Bilingual Digital,Term 1,Purwadi,08122626344
+Zhafran Azriel Zamorano,3124834737,wali,3124834737,3124834737,9D Bilingual Digital,Term 1,"Agus Saryanto, S.H.",-
+Abimanyu Raka Wahyu Putra,0116807685,wali,0116807685,0116807685,9E Digital,Term 1,"Eko wahyuno, SE",-
+Abrar Zafran Firmansyah,0119344937,wali,0119344937,0119344937,9E Digital,Term 1,Aditia Ndaru Firmansyah,081357952951
+Aditya Roufland Harjono,0119242819,wali,0119242819,0119242819,9E Digital,Term 1,"Sri Harjono, S.Pd",-
+Adrian Wirasaba Samodra,0113789522,wali,0113789522,0113789522,9E Digital,Term 1,Abhi Dhamantoro M.Mar,085226112234
+Agaztha Lambang Putra,0119412036,wali,0119412036,0119412036,9E Digital,Term 1,Nanang Herlambang,081390028673
+Akmal Athalla Adhitama,0117972586,wali,0117972586,0117972586,9E Digital,Term 1,"Yoga Graha Pratama, SE",081215611133
+Celena Quinn Alexandra,3125418304,wali,3125418304,3125418304,9E Digital,Term 1,Nur Rohmad Fanani,085867822023
+Faeyza Khoirul Azzam,0118673203,wali,0118673203,0118673203,9E Digital,Term 1,"Arip Budi Cahyono, S.E",081321120002
+Gafra Nawai Aryasetya,0116032325,wali,0116032325,0116032325,9E Digital,Term 1,Ir Darmono Eko Setyanto,081277779500
+Ghassaniy Nafeeza Nugroho,0122965538,wali,0122965538,0122965538,9E Digital,Term 1,"Bhanu Budinugroho, S.Sos",-
+Hafiz Putra Purnama,3114612759,wali,3114612759,3114612759,9E Digital,Term 1,Hari Purnomo,081533445758
+Hanif Agian Arjuna Pradipta,0117456813,wali,0117456813,0117456813,9E Digital,Term 1,"Agung Basuki, S. ST.",-
+Kinanti Anatasya Pradani Baikun,0117779732,wali,0117779732,0117779732,9E Digital,Term 1,Baikuni Ahmadi. ST,085725052007
+Muhammad Farhan Harith,0129743441,wali,0129743441,0129743441,9E Digital,Term 1,Aris Nuryanto SH MH,0811508115
+Muhammad Iqbal Arjuwan Kuswiyanto,0127833537,wali,0127833537,0127833537,9E Digital,Term 1,Doddy Kuswiyanto,081211650909
+Muhammad Wildan Pramatya,0125717264,wali,0125717264,0125717264,9E Digital,Term 1,"Nanang Yudi Pratama, S.T.",082133178383
+Nohan Sahnon Ardhani,3128506166,wali,3128506166,3128506166,9E Digital,Term 1,Ndayani,08562830404
+Okviadita Syifa Umayanuha,0119686576,wali,0119686576,0119686576,9E Digital,Term 1,Duwiyono,081393168884
+Rahesha Desta Fitrawan,0127231739,wali,0127231739,0127231739,9E Digital,Term 1,Agung fitriawan,085233631191
+Shafia Putriana Nugraha,0116040905,wali,0116040905,0116040905,9E Digital,Term 1,"Nugroho Sulistyo, SH.ST",-
+Syafiqah Naffa Aristyo Putro,0122192623,wali,0122192623,0122192623,9E Digital,Term 1,Bayu Aristyo Putro,081228531799

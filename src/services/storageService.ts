@@ -2152,6 +2152,99 @@ export const storageService = {
     return [headers.join(','), ...sampleRows].join('\n');
   },
 
+  // Export all users & students in format: nama,pengguna,peran,nis,nisn,kelas,term,nama_ortu,no_hp
+  exportUserTahfizhCSV(): string {
+    const users = this.getUsers();
+    const students = this.getStudents();
+    const teachers = this.getTeachers();
+    const classes = this.getClasses();
+
+    const classMap = new Map<string, string>(classes.map(c => [c.id, c.name]));
+    const teacherMap = new Map<string, Teacher>(teachers.map(t => [t.id, t]));
+    const userByStudentId = new Map<string, User>();
+    const userByUsername = new Map<string, User>();
+
+    users.forEach(u => {
+      if (u.studentId) userByStudentId.set(u.studentId, u);
+      if (u.username) userByUsername.set(String(u.username).trim().toLowerCase(), u);
+    });
+
+    const escCsv = (val: unknown): string => {
+      const s = String(val ?? '').replace(/\uFFFD/g, "'").trim();
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+
+    const rows: string[] = ['nama,pengguna,peran,nis,nisn,kelas,term,nama_ortu,no_hp'];
+
+    users.filter(u => u.role === 'admin').forEach(u => {
+      rows.push([
+        escCsv(u.name),
+        escCsv(u.username || 'admin'),
+        escCsv('admin'),
+        escCsv('01.0125'),
+        escCsv('-'),
+        escCsv('-'),
+        escCsv('Term 1'),
+        escCsv('-'),
+        escCsv(u.phone || '-')
+      ].join(','));
+    });
+
+    users.filter(u => u.role === 'guru').forEach(u => {
+      const tch = (u.teacherId ? teacherMap.get(u.teacherId) : undefined) || teachers.find(t => t.name === u.name);
+      const homeroomClasses = classes
+        .filter(c => c.homeroomTeacherId === (u.teacherId || tch?.id) || (tch?.classIds || []).includes(c.id))
+        .map(c => c.name)
+        .join(' / ');
+      rows.push([
+        escCsv(u.name),
+        escCsv(u.username || (u.email ? u.email.split('@')[0] : '-')),
+        escCsv('guru'),
+        escCsv(tch?.nip || '-'),
+        escCsv('-'),
+        escCsv(homeroomClasses || '-'),
+        escCsv('Term 1'),
+        escCsv('-'),
+        escCsv(u.phone || tch?.phone || '-')
+      ].join(','));
+    });
+
+    const sortedStudents = [...students].sort((a, b) => {
+      const clsA = classMap.get(a.classId) || '';
+      const clsB = classMap.get(b.classId) || '';
+      const cmpCls = clsA.localeCompare(clsB, 'id', { numeric: true, sensitivity: 'base' });
+      if (cmpCls !== 0) return cmpCls;
+      return (a.name || '').localeCompare(b.name || '', 'id', { sensitivity: 'base' });
+    });
+
+    sortedStudents.forEach(s => {
+      const u = userByStudentId.get(s.id) || userByUsername.get(String(s.nis || '').trim().toLowerCase());
+      const clsName = classMap.get(s.classId) || s.classId || '-';
+      let parentName = String(s.parentName || '-').trim();
+      let rawPhone = String(s.parentPhone || u?.phone || '-').trim();
+      if (rawPhone && rawPhone !== '-' && !/\d/.test(rawPhone)) {
+        parentName = `${parentName}, ${rawPhone}`;
+        rawPhone = '-';
+      }
+      rows.push([
+        escCsv(s.name),
+        escCsv(u?.username || s.nis || '-'),
+        escCsv(u?.role || 'wali'),
+        escCsv(s.nis || '-'),
+        escCsv(s.nisn || '-'),
+        escCsv(clsName),
+        escCsv('Term 1'),
+        escCsv(parentName || '-'),
+        escCsv(rawPhone || '-')
+      ].join(','));
+    });
+
+    return '\uFEFF' + rows.join('\n');
+  },
+
   // Export all students to CSV
   exportStudentsToCSV(): string {
     const students = this.getStudents();

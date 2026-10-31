@@ -15,7 +15,10 @@ import {
   Upload,
   Image as ImageIcon,
   Sliders,
-  Trash2
+  Trash2,
+  ZoomIn,
+  ZoomOut,
+  Maximize2
 } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
 import {
@@ -29,6 +32,7 @@ import {
 } from '../types';
 import { storageService } from '../services/storageService';
 import { UMMI_JILIDS } from '../data/ummiData';
+import { transliterateStudentNameToArabic } from '../utils/arabicTransliteration';
 import {
   AlAzhar21CircularEmblem,
   DirektoratAlAzharSoloBaruEmblem,
@@ -275,6 +279,8 @@ export const ExamScoringAndCertificate: React.FC<ExamScoringAndCertificateProps>
   // Quick inline data override inputs for adjusting Syahadah data directly
   const [customCertNo, setCustomCertNo] = useState<string>('');
   const [customStudentName, setCustomStudentName] = useState<string>('');
+  const [customStudentArabicName, setCustomStudentArabicName] = useState<string>('');
+  const [syahadahFontScale, setSyahadahFontScale] = useState<number>(() => settings.syahadahFontScale || 100);
   const [customJuzText, setCustomJuzText] = useState<string>('');
   const [customHijriIndo, setCustomHijriIndo] = useState<string>('');
   const [customHijriArab, setCustomHijriArab] = useState<string>('');
@@ -295,7 +301,10 @@ export const ExamScoringAndCertificate: React.FC<ExamScoringAndCertificateProps>
     if (typeof settings.syahadahTopOffset === 'number') {
       setSyahadahTopOffset(settings.syahadahTopOffset);
     }
-  }, [settings.syahadahTemplateUrl, settings.syahadahOverlayMode, settings.syahadahTopOffset]);
+    if (typeof settings.syahadahFontScale === 'number') {
+      setSyahadahFontScale(settings.syahadahFontScale);
+    }
+  }, [settings.syahadahTemplateUrl, settings.syahadahOverlayMode, settings.syahadahTopOffset, settings.syahadahFontScale]);
 
   React.useEffect(() => {
     setSyahadahTemplateStyle(category === 'juziyyah' ? 'bilingual_syahadah' : 'score_table');
@@ -310,10 +319,22 @@ export const ExamScoringAndCertificate: React.FC<ExamScoringAndCertificateProps>
         buildDefaultCertificateNumber(category, selectedParticipantIndex, rawDate)
     );
     setCustomStudentName(p.studentName || '');
+    const autoArabic = transliterateStudentNameToArabic(p.studentName || '');
+    setCustomStudentArabicName(p.studentArabicName || autoArabic);
     setCustomJuzText(p.jilidOrJuz || 'Juz 30');
     setCustomHijriIndo(submission.hijriDateText || formatHijriDateIndo(rawDate));
     setCustomHijriArab(formatHijriDateArabic(rawDate));
   }, [selectedParticipantIndex, submission, category]);
+
+  const handleUpdateFontScale = async (newScale: number) => {
+    const clamped = Math.min(160, Math.max(60, newScale));
+    setSyahadahFontScale(clamped);
+    const currentSettings = storageService.getSettings();
+    await storageService.saveSettings({
+      ...currentSettings,
+      syahadahFontScale: clamped
+    });
+  };
 
   const handleUploadSyahadahTemplate = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -371,6 +392,7 @@ export const ExamScoringAndCertificate: React.FC<ExamScoringAndCertificateProps>
         ? {
             ...item,
             studentName: customStudentName.trim() || item.studentName,
+            studentArabicName: customStudentArabicName.trim() || undefined,
             jilidOrJuz: customJuzText.trim() || item.jilidOrJuz,
             certificateNumber: customCertNo.trim() || item.certificateNumber
           }
@@ -1208,16 +1230,44 @@ ${coordinatorName}`;
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       <div>
                         <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
-                          Nama Santri di Syahadah:
+                          Nama Santri (Bahasa Indonesia / Kiri):
                         </label>
                         <input
                           type="text"
                           value={customStudentName}
-                          onChange={e => setCustomStudentName(e.target.value)}
+                          onChange={e => {
+                            setCustomStudentName(e.target.value);
+                            if (!customStudentArabicName || customStudentArabicName === transliterateStudentNameToArabic(customStudentName)) {
+                              setCustomStudentArabicName(transliterateStudentNameToArabic(e.target.value));
+                            }
+                          }}
                           className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-bold text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <label className="text-[10px] font-bold text-slate-600">
+                            Nama Santri (Huruf Arab / Kanan):
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setCustomStudentArabicName(transliterateStudentNameToArabic(customStudentName))}
+                            className="text-[10px] text-amber-700 hover:text-amber-900 font-bold underline cursor-pointer"
+                            title="Konversi otomatis nama Indonesia ke huruf Arab"
+                          >
+                            ✨ Auto Arab
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          dir="rtl"
+                          value={customStudentArabicName}
+                          onChange={e => setCustomStudentArabicName(e.target.value)}
+                          placeholder="Contoh: أَحْمَد فَوْزَان"
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-bold text-slate-900 text-right font-serif"
                         />
                       </div>
                       <div>
@@ -1230,6 +1280,17 @@ ${coordinatorName}`;
                           onChange={e => setCustomJuzText(e.target.value)}
                           placeholder="Contoh: Juz 30"
                           className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-bold text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                          Nomor Syahadah:
+                        </label>
+                        <input
+                          type="text"
+                          value={customCertNo}
+                          onChange={e => setCustomCertNo(e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-semibold text-slate-900"
                         />
                       </div>
                       <div>
@@ -1257,10 +1318,10 @@ ${coordinatorName}`;
                     </div>
                   </div>
 
-                  {/* Right box: Template Overlay & Position Adjustment */}
+                  {/* Right box: Template Overlay & Position & Font Scale Adjustment */}
                   <div className="bg-white rounded-xl border border-amber-200 p-3.5 space-y-2.5">
                     <span className="font-extrabold text-slate-800 block">
-                      2. Pengaturan Tampilan & Posisi Data di Atas Gambar Template
+                      2. Pengaturan Tampilan, Skala Font & Posisi Data
                     </span>
 
                     <div className="flex flex-wrap items-center gap-2">
@@ -1286,6 +1347,61 @@ ${coordinatorName}`;
                       >
                         Hanya Isi Titik-Titik Data (Jika Upload Gambar Syahadah)
                       </button>
+                    </div>
+
+                    {/* Scale Controls: Perbesar / Perkecil Tulisan */}
+                    <div className="bg-amber-50/60 p-2.5 rounded-lg border border-amber-200/80 space-y-1.5">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-slate-800">
+                        <span className="flex items-center gap-1">
+                          <ZoomIn className="w-3.5 h-3.5 text-amber-700" />
+                          Ukuran Tulisan Syahadah (Perbesar / Perkecil):
+                        </span>
+                        <span className="font-mono text-amber-900 font-extrabold">{syahadahFontScale}%</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateFontScale(syahadahFontScale - 5)}
+                          className="px-2 py-1 rounded bg-white hover:bg-slate-100 border border-slate-300 text-[11px] font-bold text-slate-700 transition flex items-center gap-1 cursor-pointer shrink-0"
+                          title="Perkecil ukuran tulisan"
+                        >
+                          <ZoomOut className="w-3 h-3 text-slate-600" />
+                          <span>A- Perkecil</span>
+                        </button>
+
+                        <input
+                          type="range"
+                          min={65}
+                          max={150}
+                          step={2}
+                          value={syahadahFontScale}
+                          onChange={e => handleUpdateFontScale(Number(e.target.value))}
+                          className="w-full accent-amber-600 cursor-pointer"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateFontScale(syahadahFontScale + 5)}
+                          className="px-2 py-1 rounded bg-white hover:bg-slate-100 border border-slate-300 text-[11px] font-bold text-slate-700 transition flex items-center gap-1 cursor-pointer shrink-0"
+                          title="Perbesar ukuran tulisan"
+                        >
+                          <ZoomIn className="w-3 h-3 text-slate-600" />
+                          <span>A+ Perbesar</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateFontScale(100)}
+                          className="px-2 py-1 rounded bg-white hover:bg-slate-100 border border-slate-300 text-[10px] font-semibold text-slate-500 transition cursor-pointer shrink-0"
+                          title="Reset ke 100%"
+                        >
+                          100%
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-500">
+                        Sesuaikan ukuran agar tulisan proporsional dan tidak terpotong saat dibuka di HP, tablet, atau dicetak PDF.
+                      </p>
                     </div>
 
                     {syahadahTemplateUrl && syahadahOverlayMode === 'full_text' && (
@@ -1355,7 +1471,8 @@ ${coordinatorName}`;
                   className="printable-report-area w-full max-w-[1080px] bg-white text-slate-950 relative overflow-hidden shadow-xs"
                   style={{
                     fontFamily: "Arial, Helvetica, sans-serif",
-                    aspectRatio: '297 / 210'
+                    aspectRatio: '297 / 210',
+                    zoom: syahadahFontScale !== 100 ? `${syahadahFontScale}%` : undefined
                   }}
                 >
                   {/* Background Layer: Either Uploaded Image OR Exact Vector Wave Replica of Syahadah 2025 FIX */}
@@ -1372,6 +1489,10 @@ ${coordinatorName}`;
                   {(() => {
                     const displayStudentName =
                       customStudentName.trim() || currentParticipant.studentName;
+                    const displayStudentArabicName =
+                      customStudentArabicName.trim() ||
+                      currentParticipant.studentArabicName ||
+                      transliterateStudentNameToArabic(displayStudentName);
                     const displayJuzRaw =
                       customJuzText.trim() || currentParticipant.jilidOrJuz || 'Juz 30';
                     const juzFormatted = formatJuzForSyahadah(displayJuzRaw);
@@ -1396,7 +1517,7 @@ ${coordinatorName}`;
                               : undefined
                           }}
                         >
-                          {/* 1. Left Student Name (above dotted line under "menyatakan bahwasannya murid :") */}
+                          {/* 1. Left Student Name (Indonesian - above dotted line under "menyatakan bahwasannya murid :") */}
                           <div
                             className="absolute font-extrabold text-slate-950 text-sm sm:text-base md:text-[17px] tracking-wide"
                             style={{
@@ -1431,16 +1552,18 @@ ${coordinatorName}`;
                             {masehiIndo}
                           </div>
 
-                          {/* 4. Right Student Name (above dotted line under "بأن الطالب/الطالبة:") */}
+                          {/* 4. Right Student Name (Arabic - above dotted line under "بأن الطالب/الطالبة:") */}
                           <div
-                            className="absolute font-extrabold text-slate-950 text-sm sm:text-base md:text-[17px] text-right"
+                            dir="rtl"
+                            className="absolute font-extrabold text-slate-950 text-base sm:text-lg md:text-[20px] text-right"
                             style={{
-                              top: '57.6%',
+                              top: '56.6%',
                               right: '2.6%',
-                              width: '38%'
+                              width: '38%',
+                              fontFamily: "'Traditional Arabic', 'Amiri', 'Scheherazade New', serif"
                             }}
                           >
-                            {displayStudentName}
+                            {displayStudentArabicName}
                           </div>
 
                           {/* 5. Right Juz Number (on "قد حفظ : الجزء ..... من القرآن الكريم") */}
@@ -1620,14 +1743,14 @@ ${coordinatorName}`;
                               </p>
                             </div>
 
-                            {/* Student Name on Dotted Line (Right-Aligned) */}
-                            <div className="pt-2 pb-1 text-right" dir="ltr">
+                            {/* Student Name on Dotted Line (Right-Aligned, Arabic Script) */}
+                            <div className="pt-2 pb-1 text-right" dir="rtl">
                               <div className="inline-block min-w-[230px] sm:min-w-[280px] border-b-2 border-dotted border-slate-900 pb-0.5 text-right">
                                 <span
-                                  className="font-extrabold text-sm sm:text-[16px] text-slate-950 tracking-wide"
-                                  style={{ fontFamily: "Arial, Helvetica, sans-serif" }}
+                                  className="font-extrabold text-base sm:text-[19px] text-slate-950 tracking-wide"
+                                  style={{ fontFamily: "'Traditional Arabic', 'Amiri', 'Scheherazade New', serif" }}
                                 >
-                                  {displayStudentName}
+                                  {displayStudentArabicName}
                                 </span>
                               </div>
                             </div>

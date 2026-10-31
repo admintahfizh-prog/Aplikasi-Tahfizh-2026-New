@@ -13,7 +13,10 @@ import {
   KeyRound,
   Database,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  ScanLine,
+  BookOpen,
+  BookMarked
 } from 'lucide-react';
 import { User, NotificationItem } from '../types';
 import { LogoAlAzhar } from './LogoAlAzhar';
@@ -26,6 +29,8 @@ interface NavbarProps {
   onSwitchUser?: (user: User) => void;
   allUsers?: User[];
   onOpenDailyInput: () => void;
+  onOpenScanHafalan?: () => void;
+  onOpenScanUmmi?: () => void;
   notifications?: NotificationItem[];
   onMarkNotificationsRead?: () => void;
   onLogout: () => void;
@@ -41,6 +46,8 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
   onOpenDailyInput,
+  onOpenScanHafalan,
+  onOpenScanUmmi,
   notifications = [],
   onMarkNotificationsRead,
   onLogout,
@@ -197,19 +204,52 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Right Actions Toolbar */}
-          <div className="flex items-center space-x-2 sm:space-x-3">
+          <div className="flex items-center space-x-1.5 sm:space-x-2">
             
-            {/* Quick Daily Input Button */}
+            {/* Quick Access Scan Barcode for Hafalan & Ummi + Daily Input */}
             {currentUser.role !== 'wali' && (
-              <button
-                id="btn-quick-setoran"
-                onClick={onOpenDailyInput}
-                className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white font-semibold text-xs transition shadow-sm active:scale-95 cursor-pointer"
-                title="Input Setoran Hafalan / Ummi"
-              >
-                <Plus className="w-4 h-4 text-[#D4AF37]" />
-                <span className="hidden xs:inline">Setoran Baru</span>
-              </button>
+              <>
+                {onOpenScanHafalan && (
+                  <button
+                    id="btn-navbar-scan-hafalan"
+                    type="button"
+                    onClick={onOpenScanHafalan}
+                    className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs transition shadow-xs active:scale-95 cursor-pointer"
+                    title="Scan Barcode / QR Siswa untuk Absen & Input Setoran Hafalan Al-Qur'an"
+                  >
+                    <ScanLine className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                    <BookOpen className="w-3.5 h-3.5 text-amber-200 hidden md:inline shrink-0" />
+                    <span className="hidden sm:inline">Scan Hafalan</span>
+                    <span className="sm:hidden">Scan Qur&apos;an</span>
+                  </button>
+                )}
+
+                {onOpenScanUmmi && (
+                  <button
+                    id="btn-navbar-scan-ummi"
+                    type="button"
+                    onClick={onOpenScanUmmi}
+                    className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-extrabold text-xs transition shadow-xs active:scale-95 cursor-pointer"
+                    title="Scan Barcode / QR Siswa untuk Absen & Input Evaluasi Metode Ummi"
+                  >
+                    <ScanLine className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                    <BookMarked className="w-3.5 h-3.5 text-amber-200 hidden md:inline shrink-0" />
+                    <span className="hidden sm:inline">Scan Ummi</span>
+                    <span className="sm:hidden">Ummi</span>
+                  </button>
+                )}
+
+                <button
+                  id="btn-quick-setoran"
+                  type="button"
+                  onClick={onOpenDailyInput}
+                  className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white font-semibold text-xs transition shadow-sm active:scale-95 cursor-pointer"
+                  title="Input Setoran Hafalan / Ummi"
+                >
+                  <Plus className="w-4 h-4 text-[#D4AF37]" />
+                  <span className="hidden md:inline">Setoran Baru</span>
+                </button>
+              </>
             )}
 
             {/* Notification Bell */}

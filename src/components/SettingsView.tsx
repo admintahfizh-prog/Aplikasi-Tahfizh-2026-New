@@ -925,6 +925,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             {/* Action Buttons */}
             <div className="flex flex-wrap items-center gap-2">
+              <a
+                href="/data_user_tahfizh.csv"
+                download="data_user_tahfizh.csv"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+                title="Download CSV seluruh data user tahfizh (nama,pengguna,peran,nis,nisn,kelas,term,nama_ortu,no_hp)"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download CSV User Tahfizh</span>
+              </a>
+
               <button
                 type="button"
                 onClick={handleSyncAllAccounts}

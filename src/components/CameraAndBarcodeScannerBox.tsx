@@ -124,7 +124,6 @@ export const CameraAndBarcodeScannerBox: React.FC<CameraAndBarcodeScannerBoxProp
     try {
       await video.play();
     } catch {
-      // Wait for metadata if immediate play was deferred
       video.onloadedmetadata = () => {
         video.play().catch(() => {});
       };
@@ -156,7 +155,6 @@ export const CameraAndBarcodeScannerBox: React.FC<CameraAndBarcodeScannerBoxProp
         let stream: MediaStream | null = null;
         const devId = customDeviceId !== undefined ? customDeviceId : selectedDeviceId;
 
-        // Progressive fallback constraints so every phone/laptop webcam succeeds
         const constraintCandidates: MediaStreamConstraints[] = [];
         if (devId) {
           constraintCandidates.push({
@@ -199,7 +197,6 @@ export const CameraAndBarcodeScannerBox: React.FC<CameraAndBarcodeScannerBoxProp
 
         await attachStreamToVideoElement(stream);
 
-        // Enumerate video input devices after permission is granted
         if (navigator.mediaDevices.enumerateDevices) {
           navigator.mediaDevices
             .enumerateDevices()
@@ -210,7 +207,6 @@ export const CameraAndBarcodeScannerBox: React.FC<CameraAndBarcodeScannerBoxProp
             .catch(() => {});
         }
 
-        // Start scanning loop using jsQR + native BarcodeDetector
         const AnyWindow = window as unknown as {
           BarcodeDetector?: new (opts?: { formats: string[] }) => {
             detect: (
@@ -261,7 +257,7 @@ export const CameraAndBarcodeScannerBox: React.FC<CameraAndBarcodeScannerBoxProp
         const errName = err?.name || '';
         if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
           setCameraError(
-            'Izin kamera ditolak oleh browser. Klik ikon gembok/kamera di bilah alamat browser lalu pilih "Allow / Izinkan Kamera", kemudian klik Buka Kamera kembali.'
+            'Izin kamera ditolak oleh browser. Klik ikon gembok/kamera di bilah alamat browser lalu pilih "Allow / Izinkan Kamera", kemudian klik Aktifkan Kamera kembali.'
           );
         } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
           setCameraError(
@@ -335,145 +331,178 @@ export const CameraAndBarcodeScannerBox: React.FC<CameraAndBarcodeScannerBoxProp
   };
 
   return (
-    <div className="space-y-3">
-      {/* Top Controls: Camera Toggle & Image Upload */}
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-900 text-white p-3 rounded-xl border border-slate-700">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-[#D4AF37] text-slate-950 flex items-center justify-center shrink-0">
-            <ScanLine className="w-4 h-4" />
-          </div>
-          <div>
-            <h4 className="text-xs font-extrabold text-white">
-              Scanner Barcode &amp; QR Code Santri
-            </h4>
-            <p className="text-[10px] text-slate-300">
-              Mendukung Kamera Live, Alat Laser Barcode/QR USB, &amp; Upload Gambar Kartu QR
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {videoDevices.length > 1 && isCameraActive && (
-            <select
-              value={selectedDeviceId}
-              onChange={e => {
-                const id = e.target.value;
-                setSelectedDeviceId(id);
-                startCamera(facingMode, id);
-              }}
-              className="px-2 py-1.5 rounded-lg bg-slate-800 text-slate-200 border border-slate-600 text-[11px] font-bold focus:outline-none"
-            >
-              <option value="">Pilih Kamera ({videoDevices.length})</option>
-              {videoDevices.map((dev, idx) => (
-                <option key={dev.deviceId || idx} value={dev.deviceId}>
-                  {dev.label || `Kamera ${idx + 1}`}
-                </option>
-              ))}
-            </select>
-          )}
-
-          <button
-            type="button"
-            onClick={handleToggleCamera}
-            disabled={isStartingCamera}
-            className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer ${
-              isCameraActive
-                ? 'bg-rose-600 hover:bg-rose-700 text-white'
-                : 'bg-[#D4AF37] hover:bg-[#c49f2c] text-slate-950'
-            }`}
-          >
-            {isCameraActive ? (
-              <>
-                <CameraOff className="w-3.5 h-3.5" />
-                <span>Matikan Kamera</span>
-              </>
-            ) : (
-              <>
-                <Camera className="w-3.5 h-3.5" />
-                <span>{isStartingCamera ? 'Membuka Kamera...' : 'Buka Kamera Scan QR'}</span>
-              </>
-            )}
-          </button>
-
-          {isCameraActive && (
-            <button
-              type="button"
-              onClick={handleSwitchCameraFacing}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-xs font-bold flex items-center gap-1 cursor-pointer"
-              title="Ganti Kamera Depan / Belakang"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-[#D4AF37]" />
-              <span>Balik Kamera</span>
-            </button>
-          )}
-
-          <label className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-600 text-xs font-bold flex items-center gap-1.5 cursor-pointer">
-            <Upload className="w-3.5 h-3.5" />
-            <span>Scan dari File Gambar QR</span>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageUploadScan}
-              className="hidden"
+    <div className="space-y-3 w-full">
+      {/* Camera Box Container - Always visible with explicit width & aspect-video so video never collapses */}
+      <div className="bg-slate-950 rounded-2xl overflow-hidden border-2 border-slate-800 shadow-lg w-full">
+        {/* Top Controls Bar */}
+        <div className="px-3.5 py-2.5 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span
+              className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                isCameraActive ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+              }`}
             />
-          </label>
-        </div>
-      </div>
-
-      {/* Camera Live Viewfinder - Always mounted in DOM so videoRef is never null */}
-      <div
-        className={`relative bg-slate-950 rounded-xl overflow-hidden border-2 border-[#D4AF37] max-w-md mx-auto aspect-4/3 flex items-center justify-center ${
-          isCameraActive || isStartingCamera ? 'block' : 'hidden'
-        }`}
-      >
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className="w-full h-full object-cover"
-        />
-        <canvas ref={canvasRef} className="hidden" />
-
-        {isStartingCamera && !isCameraActive && (
-          <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center gap-2 text-white text-xs font-bold">
-            <RefreshCw className="w-6 h-6 text-[#D4AF37] animate-spin" />
-            <span>Mengaktifkan kamera perangkat...</span>
-          </div>
-        )}
-
-        {/* Target Frame Overlay */}
-        {isCameraActive && (
-          <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-6">
-            <div className="w-48 h-48 border-2 border-[#D4AF37] rounded-2xl relative shadow-[0_0_0_9999px_rgba(15,23,42,0.45)]">
-              <div className="absolute -top-0.5 -left-0.5 w-5 h-5 border-t-4 border-l-4 border-[#D4AF37] rounded-tl-lg" />
-              <div className="absolute -top-0.5 -right-0.5 w-5 h-5 border-t-4 border-r-4 border-[#D4AF37] rounded-tr-lg" />
-              <div className="absolute -bottom-0.5 -left-0.5 w-5 h-5 border-b-4 border-l-4 border-[#D4AF37] rounded-bl-lg" />
-              <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 border-b-4 border-r-4 border-[#D4AF37] rounded-br-lg" />
-              <div className="absolute inset-x-2 top-1/2 h-0.5 bg-emerald-400 animate-pulse" />
-            </div>
-            <span className="mt-3 px-3 py-1 rounded-full bg-slate-900/90 text-[#D4AF37] text-[11px] font-bold border border-[#D4AF37]/40">
-              Arahkan Kartu QR / Barcode Santri ke Kotak Kamera
+            <span className="text-xs font-extrabold text-white">
+              {isCameraActive
+                ? 'Kamera Scan Barcode / QR Aktif'
+                : 'Kamera Scan Barcode & QR Santri'}
             </span>
           </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {videoDevices.length > 1 && isCameraActive && (
+              <select
+                value={selectedDeviceId}
+                onChange={e => {
+                  const id = e.target.value;
+                  setSelectedDeviceId(id);
+                  startCamera(facingMode, id);
+                }}
+                className="px-2 py-1 rounded-lg bg-slate-800 text-slate-200 border border-slate-600 text-[11px] font-bold focus:outline-none"
+              >
+                <option value="">Pilih Kamera ({videoDevices.length})</option>
+                {videoDevices.map((dev, idx) => (
+                  <option key={dev.deviceId || idx} value={dev.deviceId}>
+                    {dev.label || `Kamera ${idx + 1}`}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            <button
+              type="button"
+              onClick={handleToggleCamera}
+              disabled={isStartingCamera}
+              className={`px-3 py-1 rounded-lg text-[11px] font-extrabold flex items-center gap-1.5 transition cursor-pointer ${
+                isCameraActive
+                  ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                  : 'bg-[#D4AF37] hover:bg-[#c49f2c] text-slate-950'
+              }`}
+            >
+              {isCameraActive ? (
+                <>
+                  <CameraOff className="w-3.5 h-3.5" />
+                  <span>Matikan</span>
+                </>
+              ) : (
+                <>
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>{isStartingCamera ? 'Membuka...' : 'Aktifkan Kamera'}</span>
+                </>
+              )}
+            </button>
+
+            {isCameraActive && (
+              <button
+                type="button"
+                onClick={handleSwitchCameraFacing}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                title="Ganti Kamera Depan / Belakang"
+              >
+                <RefreshCw className="w-3 h-3 text-[#D4AF37]" />
+                <span>Putar</span>
+              </button>
+            )}
+
+            <label className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-600 text-[11px] font-bold flex items-center gap-1 cursor-pointer">
+              <Upload className="w-3 h-3" />
+              <span>Foto QR</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageUploadScan}
+                className="hidden"
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* Camera Live Viewfinder - Always laid out in DOM with w-full aspect-video min-h-[240px] */}
+        <div className="relative w-full aspect-video min-h-[240px] bg-slate-950 flex items-center justify-center overflow-hidden">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className={`w-full h-full object-cover transition-opacity duration-200 ${
+              isCameraActive ? 'opacity-100' : 'opacity-0 pointer-events-none absolute inset-0'
+            }`}
+          />
+          <canvas ref={canvasRef} className="hidden" />
+
+          {isStartingCamera && !isCameraActive && (
+            <div className="relative z-10 p-6 text-center space-y-2 text-white">
+              <RefreshCw className="w-7 h-7 text-[#D4AF37] animate-spin mx-auto" />
+              <p className="text-xs font-bold">Mengaktifkan kamera pemindai...</p>
+            </div>
+          )}
+
+          {isCameraActive ? (
+            <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-4">
+              <div className="w-48 h-40 sm:w-56 sm:h-44 border-2 border-[#D4AF37] rounded-2xl relative shadow-[0_0_0_9999px_rgba(15,23,42,0.45)]">
+                <div className="absolute -top-0.5 -left-0.5 w-5 h-5 border-t-4 border-l-4 border-[#D4AF37] rounded-tl-lg" />
+                <div className="absolute -top-0.5 -right-0.5 w-5 h-5 border-t-4 border-r-4 border-[#D4AF37] rounded-tr-lg" />
+                <div className="absolute -bottom-0.5 -left-0.5 w-5 h-5 border-b-4 border-l-4 border-[#D4AF37] rounded-bl-lg" />
+                <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 border-b-4 border-r-4 border-[#D4AF37] rounded-br-lg" />
+                <div className="absolute inset-x-2 top-1/2 h-0.5 bg-emerald-400 animate-pulse" />
+              </div>
+              <span className="mt-2.5 px-3 py-1 rounded-full bg-slate-900/90 text-[#D4AF37] text-[11px] font-bold border border-[#D4AF37]/40">
+                Arahkan Kartu Barcode / QR Santri ke Kotak Kamera
+              </span>
+            </div>
+          ) : !isStartingCamera ? (
+            <div className="relative z-10 p-5 text-center space-y-3 max-w-sm">
+              <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 text-[#D4AF37] flex items-center justify-center mx-auto">
+                <Camera className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-xs sm:text-sm font-extrabold text-white">
+                  Kamera Pemindai Barcode &amp; QR Siap
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Klik tombol di bawah untuk menyalakan kamera dan scan kartu santri untuk absen &amp; input nilai.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => startCamera(facingMode)}
+                  className="px-4 py-2 rounded-xl bg-[#D4AF37] hover:bg-[#c49f2c] text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
+                >
+                  <Camera className="w-4 h-4" />
+                  <span>Aktifkan Kamera Sekarang</span>
+                </button>
+                <label className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1.5 border border-slate-700 cursor-pointer">
+                  <Upload className="w-4 h-4 text-[#D4AF37]" />
+                  <span>Upload Gambar QR</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUploadScan}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {cameraError && (
+          <div className="p-3 bg-rose-950/90 border-t border-rose-800 text-rose-200 text-xs flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>{cameraError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => startCamera(facingMode)}
+              className="px-2.5 py-1 rounded-lg bg-[#D4AF37] text-slate-950 font-extrabold text-[11px] shrink-0 cursor-pointer"
+            >
+              Coba Lagi
+            </button>
+          </div>
         )}
       </div>
-
-      {cameraError && (
-        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>{cameraError}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => startCamera(facingMode)}
-            className="px-2.5 py-1 rounded-lg bg-[#1E293B] text-white font-bold text-[11px] shrink-0 cursor-pointer"
-          >
-            Coba Lagi
-          </button>
-        </div>
-      )}
 
       {/* Barcode / QR Hardware Scanner Input Bar */}
       <form onSubmit={handleManualSubmit} className="flex flex-col sm:flex-row gap-2">

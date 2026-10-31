@@ -19,7 +19,8 @@ import { SettingsView } from './components/SettingsView';
 import { DailyInputModal } from './components/DailyInputModal';
 import { UserProfileModal } from './components/UserProfileModal';
 import { LoginView } from './components/LoginView';
-import { Database, AlertTriangle, ExternalLink, RefreshCw, X, ShieldAlert } from 'lucide-react';
+import { Database, AlertTriangle, ExternalLink, RefreshCw, X, ShieldAlert, Sparkles } from 'lucide-react';
+import { useAutoUpdate } from './hooks/useAutoUpdate';
 
 import { storageService } from './services/storageService';
 import { 
@@ -40,6 +41,9 @@ import {
 } from './types';
 
 export default function App() {
+  // Auto-Update & Cache-Busting detection across devices
+  const { hasUpdate, applyUpdateNow } = useAutoUpdate();
+
   // Authentication & Profile State
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     return storageService.getCurrentUser();
@@ -83,6 +87,7 @@ export default function App() {
   const [isQuotaBannerDismissed, setIsQuotaBannerDismissed] = useState(false);
   const [prefilledStudentId, setPrefilledStudentId] = useState<string | undefined>(undefined);
   const [dailyInputTab, setDailyInputTab] = useState<'quran' | 'ummi' | 'presensi' | undefined>(undefined);
+  const [dailyInputOpenScanner, setDailyInputOpenScanner] = useState<boolean>(false);
   const [editingMemorizationRecord, setEditingMemorizationRecord] = useState<MemorizationRecord | null>(null);
   const [editingUmmiRecord, setEditingUmmiRecord] = useState<UmmiRecord | null>(null);
 
@@ -185,11 +190,16 @@ export default function App() {
     setCurrentView('dashboard');
   };
 
-  const handleOpenDailyInput = (studentId?: string, initialTab?: 'quran' | 'ummi' | 'presensi') => {
+  const handleOpenDailyInput = (
+    studentId?: string,
+    initialTab?: 'quran' | 'ummi' | 'presensi',
+    openScanner: boolean = false
+  ) => {
     setEditingMemorizationRecord(null);
     setEditingUmmiRecord(null);
     setPrefilledStudentId(studentId);
     setDailyInputTab(initialTab);
+    setDailyInputOpenScanner(openScanner);
     setIsDailyInputOpen(true);
   };
 
@@ -279,7 +289,9 @@ export default function App() {
       {/* Top Navbar */}
       <Navbar
         currentUser={currentUser}
-        onOpenDailyInput={() => handleOpenDailyInput()}
+        onOpenDailyInput={() => handleOpenDailyInput(undefined, undefined, false)}
+        onOpenScanHafalan={() => handleOpenDailyInput(undefined, 'quran', true)}
+        onOpenScanUmmi={() => handleOpenDailyInput(undefined, 'ummi', true)}
         onLogout={handleLogout}
         onOpenSettings={() => setCurrentView('settings')}
         onOpenProfile={() => setIsProfileModalOpen(true)}
@@ -320,11 +332,12 @@ export default function App() {
           }}
           isMobileOpen={isMobileSidebarOpen}
           onCloseMobile={() => setIsMobileSidebarOpen(false)}
+          onOpenMobile={() => setIsMobileSidebarOpen(true)}
         />
 
         {/* Content Area */}
         <main
-          className={`flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 mx-auto w-full transition-all duration-200 ${
+          className={`flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8 pb-24 md:pb-8 mx-auto w-full transition-all duration-200 ${
             isSidebarOpen ? 'max-w-[1600px]' : 'max-w-full'
           }`}
         >
@@ -649,6 +662,7 @@ export default function App() {
           setIsDailyInputOpen(false);
           setPrefilledStudentId(undefined);
           setDailyInputTab(undefined);
+          setDailyInputOpenScanner(false);
           setEditingMemorizationRecord(null);
           setEditingUmmiRecord(null);
         }}
@@ -683,6 +697,10 @@ export default function App() {
         preSelectedStudentId={prefilledStudentId}
         initialStudentId={prefilledStudentId}
         defaultTab={dailyInputTab || (currentView === 'ummi' ? 'ummi' : 'quran')}
+        initialOpenScanner={dailyInputOpenScanner}
+        onSelectNextStudent={(nextId) => {
+          setPrefilledStudentId(nextId);
+        }}
         onSaveSuccess={() => {
           loadAllData();
         }}
@@ -698,6 +716,26 @@ export default function App() {
           loadAllData();
         }}
       />
+
+      {/* AUTO-UPDATE NOTIFICATION BANNER (CACHE-BUSTING) */}
+      {hasUpdate && (
+        <div className="fixed bottom-16 md:bottom-6 right-4 sm:right-6 z-50 bg-[#1E293B] text-white p-3.5 rounded-xl shadow-2xl border border-[#D4AF37] max-w-sm flex items-center justify-between gap-3 animate-in slide-in-from-bottom-4">
+          <div className="flex items-center gap-2.5">
+            <Sparkles className="w-5 h-5 text-[#D4AF37] shrink-0 animate-pulse" />
+            <div>
+              <p className="text-xs font-bold text-white">Versi Baru Tersedia!</p>
+              <p className="text-[11px] text-slate-300">Pembaruan sistem otomatis terdeteksi tanpa perlu bersihkan cache browser.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={applyUpdateNow}
+            className="px-3 py-1.5 rounded-lg bg-[#D4AF37] hover:bg-[#c29d27] text-slate-900 font-extrabold text-xs shadow-xs transition shrink-0 cursor-pointer"
+          >
+            Perbarui
+          </button>
+        </div>
+      )}
 
     </div>
   );

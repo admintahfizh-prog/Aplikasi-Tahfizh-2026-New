@@ -1,0 +1,6 @@
+{
+  "version": "1.2.0",
+  "buildTimestamp": 1740845500000,
+  "releaseDate": "2026-03-01",
+  "changeSummary": "Mobile-friendly UI, cache-busting auto update, fixed Save & Next Student in DailyInputModal, and Juziyyah certificate font scaling & Arabic student name layout"
+}
