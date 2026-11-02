@@ -88,6 +88,119 @@
     print-color-adjust: exact !important;
   }
 
+  /* Surat Undangan Wali Murid strictly matches Folio / F4 (215mm x 330mm) */
+  .surat-sheet {
+    box-sizing: border-box !important;
+    position: relative !important;
+    width: 215mm !important;
+    max-width: 215mm !important;
+    height: calc(330mm - 10mm) !important;
+    min-height: calc(330mm - 10mm) !important;
+    max-height: calc(330mm - 10mm) !important;
+    margin: 0 auto !important;
+    padding: 8mm 18mm 8mm 18mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    page-break-inside: avoid !important;
+    page-break-after: avoid !important;
+    page-break-before: avoid !important;
+    background-color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+  }
+
+  /* Form 1 Pengajuan Musyrif strictly matches Folio / F4 (215mm x 330mm) */
+  .form1-sheet {
+    box-sizing: border-box !important;
+    position: relative !important;
+    width: 215mm !important;
+    max-width: 215mm !important;
+    height: calc(330mm - 10mm) !important;
+    min-height: calc(330mm - 10mm) !important;
+    max-height: calc(330mm - 10mm) !important;
+    margin: 0 auto !important;
+    padding: 10mm 18mm 10mm 18mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    page-break-inside: avoid !important;
+    page-break-after: avoid !important;
+    page-break-before: avoid !important;
+    background-color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Dedicated print isolation for Surat */
+  body.printing-surat {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  body.printing-surat * {
+    visibility: hidden;
+  }
+  body.printing-surat .surat-sheet,
+  body.printing-surat .surat-sheet * {
+    visibility: visible;
+  }
+  body.printing-surat .surat-sheet {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 215mm !important;
+    max-width: 215mm !important;
+    height: calc(330mm - 10mm) !important;
+    min-height: calc(330mm - 10mm) !important;
+    max-height: calc(330mm - 10mm) !important;
+    margin: 0 auto !important;
+    padding: 8mm 18mm 8mm 18mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    page-break-inside: avoid !important;
+    page-break-after: avoid !important;
+    page-break-before: avoid !important;
+    z-index: 999999 !important;
+  }
+
+  /* Dedicated print isolation for Form 1 */
+  body.printing-form1 {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  body.printing-form1 * {
+    visibility: hidden;
+  }
+  body.printing-form1 .form1-sheet,
+  body.printing-form1 .form1-sheet * {
+    visibility: visible;
+  }
+  body.printing-form1 .form1-sheet {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 215mm !important;
+    max-width: 215mm !important;
+    height: calc(330mm - 10mm) !important;
+    min-height: calc(330mm - 10mm) !important;
+    max-height: calc(330mm - 10mm) !important;
+    margin: 0 auto !important;
+    padding: 10mm 18mm 10mm 18mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    page-break-inside: avoid !important;
+    page-break-after: avoid !important;
+    page-break-before: avoid !important;
+    z-index: 999999 !important;
+  }
+
   .page-break {
     page-break-after: always;
   }
@@ -135,4 +248,5 @@
     page-break-inside: avoid !important;
   }
 }
+
 

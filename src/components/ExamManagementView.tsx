@@ -43,6 +43,7 @@ import {
 import { storageService } from '../services/storageService';
 import { UMMI_JILIDS } from '../data/ummiData';
 import { ExamScoringAndCertificate } from './ExamScoringAndCertificate';
+import { LogoAlAzhar } from './LogoAlAzhar';
 import {
   buildDefaultParentLetterNumber,
   compressUploadedImage,
@@ -596,31 +597,124 @@ export const ExamManagementView: React.FC<ExamManagementViewProps> = ({
     selectedSubmission?.participants[selectedParticipantIndex] ||
     selectedSubmission?.participants[0];
 
-  const handleDownloadPdf = async (targetRef: React.RefObject<HTMLDivElement | null>, filename: string) => {
-    if (!targetRef.current) return;
+  // Effective fallbacks so Surat is always completely printable/downloadable
+  const effectiveScheduledDate =
+    selectedSubmission?.scheduledDate ||
+    selectedSubmission?.submissionDate ||
+    new Date().toISOString().split('T')[0];
+  const effectiveScheduledDay =
+    selectedSubmission?.scheduledDay ||
+    getIndonesianDayName(effectiveScheduledDate);
+  const effectiveScheduledTime =
+    currentParticipant?.scheduledTime ||
+    selectedSubmission?.scheduledTime ||
+    '07.30 - 09.30 WIB';
+  const effectiveScheduledRoom =
+    selectedSubmission?.scheduledRoom || 'Kampus SMP Islam Al Azhar 21 Solo Baru';
+  const effectiveExaminer =
+    currentParticipant?.examinerName ||
+    selectedSubmission?.examinerName ||
+    coordinatorName;
+  const effectiveHijriDate =
+    selectedSubmission?.hijriDateText || formatHijriDateIndo(effectiveScheduledDate);
+  const effectiveLetterNumber =
+    selectedSubmission?.letterNumber ||
+    buildDefaultParentLetterNumber(category, effectiveScheduledDate, 72);
+
+  const handlePrintSurat = () => {
+    document.body.classList.add('printing-surat');
+    const cleanup = () => {
+      document.body.classList.remove('printing-surat');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(() => {
+      window.print();
+      setTimeout(cleanup, 2500);
+    }, 150);
+  };
+
+  const handlePrintForm1 = () => {
+    document.body.classList.add('printing-form1');
+    const cleanup = () => {
+      document.body.classList.remove('printing-form1');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(() => {
+      window.print();
+      setTimeout(cleanup, 2500);
+    }, 150);
+  };
+
+  const handleDownloadPdf = async (
+    targetRef: React.RefObject<HTMLDivElement | null>,
+    filename: string,
+    isSurat = false
+  ) => {
+    if (!targetRef.current) {
+      showToast('Area dokumen tidak ditemukan.');
+      return;
+    }
     setIsDownloadingPdf(true);
+    showToast('Sedang membuat file PDF Folio/F4...');
+
     try {
       const element = targetRef.current;
       const opt = {
-        margin: [8, 10, 8, 10] as [number, number, number, number],
+        margin: 0,
         filename,
         image: { type: 'jpeg' as const, quality: 0.98 },
         html2canvas: {
           scale: 2,
           useCORS: true,
+          logging: false,
+          scrollX: 0,
+          scrollY: 0,
           onclone: (clonedDoc: Document) => {
             clonedDoc.querySelectorAll('.no-print').forEach(el => {
               (el as HTMLElement).style.display = 'none';
             });
+            const sheet = clonedDoc.querySelector(isSurat ? '.surat-sheet' : '.form1-sheet') as HTMLElement;
+            if (sheet) {
+              sheet.style.width = '215mm';
+              sheet.style.minHeight = '324mm';
+              sheet.style.maxHeight = '324mm';
+              sheet.style.boxShadow = 'none';
+            }
           }
         },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
+        jsPDF: {
+          unit: 'mm',
+          format: [215, 330] as [number, number],
+          orientation: 'portrait' as const
+        }
       };
-      await html2pdf().set(opt).from(element).save();
-      showToast(`File PDF "${filename}" berhasil diunduh!`);
+
+      // Robust html2pdf resolution across bundle formats
+      let exporter: any = html2pdf;
+      if (typeof exporter !== 'function' && (exporter as any)?.default) {
+        exporter = (exporter as any).default;
+      }
+      if (typeof exporter !== 'function' && typeof (window as any).html2pdf === 'function') {
+        exporter = (window as any).html2pdf;
+      }
+
+      if (typeof exporter === 'function') {
+        // @ts-ignore
+        await exporter().set(opt).from(element).save();
+        showToast(`Alhamdulillah! Berkas PDF "${filename}" berhasil diunduh.`);
+      } else {
+        throw new Error('Library html2pdf tidak tersedia');
+      }
     } catch (err) {
-      console.error('PDF generation error:', err);
-      window.print();
+      console.warn('Direct html2pdf generation failed, falling back to print dialog:', err);
+      showToast('Mengalihkan ke jendela cetak browser (Simpan sebagai PDF F4)...');
+      if (isSurat) {
+        handlePrintSurat();
+      } else {
+        handlePrintForm1();
+      }
     } finally {
       setIsDownloadingPdf(false);
     }
@@ -1061,25 +1155,26 @@ Koordinator Tahfizh: ${coordinatorName}`;
                         onClick={() =>
                           handleDownloadPdf(
                             form1PrintRef,
-                            `Formulir_Pengajuan_${config.shortTitle.replace(/\s+/g, '_')}_${selectedSubmission.submissionDate}.pdf`
+                            `Formulir_Pengajuan_${config.shortTitle.replace(/\s+/g, '_')}_${selectedSubmission.submissionDate}.pdf`,
+                            false
                           )
                         }
-                        className="px-3.5 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                        className="px-3.5 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
                       >
                         {isDownloadingPdf ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin text-[#D4AF37]" />
                         ) : (
                           <Download className="w-3.5 h-3.5 text-[#D4AF37]" />
                         )}
-                        <span>Download PDF Formulir</span>
+                        <span>Download PDF Formulir (F4)</span>
                       </button>
                       <button
                         type="button"
-                        onClick={() => window.print()}
-                        className="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                        onClick={handlePrintForm1}
+                        className="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
                       >
                         <Printer className="w-3.5 h-3.5" />
-                        <span>Cetak</span>
+                        <span>Cetak Formulir (F4)</span>
                       </button>
                     </>
                   )}
@@ -1087,32 +1182,32 @@ Koordinator Tahfizh: ${coordinatorName}`;
                     <>
                       <button
                         type="button"
-                        disabled={isDownloadingPdf || !selectedSubmission.scheduledDate}
+                        disabled={isDownloadingPdf}
                         onClick={() =>
                           handleDownloadPdf(
                             form2PrintRef,
                             `Surat_Pemberitahuan_${config.shortTitle.replace(/\s+/g, '_')}_${(
                               currentParticipant?.studentName || 'Santri'
-                            ).replace(/\s+/g, '_')}.pdf`
+                            ).replace(/\s+/g, '_')}.pdf`,
+                            true
                           )
                         }
-                        className="px-3.5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                        className="px-3.5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
                       >
                         {isDownloadingPdf ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
                         ) : (
-                          <Download className="w-3.5 h-3.5" />
+                          <Download className="w-3.5 h-3.5 text-[#D4AF37]" />
                         )}
-                        <span>Download PDF Surat Wali</span>
+                        <span>Download PDF Surat (F4)</span>
                       </button>
                       <button
                         type="button"
-                        disabled={!selectedSubmission.scheduledDate}
-                        onClick={() => window.print()}
-                        className="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 border border-slate-300 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                        onClick={handlePrintSurat}
+                        className="px-3 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white border border-slate-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
                       >
-                        <Printer className="w-3.5 h-3.5" />
-                        <span>Cetak Surat</span>
+                        <Printer className="w-3.5 h-3.5 text-[#D4AF37]" />
+                        <span>Cetak Surat (F4)</span>
                       </button>
                     </>
                   )}
@@ -1156,12 +1251,18 @@ Koordinator Tahfizh: ${coordinatorName}`;
                     </div>
                   )}
 
-                  {/* Printable Sheet for Gambar 1 */}
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 sm:p-10 flex justify-center overflow-x-auto print:p-0 print:border-none print:shadow-none">
+                  {/* Printable Sheet for Gambar 1 (Folio / F4 215mm x 330mm) */}
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-8 flex justify-center overflow-x-auto print:p-0 print:border-none print:shadow-none">
                     <div
                       ref={form1PrintRef}
-                      className="printable-report-area w-full max-w-[720px] bg-white text-slate-950 space-y-6"
-                      style={{ fontFamily: "'Calibri', 'Segoe UI', Arial, sans-serif" }}
+                      className="form1-sheet bg-white text-slate-950 relative shadow-xl print:shadow-none print:m-0 space-y-6"
+                      style={{
+                        width: '215mm',
+                        minHeight: '330mm',
+                        maxHeight: '330mm',
+                        padding: '12mm 18mm 12mm 18mm',
+                        fontFamily: "'Calibri', 'Segoe UI', Arial, sans-serif"
+                      }}
                     >
                       {/* Title & Subtitle matching Image 1 */}
                       <div className="text-center space-y-3 pt-2">
@@ -1525,296 +1626,291 @@ Koordinator Tahfizh: ${coordinatorName}`;
                         </div>
                       </div>
 
-                      {/* PRINTABLE / PDF SURAT PEMBERITAHUAN ORANG TUA (KOP SURAT & PENATAAN RESMI) */}
-                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-8 flex justify-center overflow-x-auto print:p-0 print:border-none print:shadow-none">
+                      {/* PRINTABLE / PDF SURAT PEMBERITAHUAN ORANG TUA - STRICT FOLIO / F4 (215 x 330 mm) */}
+                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6 flex justify-center overflow-x-auto print:p-0 print:border-none print:shadow-none">
                         <div
                           ref={form2PrintRef}
-                          className="printable-report-area w-full max-w-[760px] bg-white text-slate-950 flex flex-col justify-between"
+                          className="surat-sheet bg-white text-slate-950 relative shadow-xl print:shadow-none print:m-0"
                           style={{
-                            fontFamily: "'Times New Roman', Times, serif",
-                            minHeight: '980px',
-                            padding: '12px 24px 16px 24px'
+                            width: '215mm',
+                            minHeight: '330mm',
+                            maxHeight: '330mm',
+                            padding: '8mm 18mm 8mm 18mm',
+                            fontFamily: "'Times New Roman', Times, serif"
                           }}
                         >
-                          <div className="space-y-4">
-                            {/* ============================================================= */}
-                            {/* KOP SURAT HEADER (GAMBAR UPLOAD)                              */}
-                            {/* ============================================================= */}
-                            <div>
-                              {letterHeaderUrl ? (
-                                <img
-                                  src={letterHeaderUrl}
-                                  alt="Kop Surat Header"
-                                  className="w-full h-auto object-contain block select-none"
-                                />
-                              ) : (
-                                <div className="no-print border-2 border-dashed border-slate-300 rounded-xl p-5 bg-slate-50/70 text-center space-y-1.5">
-                                  <ImageIcon className="w-6 h-6 text-slate-400 mx-auto" />
-                                  <p className="text-xs font-bold text-slate-700">
-                                    Area Gambar Kop Surat (Header)
-                                  </p>
-                                  <p className="text-[11px] text-slate-500">
-                                    Silakan upload gambar Kop Surat (PNG/JPG) agar tampilan header surat sama persis
-                                  </p>
-                                  {!isWali && (
-                                    <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white text-xs font-bold cursor-pointer mt-1">
-                                      <Upload className="w-3.5 h-3.5 text-[#D4AF37]" />
-                                      <span>+ Upload Gambar Kop Surat (Header)</span>
-                                      <input
-                                        type="file"
-                                        accept="image/png,image/jpeg,image/webp"
-                                        onChange={handleUploadLetterHeader}
-                                        className="hidden"
-                                      />
-                                    </label>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* ============================================================= */}
-                            {/* NOMOR SURAT, HAL, DAN TANGGAL HIJRIAH / MASEHI                */}
-                            {/* ============================================================= */}
-                            <div className="flex items-start justify-between gap-4 pt-1 text-[14px] leading-snug">
-                              <table className="border-none">
-                                <tbody>
-                                  <tr>
-                                    <td className="py-0.5 pr-4 w-12 align-top">No</td>
-                                    <td className="py-0.5 pr-2 align-top">:</td>
-                                    <td className="py-0.5 font-medium">
-                                      {selectedSubmission.letterNumber ||
-                                        buildDefaultParentLetterNumber(
-                                          category,
-                                          selectedSubmission.scheduledDate,
-                                          72
-                                        )}
-                                    </td>
-                                  </tr>
-                                  <tr>
-                                    <td className="py-0.5 pr-4 align-top">Hal</td>
-                                    <td className="py-0.5 pr-2 align-top">:</td>
-                                    <td className="py-0.5 font-semibold">
-                                      Pemberitahuan {config.title}
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
-
-                              {/* Right Date: Hijriah underlined over Masehi */}
-                              <div className="text-right shrink-0">
-                                <div className="inline-block text-center">
-                                  <p className="border-b border-slate-900 pb-0.5 px-1">
-                                    Sukoharjo,{' '}
-                                    {selectedSubmission.hijriDateText ||
-                                      formatHijriDateIndo(selectedSubmission.scheduledDate)}
-                                  </p>
-                                  <p className="pt-0.5">
-                                    {formatIndonesianDate(selectedSubmission.scheduledDate)} M
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* ============================================================= */}
-                            {/* TUJUAN SURAT & ISI SURAT (PENATAAN SESUAI TEMPLATE SURAT)     */}
-                            {/* ============================================================= */}
-                            <div className="pl-0 sm:pl-[62px] space-y-3.5 text-[14.5px] leading-relaxed text-slate-950">
-                              {/* Kepada Yth. */}
-                              <div className="leading-snug space-y-0.5 pt-1">
-                                <p>Kepada</p>
-                                <p>Yth. Bapak/Ibu Orang Tua / Wali Murid</p>
-                                <p className="font-bold">
-                                  Ananda{' '}
-                                  {currentParticipant
-                                    ? `${currentParticipant.studentName} (${currentParticipant.className})`
-                                    : '....................................'}
-                                </p>
-                                <p>Di Tempat</p>
+                          <div className="flex-1 flex flex-col justify-between">
+                            <div className="space-y-3">
+                              {/* ============================================================= */}
+                              {/* KOP SURAT HEADER (GAMBAR UPLOAD / OFFICIAL FALLBACK)          */}
+                              {/* ============================================================= */}
+                              <div>
+                                {letterHeaderUrl ? (
+                                  <img
+                                    src={letterHeaderUrl}
+                                    alt="Kop Surat Header"
+                                    className="w-full max-h-[105px] object-contain block select-none"
+                                  />
+                                ) : (
+                                  <div className="space-y-1">
+                                    <div className="flex items-center justify-between pb-1 border-b-[2.5px] border-slate-900">
+                                      {/* Left: Logo Al Azhar */}
+                                      <div className="w-16 h-16 flex items-center justify-center shrink-0">
+                                        <LogoAlAzhar
+                                          size={58}
+                                          customLogoUrl={settings.customLogoUrl}
+                                          className="w-[58px] h-[58px] object-contain"
+                                        />
+                                      </div>
+                                      {/* Center: Official Header Text */}
+                                      <div className="flex-1 text-center px-2">
+                                        <h4 className="text-[11.5px] font-bold text-slate-800 tracking-wider uppercase leading-tight">
+                                          YAYASAN MAKARIMA SURAKARTA
+                                        </h4>
+                                        <h2 className="text-[16px] font-black tracking-wide text-slate-950 uppercase leading-snug">
+                                          SMP ISLAM AL AZHAR 21 SOLO BARU
+                                        </h2>
+                                        <p className="text-[10.5px] font-bold text-emerald-800 tracking-wide leading-tight">
+                                          STATUS: TERAKREDITASI "A" (UNGGUL)
+                                        </p>
+                                        <p className="text-[9.5px] text-slate-700 leading-tight">
+                                          Kompleks Masjid Raya Al Azhar Solo Baru, Jl. Raya Solo Baru, Sukoharjo 57552
+                                        </p>
+                                        <p className="text-[9px] text-slate-600 leading-tight">
+                                          Telp. (0271) 621444 | Email: smpia21solobaru@yahoo.com | Web: smpislamalazhar21.sch.id
+                                        </p>
+                                      </div>
+                                      {/* Right: Badge */}
+                                      <div className="w-16 h-16 flex items-center justify-center shrink-0">
+                                        <div className="w-13 h-13 rounded-full border border-slate-300 flex items-center justify-center text-center p-1 text-[7.5px] font-bold text-slate-600 bg-slate-50 leading-tight">
+                                          YPIA & UMMI
+                                        </div>
+                                      </div>
+                                    </div>
+                                    {/* Thin secondary line of official Kop Surat */}
+                                    <div className="border-b border-slate-900 pt-0.5" />
+                                  </div>
+                                )}
                               </div>
 
-                              {/* Opening Salam */}
-                              <p className="font-bold italic pt-1">
-                                Assalamu’alaikum Warahmatullahi Wabarakatuh
-                              </p>
-
-                              {/* Opening notification statement ("isinya tetap") */}
-                              <p className="text-justify">
-                                Kami beritahukan bahwa ananda akan melakukan{' '}
-                                <span className="font-bold">{config.letterExamName}</span> pada :
-                              </p>
-
-                              {/* Details Table: Hari, Tanggal, Waktu, Tempat, Jilid/Juz, Penguji */}
-                              <div className="pl-3 sm:pl-6">
-                                <table className="border-none text-[14.5px]">
+                              {/* ============================================================= */}
+                              {/* NOMOR SURAT, HAL, DAN TANGGAL HIJRIAH / MASEHI                */}
+                              {/* ============================================================= */}
+                              <div className="flex items-start justify-between gap-4 pt-1 text-[13px] leading-snug">
+                                <table className="border-none">
                                   <tbody>
                                     <tr>
-                                      <td className="py-1 pr-6 w-36 font-medium">Nama / Kelas</td>
-                                      <td className="py-1 pr-3">:</td>
-                                      <td className="py-1 font-bold">
-                                        {currentParticipant
-                                          ? `${currentParticipant.studentName} (${currentParticipant.className})`
-                                          : '-'}
-                                      </td>
+                                      <td className="py-0.5 pr-3 w-10 align-top">No</td>
+                                      <td className="py-0.5 pr-2 align-top">:</td>
+                                      <td className="py-0.5 font-medium">{effectiveLetterNumber}</td>
                                     </tr>
                                     <tr>
-                                      <td className="py-1 pr-6 font-medium">Hari</td>
-                                      <td className="py-1 pr-3">:</td>
-                                      <td className="py-1 font-semibold">
-                                        {selectedSubmission.scheduledDay ||
-                                          getIndonesianDayName(selectedSubmission.scheduledDate)}
-                                      </td>
-                                    </tr>
-                                    <tr>
-                                      <td className="py-1 pr-6 font-medium">Tanggal</td>
-                                      <td className="py-1 pr-3">:</td>
-                                      <td className="py-1 font-semibold">
-                                        {formatIndonesianDate(selectedSubmission.scheduledDate)}
-                                      </td>
-                                    </tr>
-                                    <tr>
-                                      <td className="py-1 pr-6 font-medium">Waktu</td>
-                                      <td className="py-1 pr-3">:</td>
-                                      <td className="py-1 font-semibold">
-                                        {currentParticipant?.scheduledTime ||
-                                          selectedSubmission.scheduledTime ||
-                                          '07.30 - 09.30 WIB'}
-                                      </td>
-                                    </tr>
-                                    <tr>
-                                      <td className="py-1 pr-6 font-medium">Tempat</td>
-                                      <td className="py-1 pr-3">:</td>
-                                      <td className="py-1 font-semibold">
-                                        {selectedSubmission.scheduledRoom ||
-                                          'Kampus SMP Islam Al Azhar 21 Solo Baru'}
-                                      </td>
-                                    </tr>
-                                    <tr>
-                                      <td className="py-1 pr-6 font-medium">{config.columnLabel}</td>
-                                      <td className="py-1 pr-3">:</td>
-                                      <td className="py-1 font-bold">
-                                        {currentParticipant?.jilidOrJuz || '-'}
-                                      </td>
-                                    </tr>
-                                    <tr>
-                                      <td className="py-1 pr-6 font-medium">Penguji</td>
-                                      <td className="py-1 pr-3">:</td>
-                                      <td className="py-1 font-bold">
-                                        {currentParticipant?.examinerName ||
-                                          selectedSubmission.examinerName ||
-                                          coordinatorName}
+                                      <td className="py-0.5 pr-3 align-top">Hal</td>
+                                      <td className="py-0.5 pr-2 align-top">:</td>
+                                      <td className="py-0.5 font-bold">
+                                        Pemberitahuan {config.title}
                                       </td>
                                     </tr>
                                   </tbody>
                                 </table>
+
+                                {/* Right Date: Hijriah underlined over Masehi */}
+                                <div className="text-right shrink-0">
+                                  <div className="inline-block text-center">
+                                    <p className="border-b border-slate-900 pb-0.5 px-1 font-medium">
+                                      Sukoharjo, {effectiveHijriDate}
+                                    </p>
+                                    <p className="pt-0.5">
+                                      {formatIndonesianDate(effectiveScheduledDate)} M
+                                    </p>
+                                  </div>
+                                </div>
                               </div>
 
-                              {/* Closing paragraph & 3 bullet points ("isinya tetap") */}
-                              <div className="space-y-2 pt-1">
-                                <p>
-                                  Demikian pemberitahuan ini kami sampaikan. Kami memohon kepada
-                                  orang tua untuk :
+                              {/* ============================================================= */}
+                              {/* TUJUAN SURAT & ISI SURAT                                      */}
+                              {/* ============================================================= */}
+                              <div className="pl-0 sm:pl-[48px] space-y-2.5 text-[13px] leading-relaxed text-slate-950">
+                                {/* Kepada Yth. */}
+                                <div className="leading-snug space-y-0.5 pt-0.5">
+                                  <p>Kepada</p>
+                                  <p>Yth. Bapak/Ibu Orang Tua / Wali Murid</p>
+                                  <p className="font-bold text-[13.5px]">
+                                    Ananda{' '}
+                                    {currentParticipant
+                                      ? `${currentParticipant.studentName} (${currentParticipant.className})`
+                                      : '....................................'}
+                                  </p>
+                                  <p>Di Tempat</p>
+                                </div>
+
+                                {/* Opening Salam */}
+                                <p className="font-bold italic pt-0.5">
+                                  Assalamu’alaikum Warahmatullahi Wabarakatuh
                                 </p>
-                                <ul className="space-y-1.5 pl-4">
-                                  <li className="flex items-start gap-2.5">
-                                    <span className="font-bold">-</span>
-                                    <span className="text-justify">
-                                      Mendo’akan ananda agar diberikan kemudahan kelancaran dalam
-                                      ujian dan hasil terbaik oleh Alloh ta’ala,
-                                    </span>
-                                  </li>
-                                  <li className="flex items-start gap-2.5">
-                                    <span className="font-bold">-</span>
-                                    <span className="text-justify">
-                                      Mendampingi ananda muroja’ah di rumah dan memotivasinya,
-                                    </span>
-                                  </li>
-                                  <li className="flex items-start gap-2.5">
-                                    <span className="font-bold">-</span>
-                                    <span className="text-justify">
-                                      Mengontrol ananda untuk mengurangi penggunaan gadget.
-                                    </span>
-                                  </li>
-                                </ul>
-                              </div>
 
-                              {/* Closing Salam */}
-                              <p className="font-bold italic pt-1">
-                                Wassalamu’alaikum Warahmatullahi Wabarakatuh
-                              </p>
+                                {/* Opening notification statement */}
+                                <p className="text-justify leading-relaxed">
+                                  Kami beritahukan bahwa ananda akan melaksanakan{' '}
+                                  <span className="font-bold">{config.letterExamName}</span> pada :
+                                </p>
 
-                              {/* Signature Block on the Right (Matching Template 072) */}
-                              <div className="pt-4 flex justify-end">
-                                <div className="text-left min-w-[240px] leading-snug">
-                                  <p className="text-slate-900">
-                                    SMP Islam Al Azhar 21 Solo Baru
+                                {/* Details Table: Hari, Tanggal, Waktu, Tempat, Jilid/Juz, Penguji */}
+                                <div className="pl-3 sm:pl-6">
+                                  <table className="border-none text-[13px]">
+                                    <tbody>
+                                      <tr>
+                                        <td className="py-0.5 pr-6 w-32 font-medium">Nama / Kelas</td>
+                                        <td className="py-0.5 pr-2">:</td>
+                                        <td className="py-0.5 font-bold">
+                                          {currentParticipant
+                                            ? `${currentParticipant.studentName} (${currentParticipant.className})`
+                                            : '-'}
+                                        </td>
+                                      </tr>
+                                      <tr>
+                                        <td className="py-0.5 pr-6 font-medium">Hari</td>
+                                        <td className="py-0.5 pr-2">:</td>
+                                        <td className="py-0.5 font-semibold">
+                                          {effectiveScheduledDay}
+                                        </td>
+                                      </tr>
+                                      <tr>
+                                        <td className="py-0.5 pr-6 font-medium">Tanggal</td>
+                                        <td className="py-0.5 pr-2">:</td>
+                                        <td className="py-0.5 font-semibold">
+                                          {formatIndonesianDate(effectiveScheduledDate)}
+                                        </td>
+                                      </tr>
+                                      <tr>
+                                        <td className="py-0.5 pr-6 font-medium">Waktu</td>
+                                        <td className="py-0.5 pr-2">:</td>
+                                        <td className="py-0.5 font-semibold">
+                                          {effectiveScheduledTime}
+                                        </td>
+                                      </tr>
+                                      <tr>
+                                        <td className="py-0.5 pr-6 font-medium">Tempat</td>
+                                        <td className="py-0.5 pr-2">:</td>
+                                        <td className="py-0.5 font-semibold">
+                                          {effectiveScheduledRoom}
+                                        </td>
+                                      </tr>
+                                      <tr>
+                                        <td className="py-0.5 pr-6 font-medium">{config.columnLabel}</td>
+                                        <td className="py-0.5 pr-2">:</td>
+                                        <td className="py-0.5 font-bold text-emerald-900">
+                                          {currentParticipant?.jilidOrJuz || '-'}
+                                        </td>
+                                      </tr>
+                                      <tr>
+                                        <td className="py-0.5 pr-6 font-medium">Penguji</td>
+                                        <td className="py-0.5 pr-2">:</td>
+                                        <td className="py-0.5 font-bold">
+                                          {effectiveExaminer}
+                                        </td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                </div>
+
+                                {/* Closing paragraph & 3 bullet points */}
+                                <div className="space-y-1.5 pt-0.5">
+                                  <p>
+                                    Demikian pemberitahuan ini kami sampaikan. Kami memohon kepada orang tua untuk :
                                   </p>
-                                  <p className="font-semibold text-slate-950">
-                                    {letterSignerRole === 'kepsek'
-                                      ? 'Kepala Sekolah'
-                                      : 'Koordinator Tahfizh & Metode Ummi'}
-                                  </p>
-                                  {letterSignerRole === 'kepsek' ? (
-                                    settings.headmasterSignatureUrl ? (
-                                      <div className="h-16 flex items-center justify-start my-1">
+                                  <ul className="space-y-1 pl-4">
+                                    <li className="flex items-start gap-2">
+                                      <span className="font-bold">-</span>
+                                      <span className="text-justify">
+                                        Mendo’akan ananda agar diberikan kemudahan kelancaran dalam ujian dan hasil terbaik oleh Alloh ta’ala,
+                                      </span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                      <span className="font-bold">-</span>
+                                      <span className="text-justify">
+                                        Mendampingi ananda muroja’ah di rumah dan memotivasinya,
+                                      </span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                      <span className="font-bold">-</span>
+                                      <span className="text-justify">
+                                        Mengontrol ananda untuk mengurangi penggunaan gadget.
+                                      </span>
+                                    </li>
+                                  </ul>
+                                </div>
+
+                                {/* Closing Salam */}
+                                <p className="font-bold italic pt-0.5">
+                                  Wassalamu’alaikum Warahmatullahi Wabarakatuh
+                                </p>
+
+                                {/* Signature Block on the Right (Matching Official Letterhead) */}
+                                <div className="pt-2 flex justify-end">
+                                  <div className="text-left min-w-[220px] leading-snug">
+                                    <p className="text-slate-900">
+                                      SMP Islam Al Azhar 21 Solo Baru
+                                    </p>
+                                    <p className="font-semibold text-slate-950">
+                                      {letterSignerRole === 'kepsek'
+                                        ? 'Kepala Sekolah'
+                                        : 'Koordinator Tahfizh & Metode Ummi'}
+                                    </p>
+                                    {letterSignerRole === 'kepsek' ? (
+                                      settings.headmasterSignatureUrl ? (
+                                        <div className="h-12 flex items-center justify-start my-0.5">
+                                          <img
+                                            src={settings.headmasterSignatureUrl}
+                                            alt="TTD Kepala Sekolah"
+                                            className="h-11 object-contain"
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div className="h-12" />
+                                      )
+                                    ) : settings.tahfizhCoordinatorSignatureUrl ? (
+                                      <div className="h-12 flex items-center justify-start my-0.5">
                                         <img
-                                          src={settings.headmasterSignatureUrl}
-                                          alt="TTD Kepala Sekolah"
-                                          className="h-14 object-contain"
+                                          src={settings.tahfizhCoordinatorSignatureUrl}
+                                          alt="TTD Koordinator"
+                                          className="h-11 object-contain"
                                         />
                                       </div>
                                     ) : (
-                                      <div className="h-16" />
-                                    )
-                                  ) : settings.tahfizhCoordinatorSignatureUrl ? (
-                                    <div className="h-16 flex items-center justify-start my-1">
-                                      <img
-                                        src={settings.tahfizhCoordinatorSignatureUrl}
-                                        alt="TTD Koordinator"
-                                        className="h-14 object-contain"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <div className="h-16" />
-                                  )}
-                                  <p className="font-bold underline text-slate-950">
-                                    {letterSignerRole === 'kepsek'
-                                      ? headmasterName
-                                      : coordinatorName}
-                                  </p>
+                                      <div className="h-12" />
+                                    )}
+                                    <p className="font-bold underline text-slate-950">
+                                      {letterSignerRole === 'kepsek'
+                                        ? headmasterName
+                                        : coordinatorName}
+                                    </p>
+                                    <p className="text-[11px] text-slate-700">
+                                      {letterSignerRole === 'kepsek'
+                                        ? `NIK. ${headmasterNik}`
+                                        : `NIK. ${coordinatorNik}`}
+                                    </p>
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
 
-                          {/* ============================================================= */}
-                          {/* BOTTOM FOOTER SURAT (GAMBAR UPLOAD)                           */}
-                          {/* ============================================================= */}
-                          <div className="pt-6">
-                            {letterFooterUrl ? (
-                              <img
-                                src={letterFooterUrl}
-                                alt="Footer Surat"
-                                className="w-full h-auto object-contain block select-none"
-                              />
-                            ) : (
-                              <div className="no-print border-2 border-dashed border-slate-300 rounded-xl p-3.5 bg-slate-50/70 text-center space-y-1">
-                                <p className="text-[11px] font-bold text-slate-600">
-                                  Area Gambar Footer Surat
-                                </p>
-                                {!isWali && (
-                                  <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-bold cursor-pointer">
-                                    <Upload className="w-3 h-3 text-[#D4AF37]" />
-                                    <span>+ Upload Gambar Footer Surat</span>
-                                    <input
-                                      type="file"
-                                      accept="image/png,image/jpeg,image/webp"
-                                      onChange={handleUploadLetterFooter}
-                                      className="hidden"
-                                    />
-                                  </label>
-                                )}
-                              </div>
-                            )}
+                            {/* ============================================================= */}
+                            {/* BOTTOM FOOTER SURAT                                           */}
+                            {/* ============================================================= */}
+                            <div className="pt-2">
+                              {letterFooterUrl ? (
+                                <img
+                                  src={letterFooterUrl}
+                                  alt="Footer Surat"
+                                  className="w-full max-h-[50px] object-contain block select-none"
+                                />
+                              ) : (
+                                <div className="border-t border-slate-300 pt-1 text-center text-[9.5px] text-slate-500 font-sans italic">
+                                  SMP Islam Al Azhar 21 Solo Baru · Berakhlak Mulia, Berprestasi Tinggi & Berwawasan Global
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
