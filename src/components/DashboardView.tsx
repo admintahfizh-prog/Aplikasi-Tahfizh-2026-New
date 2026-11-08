@@ -16,7 +16,10 @@ import {
   Activity,
   UserCheck,
   ChevronRight,
-  Target
+  Target,
+  Filter,
+  Layers,
+  School
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -30,16 +33,20 @@ import {
   ResponsiveContainer, 
   PieChart, 
   Pie, 
-  Cell 
+  Cell,
+  Legend
 } from 'recharts';
-import { Student, Teacher, MemorizationRecord, UmmiRecord, TargetProgress, User } from '../types';
+import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, TargetProgress, User } from '../types';
 import { AvatarBadge } from './AvatarBadge';
+import { Card3D } from './Card3D';
 import { storageService } from '../services/storageService';
 import { resolveCurrentTeacher } from '../utils/halaqahHelper';
+import { isGrade8or9Student } from '../utils/gradeHelper';
 
 interface DashboardViewProps {
   students: Student[];
   teachers: Teacher[];
+  classes?: ClassItem[];
   records: MemorizationRecord[];
   ummiRecords: UmmiRecord[];
   targets: TargetProgress[];
@@ -52,6 +59,7 @@ interface DashboardViewProps {
 export const DashboardView: React.FC<DashboardViewProps> = ({
   students,
   teachers,
+  classes: propClasses,
   records,
   ummiRecords,
   targets,
@@ -60,6 +68,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenStudentDetail,
   onNavigate
 }) => {
+  const classesList = React.useMemo(
+    () => (propClasses && propClasses.length > 0 ? propClasses : storageService.getClasses()),
+    [propClasses]
+  );
   const activeUser = React.useMemo(
     () => propCurrentUser || storageService.getCurrentUser(),
     [propCurrentUser]
@@ -195,6 +207,245 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     { name: 'Perlu Bimbingan (<70)', value: records.filter(r => r.finalScore < 70).length || 1, color: '#ef4444' },
   ];
 
+  // =========================================================================
+  // ANALISIS & GRAFIK KETERAPAIAN TARGET HAFALAN & UMMI PER JENJANG & PER KELAS
+  // =========================================================================
+  const [targetJenjangFilter, setTargetJenjangFilter] = React.useState<'all' | '7' | '8' | '9'>('all');
+  const [targetClassFilter, setTargetClassFilter] = React.useState<string>('all');
+  const [targetMetricType, setTargetMetricType] = React.useState<'both' | 'tahfizh' | 'ummi'>('both');
+
+  // Helper to extract Jenjang ('7' | '8' | '9')
+  const getStudentJenjang = React.useCallback((std: Student): '7' | '8' | '9' => {
+    const cls = classesList.find(c => c.id === std.classId);
+    const clsName = cls?.name || '';
+    if (clsName.includes('7') || clsName.startsWith('VII')) return '7';
+    if (clsName.includes('8') || clsName.startsWith('VIII')) return '8';
+    if (clsName.includes('9') || clsName.startsWith('IX')) return '9';
+    return '7';
+  }, [classesList]);
+
+  // Available classes filtered by selected Jenjang
+  const availableClassesForJenjang = React.useMemo(() => {
+    if (targetJenjangFilter === 'all') return classesList;
+    return classesList.filter(c => {
+      const name = c.name;
+      if (targetJenjangFilter === '7') return name.includes('7') || name.startsWith('VII');
+      if (targetJenjangFilter === '8') return name.includes('8') || name.startsWith('VIII');
+      if (targetJenjangFilter === '9') return name.includes('9') || name.startsWith('IX');
+      return false;
+    });
+  }, [classesList, targetJenjangFilter]);
+
+  // Compute student target statistics for the active scope
+  const targetScopeStudents = React.useMemo(() => {
+    return students.filter(s => {
+      const j = getStudentJenjang(s);
+      const matchJenjang = targetJenjangFilter === 'all' || j === targetJenjangFilter;
+      const matchClass = targetClassFilter === 'all' || s.classId === targetClassFilter;
+      return matchJenjang && matchClass;
+    });
+  }, [students, targetJenjangFilter, targetClassFilter, getStudentJenjang]);
+
+  // Compute stats per Jenjang or per Class for the Chart
+  const targetBarChartData = React.useMemo(() => {
+    // If specific class chosen: show students in that class
+    if (targetClassFilter !== 'all') {
+      const targetCls = classesList.find(c => c.id === targetClassFilter);
+      const clsStudents = students.filter(s => s.classId === targetClassFilter);
+      return clsStudents.map(std => {
+        const isGr89 = isGrade8or9Student(std, classesList);
+        const tJuz = Math.max(0.5, Number(std.targetJuz) || 1);
+        const hJuz = Number(std.totalJuzHafal) || 0;
+        const pctTahfizh = Math.min(100, Math.round((hJuz / tJuz) * 100));
+
+        let pctUmmi = 100;
+        if (!isGr89) {
+          const jilidNum = std.currentUmmiJilid?.includes('1') ? 25 :
+                           std.currentUmmiJilid?.includes('2') ? 50 :
+                           std.currentUmmiJilid?.includes('3') ? 75 :
+                           std.currentUmmiJilid?.includes('Qur') ? 90 : 80;
+          pctUmmi = Math.min(100, jilidNum);
+        }
+
+        return {
+          name: std.name.split(' ').slice(0, 2).join(' '),
+          fullName: std.name,
+          kelas: targetCls?.name || '-',
+          tahfizhPct: pctTahfizh,
+          ummiPct: isGr89 ? 0 : pctUmmi,
+          isGrade89: isGr89,
+          tuntas: pctTahfizh >= 70,
+          capaianJuz: hJuz,
+          targetJuz: tJuz
+        };
+      });
+    }
+
+    // If Jenjang filter chosen (e.g. '7', '8', or '9'): show all classes within that jenjang
+    if (targetJenjangFilter !== 'all') {
+      const classesInJenjang = availableClassesForJenjang;
+      return classesInJenjang.map(cls => {
+        const stdsInCls = students.filter(s => s.classId === cls.id);
+        const count = stdsInCls.length;
+        if (count === 0) {
+          return {
+            name: cls.name,
+            fullName: `Kelas ${cls.name}`,
+            kelas: cls.name,
+            tahfizhPct: 0,
+            ummiPct: 0,
+            isGrade89: targetJenjangFilter !== '7',
+            totalSantri: 0,
+            santriTuntas: 0,
+            avgJuz: 0
+          };
+        }
+
+        const avgTahfizhPct = Math.round(
+          stdsInCls.reduce((sum, s) => {
+            const tJuz = Math.max(0.5, Number(s.targetJuz) || 1);
+            const hJuz = Number(s.totalJuzHafal) || 0;
+            return sum + Math.min(100, Math.round((hJuz / tJuz) * 100));
+          }, 0) / count
+        );
+
+        const isGr89 = targetJenjangFilter !== '7';
+        let avgUmmiPct = 0;
+        if (!isGr89) {
+          avgUmmiPct = Math.round(
+            stdsInCls.reduce((sum, s) => {
+              const jNum = s.currentUmmiJilid?.includes('1') ? 25 :
+                           s.currentUmmiJilid?.includes('2') ? 50 :
+                           s.currentUmmiJilid?.includes('3') ? 75 :
+                           s.currentUmmiJilid?.includes('Qur') ? 90 : 80;
+              return sum + jNum;
+            }, 0) / count
+          );
+        }
+
+        const santriTuntas = stdsInCls.filter(s => {
+          const tJuz = Math.max(0.5, Number(s.targetJuz) || 1);
+          const hJuz = Number(s.totalJuzHafal) || 0;
+          return (hJuz / tJuz) >= 0.7;
+        }).length;
+
+        const totalJuz = Number(stdsInCls.reduce((sum, s) => sum + (Number(s.totalJuzHafal) || 0), 0).toFixed(1));
+
+        return {
+          name: cls.name,
+          fullName: `Kelas ${cls.name}`,
+          kelas: cls.name,
+          tahfizhPct: avgTahfizhPct,
+          ummiPct: isGr89 ? 0 : avgUmmiPct,
+          isGrade89: isGr89,
+          totalSantri: count,
+          santriTuntas,
+          avgJuz: Number((totalJuz / count).toFixed(2))
+        };
+      });
+    }
+
+    // Default (Semua Jenjang): Compare Kelas 7, Kelas 8, Kelas 9
+    const jenjangs: Array<{ key: '7' | '8' | '9'; label: string }> = [
+      { key: '7', label: 'Kelas 7' },
+      { key: '8', label: 'Kelas 8' },
+      { key: '9', label: 'Kelas 9' },
+    ];
+
+    return jenjangs.map(j => {
+      const stds = students.filter(s => getStudentJenjang(s) === j.key);
+      const count = stds.length || 1;
+      const isGr89 = j.key !== '7';
+
+      const avgTahfizhPct = Math.round(
+        stds.reduce((sum, s) => {
+          const tJuz = Math.max(0.5, Number(s.targetJuz) || 1);
+          const hJuz = Number(s.totalJuzHafal) || 0;
+          return sum + Math.min(100, Math.round((hJuz / tJuz) * 100));
+        }, 0) / count
+      );
+
+      let avgUmmiPct = 0;
+      if (!isGr89) {
+        avgUmmiPct = Math.round(
+          stds.reduce((sum, s) => {
+            const jNum = s.currentUmmiJilid?.includes('1') ? 25 :
+                         s.currentUmmiJilid?.includes('2') ? 50 :
+                         s.currentUmmiJilid?.includes('3') ? 75 :
+                         s.currentUmmiJilid?.includes('Qur') ? 90 : 80;
+            return sum + jNum;
+          }, 0) / count
+        );
+      }
+
+      const santriTuntas = stds.filter(s => {
+        const tJuz = Math.max(0.5, Number(s.targetJuz) || 1);
+        const hJuz = Number(s.totalJuzHafal) || 0;
+        return (hJuz / tJuz) >= 0.7;
+      }).length;
+
+      return {
+        name: j.label,
+        fullName: j.label,
+        kelas: j.label,
+        tahfizhPct: avgTahfizhPct,
+        ummiPct: isGr89 ? 0 : avgUmmiPct,
+        isGrade89: isGr89,
+        totalSantri: stds.length,
+        santriTuntas,
+        tuntasPct: Math.round((santriTuntas / count) * 100)
+      };
+    });
+  }, [
+    targetClassFilter,
+    targetJenjangFilter,
+    classesList,
+    students,
+    availableClassesForJenjang,
+    getStudentJenjang
+  ]);
+
+  // Summary Metrics for the currently selected scope
+  const targetScopeMetrics = React.useMemo(() => {
+    const list = targetScopeStudents.length > 0 ? targetScopeStudents : students;
+    const count = list.length;
+    const totalAchievedJuz = Number(list.reduce((sum, s) => sum + (Number(s.totalJuzHafal) || 0), 0).toFixed(1));
+    const totalTargetJuz = Number(list.reduce((sum, s) => sum + Math.max(0.5, Number(s.targetJuz) || 1), 0).toFixed(1));
+    const avgTahfizhPct = count > 0 ? Math.round((totalAchievedJuz / (totalTargetJuz || 1)) * 100) : 0;
+    
+    const tuntasCount = list.filter(s => {
+      const tJuz = Math.max(0.5, Number(s.targetJuz) || 1);
+      const hJuz = Number(s.totalJuzHafal) || 0;
+      return (hJuz / tJuz) >= 0.7;
+    }).length;
+    const belumTuntasCount = Math.max(0, count - tuntasCount);
+
+    const grade7List = list.filter(s => getStudentJenjang(s) === '7');
+    const avgUmmiPct = grade7List.length > 0
+      ? Math.round(
+          grade7List.reduce((sum, s) => {
+            const jNum = s.currentUmmiJilid?.includes('1') ? 25 :
+                         s.currentUmmiJilid?.includes('2') ? 50 :
+                         s.currentUmmiJilid?.includes('3') ? 75 :
+                         s.currentUmmiJilid?.includes('Qur') ? 90 : 80;
+            return sum + jNum;
+          }, 0) / grade7List.length
+        )
+      : null;
+
+    return {
+      count,
+      totalAchievedJuz,
+      totalTargetJuz,
+      avgTahfizhPct,
+      tuntasCount,
+      belumTuntasCount,
+      tuntasRatioPct: count > 0 ? Math.round((tuntasCount / count) * 100) : 0,
+      avgUmmiPct,
+      grade7Count: grade7List.length
+    };
+  }, [targetScopeStudents, students, getStudentJenjang]);
+
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-300">
       
@@ -228,13 +479,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 4 Geometric Balance Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 4 Geometric Balance Stat Cards with 3D Floating Tilt */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 perspective-container">
         
         {/* Metric 1: Total Siswa - Gold Accent */}
-        <div 
+        <Card3D 
           onClick={() => onNavigate('students')}
-          className="bg-white p-4 rounded-xl shadow-xs border border-slate-200 border-l-4 border-l-[#D4AF37] hover:shadow-md transition cursor-pointer"
+          className="bg-white p-4 rounded-xl border border-slate-200 border-l-4 border-l-[#D4AF37] cursor-pointer"
         >
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Total Siswa</span>
@@ -244,12 +495,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="text-2xl font-bold text-slate-800">{totalStudents}</span>
             <span className="text-[11px] text-slate-400">3 Kelas Rombel</span>
           </div>
-        </div>
+        </Card3D>
 
         {/* Metric 2: Hafalan Hari Ini - Blue Accent */}
-        <div 
+        <Card3D 
           onClick={onOpenDailyInput}
-          className="bg-white p-4 rounded-xl shadow-xs border border-slate-200 border-l-4 border-l-blue-600 hover:shadow-md transition cursor-pointer"
+          className="bg-white p-4 rounded-xl border border-slate-200 border-l-4 border-l-blue-600 cursor-pointer"
         >
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Hafalan Hari Ini</span>
@@ -257,14 +508,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
           <div className="mt-2 flex items-baseline justify-between">
             <span className="text-2xl font-bold text-slate-800">{todayRecords.length + 3}</span>
-            <span className="text-[11px] text-slate-400">Setoran & Murojaah</span>
+            <span className="text-[11px] text-slate-400">Setoran &amp; Murojaah</span>
           </div>
-        </div>
+        </Card3D>
 
         {/* Metric 3: Rata-Rata Nilai - Emerald Accent */}
-        <div 
+        <Card3D 
           onClick={() => onNavigate('scores')}
-          className="bg-white p-4 rounded-xl shadow-xs border border-slate-200 border-l-4 border-l-emerald-500 hover:shadow-md transition cursor-pointer"
+          className="bg-white p-4 rounded-xl border border-slate-200 border-l-4 border-l-emerald-500 cursor-pointer"
         >
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Rata-rata Nilai</span>
@@ -274,12 +525,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="text-2xl font-bold text-slate-800">{avgOverallScore}</span>
             <span className="text-[11px] text-slate-400">Rubrik 6 Tajwid</span>
           </div>
-        </div>
+        </Card3D>
 
         {/* Metric 4: Perlu Pembinaan - Orange Accent */}
-        <div 
+        <Card3D 
           onClick={() => onNavigate('scores')}
-          className="bg-white p-4 rounded-xl shadow-xs border border-slate-200 border-l-4 border-l-orange-500 hover:shadow-md transition cursor-pointer"
+          className="bg-white p-4 rounded-xl border border-slate-200 border-l-4 border-l-orange-500 cursor-pointer"
         >
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Perlu Pembinaan</span>
@@ -289,12 +540,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="text-2xl font-bold text-slate-800">{studentsNeedHelp}</span>
             <span className="text-[11px] text-orange-600 font-medium">Penguatan Tajwid</span>
           </div>
-        </div>
+        </Card3D>
 
       </div>
 
       {/* Featured Summary Card: Target Capaian Hafalan (Current User) */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 relative overflow-hidden">
+      <Card3D 
+        className="bg-white rounded-xl border border-slate-200 p-5 relative"
+      >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1.5 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -400,7 +653,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <button
                 type="button"
                 onClick={() => onNavigate('targets')}
-                className="px-3.5 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white font-bold text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                className="btn-3d px-3.5 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white font-bold text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer shrink-0"
               >
                 <span>Detail Target</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-[#D4AF37]" />
@@ -408,13 +661,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
         </div>
-      </div>
+      </Card3D>
 
-      {/* Dark Highlight Summary Card + Quick Action Highlights */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Dark Highlight Summary Card + Quick Action Highlights with 3D Perspective */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 perspective-container">
         
         {/* Dark Summary / Target Card */}
-        <div className="lg:col-span-2 bg-[#1E293B] text-white rounded-xl shadow-lg p-6 relative overflow-hidden flex flex-col justify-between">
+        <Card3D 
+          className="lg:col-span-2 bg-[#1E293B] text-white rounded-xl p-6 relative flex flex-col justify-between"
+        >
           <div className="flex items-start justify-between">
             <div>
               <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/30 text-[10px] font-bold uppercase tracking-wider mb-2">
@@ -422,7 +677,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 Target Tahfizh Semester Ganjil 2026/2027
               </div>
               <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
-                Ringkasan Capaian & Akselerasi Santri
+                Ringkasan Capaian &amp; Akselerasi Santri
               </h2>
               <p className="text-xs text-slate-300 max-w-xl mt-1 leading-relaxed">
                 Evaluasi progres kumulatif target 1–3 Juz Al-Qur'an dan kelulusan Jilid 1–3 Buku Ummi Dewasa.
@@ -435,52 +690,52 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="grid grid-cols-3 gap-3 mt-5 pt-4 border-t border-slate-700">
-            <div className="bg-slate-800 p-3 rounded-lg border border-slate-700">
+            <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700/80">
               <p className="text-[10px] text-slate-400 uppercase font-semibold">Hafalan Tertinggi</p>
               <p className="text-sm font-bold text-[#D4AF37] mt-0.5">Juz 30 Selesai</p>
               <p className="text-[10px] text-slate-400 mt-0.5 truncate">Aisyah Zahra (92)</p>
             </div>
-            <div className="bg-slate-800 p-3 rounded-lg border border-slate-700">
+            <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700/80">
               <p className="text-[10px] text-slate-400 uppercase font-semibold">Ummi Tertinggi</p>
               <p className="text-sm font-bold text-white mt-0.5">Al-Qur'an / Ghorib</p>
               <p className="text-[10px] text-slate-400 mt-0.5 truncate">Muhammad Fatih (88)</p>
             </div>
             <div 
               onClick={() => onNavigate('teachers')}
-              className="bg-slate-800 hover:bg-slate-700/80 transition p-3 rounded-lg border border-slate-700 cursor-pointer"
+              className="bg-slate-800/80 hover:bg-slate-700/80 transition p-3 rounded-lg border border-slate-700/80 cursor-pointer"
               title="Lihat Data Guru & Kelas"
             >
               <p className="text-[10px] text-slate-400 uppercase font-semibold">Total Pengajar</p>
               <p className="text-sm font-bold text-white mt-0.5">{totalTeachers} Asatidz</p>
-              <p className="text-[10px] text-[#D4AF37] mt-0.5 font-medium">Lihat Guru & Kelas →</p>
+              <p className="text-[10px] text-[#D4AF37] mt-0.5 font-medium">Lihat Guru &amp; Kelas →</p>
             </div>
           </div>
-        </div>
+        </Card3D>
 
         {/* Quick Highlights / Shortcuts */}
         <div className="space-y-2 flex flex-col justify-between">
-          <div 
+          <Card3D 
             onClick={() => onNavigate('hafalan')}
-            className="bg-[#D4AF37]/10 border border-[#D4AF37]/30 p-2.5 rounded-xl hover:bg-[#D4AF37]/15 transition cursor-pointer flex items-center justify-between"
+            className="bg-[#D4AF37]/10 border border-[#D4AF37]/30 p-2.5 rounded-xl cursor-pointer flex items-center justify-between"
           >
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-[#D4AF37] text-white flex items-center justify-center font-bold text-sm shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-[#D4AF37] text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
                 <BookOpen className="w-4 h-4 text-[#1E293B]" />
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-800">Riwayat Hafalan Qur'an</p>
-                <p className="text-[10px] text-slate-500">Log mutaba'ah & evaluasi tajwid</p>
+                <p className="text-[10px] text-slate-500">Log mutaba'ah &amp; evaluasi tajwid</p>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-slate-400" />
-          </div>
+          </Card3D>
 
-          <div 
+          <Card3D 
             onClick={() => onNavigate('ummi')}
-            className="bg-white p-2.5 rounded-xl border border-slate-200 hover:border-slate-300 shadow-xs transition cursor-pointer flex items-center justify-between"
+            className="bg-white p-2.5 rounded-xl border border-slate-200 cursor-pointer flex items-center justify-between"
           >
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
                 <BookMarked className="w-4 h-4" />
               </div>
               <div>
@@ -489,51 +744,383 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-slate-400" />
-          </div>
+          </Card3D>
 
-          <div 
+          <Card3D 
             onClick={() => onNavigate('matrikulasi')}
-            className="bg-amber-50/70 border border-amber-200 p-2.5 rounded-xl hover:bg-amber-100/70 transition cursor-pointer flex items-center justify-between"
+            className="bg-amber-50/70 border border-amber-200 p-2.5 rounded-xl cursor-pointer flex items-center justify-between"
           >
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-[#1E293B] text-[#D4AF37] flex items-center justify-center font-bold text-sm shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-[#1E293B] text-[#D4AF37] flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
                 <Sparkles className="w-4 h-4" />
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <p className="text-xs font-bold text-slate-900">Matrikulasi Iqro (Kls 8 & 9)</p>
+                  <p className="text-xs font-bold text-slate-900">Matrikulasi Iqro (Kls 8 &amp; 9)</p>
                   <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-200 text-amber-900">Sel-Rab-Kam</span>
                 </div>
-                <p className="text-[10px] text-slate-600">Bimbingan khusus & laporan non-raport</p>
+                <p className="text-[10px] text-slate-600">Bimbingan khusus &amp; laporan non-raport</p>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-amber-700" />
-          </div>
+          </Card3D>
 
-          <div 
+          <Card3D 
             onClick={() => onNavigate('targets')}
-            className="bg-white p-2.5 rounded-xl border border-slate-200 hover:border-slate-300 shadow-xs transition cursor-pointer flex items-center justify-between"
+            className="bg-white p-2.5 rounded-xl border border-slate-200 cursor-pointer flex items-center justify-between"
           >
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
                 <TrendingUp className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-xs font-bold text-slate-800">Target & Capaian</p>
+                <p className="text-xs font-bold text-slate-800">Target &amp; Capaian</p>
                 <p className="text-[10px] text-slate-500">Monitoring target semester</p>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-slate-400" />
-          </div>
+          </Card3D>
         </div>
 
       </div>
 
-      {/* 3 Geometric Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* ========================================================================= */}
+      {/* GRAFIK & ANALISIS KETERCAPAIAN TARGET HAFALAN & UMMI PER JENJANG & KELAS   */}
+      {/* ========================================================================= */}
+      <div className="floating-3d-panel bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 space-y-5">
+        {/* Header & Filter Controls */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-amber-50 text-[#8C7015] border border-[#D4AF37]/40 text-[11px] font-extrabold uppercase tracking-wider mb-1.5">
+              <School className="w-3.5 h-3.5 text-[#D4AF37]" />
+              Monitoring Target Rombel & Jenjang
+            </div>
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              Grafik Ketercapaian Target Hafalan & Ummi
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Evaluasi target hafalan Qur'an dan pembelajaran Ummi dibedakan per jenjang (Kelas 7, 8, 9) dan per rombel kelas
+            </p>
+          </div>
+
+          {/* Interactive Filters: Jenjang, Kelas, and Metrik */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            {/* Filter Jenjang Pills */}
+            <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => {
+                  setTargetJenjangFilter('all');
+                  setTargetClassFilter('all');
+                }}
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                  targetJenjangFilter === 'all'
+                    ? 'bg-[#1E293B] text-white shadow-2xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                Semua Jenjang
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTargetJenjangFilter('7');
+                  setTargetClassFilter('all');
+                }}
+                className={`px-2.5 py-1.5 rounded-lg transition cursor-pointer ${
+                  targetJenjangFilter === '7'
+                    ? 'bg-[#1E293B] text-white shadow-2xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                Kelas 7
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTargetJenjangFilter('8');
+                  setTargetClassFilter('all');
+                }}
+                className={`px-2.5 py-1.5 rounded-lg transition cursor-pointer ${
+                  targetJenjangFilter === '8'
+                    ? 'bg-[#1E293B] text-white shadow-2xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                Kelas 8
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTargetJenjangFilter('9');
+                  setTargetClassFilter('all');
+                }}
+                className={`px-2.5 py-1.5 rounded-lg transition cursor-pointer ${
+                  targetJenjangFilter === '9'
+                    ? 'bg-[#1E293B] text-white shadow-2xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                Kelas 9
+              </button>
+            </div>
+
+            {/* Filter Kelas Dropdown */}
+            <div className="relative">
+              <select
+                value={targetClassFilter}
+                onChange={(e) => setTargetClassFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold rounded-xl px-3 py-2 pr-7 focus:ring-2 focus:ring-amber-500 focus:outline-none cursor-pointer"
+              >
+                <option value="all">
+                  {targetJenjangFilter === 'all' ? 'Semua Kelas Rombel' : `Semua Kelas ${targetJenjangFilter}`}
+                </option>
+                {availableClassesForJenjang.map((cls) => (
+                  <option key={cls.id} value={cls.id}>
+                    Kelas {cls.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter Metrik */}
+            <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setTargetMetricType('both')}
+                className={`px-2.5 py-1.5 rounded-lg transition cursor-pointer ${
+                  targetMetricType === 'both'
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Tampilkan perbandingan Tahfizh & Ummi"
+              >
+                Tahfizh & Ummi
+              </button>
+              <button
+                type="button"
+                onClick={() => setTargetMetricType('tahfizh')}
+                className={`px-2.5 py-1.5 rounded-lg transition cursor-pointer ${
+                  targetMetricType === 'tahfizh'
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Hanya target Tahfizh Qur'an"
+              >
+                Tahfizh Saja
+              </button>
+              <button
+                type="button"
+                onClick={() => setTargetMetricType('ummi')}
+                className={`px-2.5 py-1.5 rounded-lg transition cursor-pointer ${
+                  targetMetricType === 'ummi'
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Hanya target Metode Ummi"
+              >
+                Ummi Saja
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Scope KPI Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Santri Lingkup</span>
+            <span className="text-xl font-black text-slate-800">{targetScopeMetrics.count}</span>
+            <span className="text-[10px] text-slate-400 block mt-0.5">
+              {targetClassFilter !== 'all'
+                ? `Kelas ${classesList.find(c => c.id === targetClassFilter)?.name || ''}`
+                : targetJenjangFilter !== 'all'
+                ? `Jenjang Kelas ${targetJenjangFilter}`
+                : 'Seluruh Rombel 7, 8, 9'}
+            </span>
+          </div>
+
+          <div className="bg-amber-50/60 p-3 rounded-xl border border-amber-200">
+            <span className="text-[10px] uppercase font-bold text-[#8C7015] block">Rata-rata Capaian Tahfizh</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-xl font-black text-slate-900">{targetScopeMetrics.avgTahfizhPct}%</span>
+              <span className="text-[11px] font-bold text-[#8C7015]">
+                ({targetScopeMetrics.totalAchievedJuz}/{targetScopeMetrics.totalTargetJuz} Juz)
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-500 block mt-0.5">Target semester berjalan</span>
+          </div>
+
+          <div className="bg-blue-50/60 p-3 rounded-xl border border-blue-200">
+            <span className="text-[10px] uppercase font-bold text-blue-700 block">Capaian Metode Ummi</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-xl font-black text-slate-900">
+                {targetJenjangFilter === '8' || targetJenjangFilter === '9' ? '-' : `${targetScopeMetrics.avgUmmiPct ?? 78}%`}
+              </span>
+              <span className="text-[10px] text-slate-500 font-medium">
+                {targetJenjangFilter === '8' || targetJenjangFilter === '9'
+                  ? 'Diganti Ibadah Harian'
+                  : 'Fokus Kelas 7'}
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-500 block mt-0.5">
+              {targetJenjangFilter === '8' || targetJenjangFilter === '9'
+                ? 'Tidak ada Ummi di Kls 8 & 9'
+                : `${targetScopeMetrics.grade7Count} Santri Kls 7`}
+            </span>
+          </div>
+
+          <div className="bg-emerald-50/60 p-3 rounded-xl border border-emerald-200">
+            <span className="text-[10px] uppercase font-bold text-emerald-800 block">Ketuntasan Target</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-xl font-black text-emerald-800">{targetScopeMetrics.tuntasRatioPct}%</span>
+              <span className="text-[10px] font-bold text-slate-600">
+                ({targetScopeMetrics.tuntasCount} Tuntas)
+              </span>
+            </div>
+            <span className="text-[10px] text-rose-600 font-medium block mt-0.5">
+              {targetScopeMetrics.belumTuntasCount} Santri Belum Tuntas
+            </span>
+          </div>
+        </div>
+
+        {/* Visual Chart Container */}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between text-xs gap-2">
+            <span className="font-bold text-slate-700 flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5 text-[#D4AF37]" />
+              {targetClassFilter !== 'all'
+                ? `Ketercapaian Santri Kelas ${classesList.find(c => c.id === targetClassFilter)?.name || ''}`
+                : targetJenjangFilter !== 'all'
+                ? `Perbandingan Ketercapaian Kelas di Jenjang ${targetJenjangFilter}`
+                : 'Perbandingan Ketercapaian Antar Jenjang (Kelas 7, 8, 9)'}
+            </span>
+
+            <div className="flex items-center gap-3">
+              {(targetMetricType === 'both' || targetMetricType === 'tahfizh') && (
+                <span className="flex items-center gap-1.5 font-bold text-slate-700">
+                  <span className="w-3 h-3 rounded bg-[#D4AF37]" />
+                  Tahfizh Qur'an (%)
+                </span>
+              )}
+              {(targetMetricType === 'both' || targetMetricType === 'ummi') && targetJenjangFilter !== '8' && targetJenjangFilter !== '9' && (
+                <span className="flex items-center gap-1.5 font-bold text-slate-700">
+                  <span className="w-3 h-3 rounded bg-[#2563eb]" />
+                  Metode Ummi (%)
+                </span>
+              )}
+              <span className="flex items-center gap-1.5 text-slate-400 font-semibold text-[11px]">
+                <span className="w-3 h-0.5 bg-emerald-500" />
+                Target Minimal (70%)
+              </span>
+            </div>
+          </div>
+
+          <div className="h-64 sm:h-72 w-full bg-slate-50/50 rounded-xl p-2 border border-slate-100">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={targetBarChartData}
+                margin={{ top: 15, right: 15, left: -15, bottom: 25 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis 
+                  dataKey="name" 
+                  tick={{ fontSize: 11, fill: '#475569', fontWeight: 600 }}
+                  interval={0}
+                  angle={targetClassFilter !== 'all' ? -25 : 0}
+                  textAnchor={targetClassFilter !== 'all' ? 'end' : 'middle'}
+                />
+                <YAxis 
+                  domain={[0, 100]}
+                  ticks={[0, 25, 50, 70, 100]}
+                  tick={{ fontSize: 11, fill: '#64748b' }}
+                  unit="%"
+                />
+                <Tooltip
+                  formatter={(val: any, name: any) => [`${val}%`, name]}
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div className="bg-[#1E293B] text-white p-3 rounded-xl shadow-lg border border-slate-700 text-xs space-y-1.5 min-w-[190px]">
+                          <p className="font-extrabold text-[#D4AF37] border-b border-slate-700 pb-1">
+                            {data.fullName || label}
+                          </p>
+                          <div className="flex justify-between items-center gap-3">
+                            <span className="text-slate-300">Capaian Tahfizh:</span>
+                            <span className="font-bold text-amber-300">{data.tahfizhPct}%</span>
+                          </div>
+                          {!data.isGrade89 && (
+                            <div className="flex justify-between items-center gap-3">
+                              <span className="text-slate-300">Capaian Ummi:</span>
+                              <span className="font-bold text-blue-300">{data.ummiPct}%</span>
+                            </div>
+                          )}
+                          {data.totalSantri !== undefined && (
+                            <div className="flex justify-between items-center gap-3 text-[11px] text-slate-400 pt-1 border-t border-slate-700">
+                              <span>Santri Tuntas:</span>
+                              <span className="font-semibold text-emerald-400">
+                                {data.santriTuntas} dari {data.totalSantri} Santri
+                              </span>
+                            </div>
+                          )}
+                          {data.targetJuz !== undefined && (
+                            <div className="flex justify-between items-center gap-3 text-[11px] text-slate-400 pt-1 border-t border-slate-700">
+                              <span>Juz Hafal / Target:</span>
+                              <span className="font-semibold text-white">
+                                {data.capaianJuz} / {data.targetJuz} Juz
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                {(targetMetricType === 'both' || targetMetricType === 'tahfizh') && (
+                  <Bar
+                    dataKey="tahfizhPct"
+                    name="Tahfizh Qur'an"
+                    fill="#D4AF37"
+                    radius={[6, 6, 0, 0]}
+                    maxBarSize={45}
+                  />
+                )}
+                {(targetMetricType === 'both' || targetMetricType === 'ummi') && (
+                  <Bar
+                    dataKey="ummiPct"
+                    name="Metode Ummi"
+                    fill="#2563eb"
+                    radius={[6, 6, 0, 0]}
+                    maxBarSize={45}
+                  />
+                )}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-500 px-1 pt-1">
+            <span className="flex items-center gap-1 font-medium">
+              💡 <span className="font-bold text-slate-700">Kebijakan Kurikulum:</span> Kelas 8 & 9 fokus penguatan Tahfizh & Praktik Ibadah Harian (tanpa pembelajaran metode Ummi).
+            </span>
+            <button
+              type="button"
+              onClick={() => onNavigate('reports')}
+              className="font-bold text-[#8C7015] hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              Buka Leger Raport Kelas Lengkap →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 3 Geometric Charts Grid with 3D Depth */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 perspective-container">
         
         {/* Chart 1: Perkembangan Hafalan Bulanan (2 Cols) */}
-        <div className="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
+        <Card3D 
+          className="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200"
+        >
           <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <div>
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
@@ -578,10 +1165,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </AreaChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Card3D>
 
         {/* Chart 2: Capaian Target Siswa */}
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+        <Card3D 
+          className="bg-white p-5 rounded-xl border border-slate-200 flex flex-col justify-between"
+        >
           <div>
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-1">
               <Activity className="w-4 h-4 text-blue-600" />
@@ -614,21 +1203,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span>🟢 &gt;75%: 4 Santri</span>
             <span>🔴 &lt;25%: 1 Santri</span>
           </div>
-        </div>
+        </Card3D>
 
       </div>
 
-      {/* Chart 3 & Recent Activity Stream */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Chart 3 & Recent Activity Stream with 3D Depth */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 perspective-container">
         
         {/* Chart 3: Distribusi Kategori Nilai */}
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
+        <Card3D 
+          className="bg-white p-5 rounded-xl border border-slate-200"
+        >
           <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-1">
             <Award className="w-4 h-4 text-[#D4AF37]" />
-            Distribusi Nilai & Rubrik
+            Distribusi Nilai &amp; Rubrik
           </h3>
           <p className="text-xs text-slate-500 mb-2">
-            Klasifikasi hasil evaluasi setoran tajwid & kelancaran
+            Klasifikasi hasil evaluasi setoran tajwid &amp; kelancaran
           </p>
 
           <div className="h-52 w-full flex items-center justify-center">
@@ -665,10 +1256,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             ))}
           </div>
-        </div>
+        </Card3D>
 
         {/* Live Recent Setoran Stream */}
-        <div className="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+        <Card3D 
+          className="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200 flex flex-col justify-between"
+        >
           <div>
             <div className="flex items-center justify-between mb-3">
               <div>
@@ -744,7 +1337,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               + Catat Setoran Sekarang
             </button>
           </div>
-        </div>
+        </Card3D>
 
       </div>
 

@@ -143,6 +143,61 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
 
   const [pelanggaranNotes, setPelanggaranNotes] = useState<string>(violationSummaryText());
 
+  // =========================================================================
+  // DUA PILIHAN FORMAT RAPORT: FORMAT 1 (KELAS 7) & FORMAT 2 (KELAS 8-9 PDF)
+  // =========================================================================
+  const isDefaultGrade89 = isGrade8or9Student(student, classes);
+  const [raportTemplateMode, setRaportTemplateMode] = useState<'kelas7' | 'kelas8_9'>(
+    (student as any).raportTemplate || (isDefaultGrade89 ? 'kelas8_9' : 'kelas7')
+  );
+
+  useEffect(() => {
+    if ((student as any).raportTemplate) {
+      setRaportTemplateMode((student as any).raportTemplate);
+    } else {
+      setRaportTemplateMode(isGrade8or9Student(student, classes) ? 'kelas8_9' : 'kelas7');
+    }
+  }, [student.id, student.classId, classes]);
+
+  // Nilai Praktik Ibadah Harian (Khusus Format Kelas 8 & 9 Sesuai Contoh PDF)
+  const [ibadahShalatScore, setIbadahShalatScore] = useState<number>(() => {
+    return (student as any).raportIbadahShalat || 90;
+  });
+  const [ibadahDzikirScore, setIbadahDzikirScore] = useState<number>(() => {
+    return (student as any).raportIbadahDzikir || 88;
+  });
+  const [ibadahDoaScore, setIbadahDoaScore] = useState<number>(() => {
+    return (student as any).raportIbadahDoa || 92;
+  });
+
+  // Data Wali Kelas untuk Tanda Tangan Format Kelas 8 & 9 (Sesuai PDF)
+  const defaultWaliName = studentClass?.teacherName || teacher?.name || 'Musyrif / Wali Kelas';
+  const defaultWaliNik = studentClass?.teacherNik || teacher?.nip || '03.0298';
+  const [waliKelasName, setWaliKelasName] = useState<string>(
+    (student as any).raportWaliKelasName || defaultWaliName
+  );
+  const [waliKelasNik, setWaliKelasNik] = useState<string>(
+    (student as any).raportWaliKelasNik || defaultWaliNik
+  );
+  const [waliKelasSignatureUrl, setWaliKelasSignatureUrl] = useState<string | null>(
+    (student as any).raportWaliKelasSignature || null
+  );
+
+  const handleWaliKelasSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setWaliKelasSignatureUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveWaliKelasSignature = () => {
+    setWaliKelasSignatureUrl(null);
+  };
+
   // Query all Ummi records for this student (sorted by date descending)
   const studentUmmiRecords = useMemo(() => {
     const allRecords = [
@@ -385,12 +440,19 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
       raportUmmiNilai: ummiNilaiScore.trim(),
       raportAlpha: alphaCount,
       raportIzin: izinCount,
-      raportSakit: sakitCount
-    };
+      raportSakit: sakitCount,
+      raportTemplate: raportTemplateMode,
+      raportIbadahShalat: ibadahShalatScore,
+      raportIbadahDzikir: ibadahDzikirScore,
+      raportIbadahDoa: ibadahDoaScore,
+      raportWaliKelasName: waliKelasName,
+      raportWaliKelasNik: waliKelasNik,
+      raportWaliKelasSignature: waliKelasSignatureUrl
+    } as any;
 
     storageService.saveStudent(updatedStudent);
     onUpdateStudent?.(updatedStudent);
-    setSaveSuccessMessage(`Data raport & capaian Ummi (${updatedStudent.currentUmmiJilid} hal. ${updatedStudent.currentUmmiPage}) untuk ${finalName} berhasil disimpan & disinkronkan!`);
+    setSaveSuccessMessage(`Data raport (${raportTemplateMode === 'kelas8_9' ? 'Format Kls 8-9 PDF' : 'Format Kls 7'}) untuk ${finalName} berhasil disimpan & disinkronkan!`);
     setTimeout(() => setSaveSuccessMessage(''), 5000);
   };
 
@@ -992,6 +1054,36 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             </div>
           )}
 
+          {/* 2 Pilihan Raport: Format 1 (Kelas 7 - Tahfizh & Ummi) & Format 2 (Kelas 8-9 - Tahfizh & Ibadah Sesuai PDF) */}
+          <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-300 text-xs font-bold shrink-0">
+            <button
+              type="button"
+              onClick={() => setRaportTemplateMode('kelas7')}
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                raportTemplateMode === 'kelas7'
+                  ? 'bg-[#1E293B] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+              title="Template Raport Tahfizh & Metode Ummi (Standar Kelas 7)"
+            >
+              <FileText className="w-3.5 h-3.5 text-[#D4AF37]" />
+              <span>Format 1: Kelas 7 (Tahfizh & Ummi)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setRaportTemplateMode('kelas8_9')}
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                raportTemplateMode === 'kelas8_9'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+              title="Template Raport Tahfizh & Praktik Ibadah Harian Sesuai Lampiran PDF (Kelas 8 & 9)"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-slate-950" />
+              <span>Format 2: Kelas 8-9 (Sesuai PDF)</span>
+            </button>
+          </div>
+
           {!isWali && (
             <button
               onClick={() => setIsCustomizing(!isCustomizing)}
@@ -1542,6 +1634,99 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             </button>
           </div>
 
+          {/* Editor Praktik Ibadah & Wali Kelas (Khusus Format Kelas 8 & 9 Sesuai Lampiran PDF) */}
+          <div className="p-4 bg-white rounded-xl border border-amber-300 space-y-3 shadow-2xs">
+            <div className="flex items-center justify-between border-b border-amber-100 pb-2">
+              <span className="font-extrabold text-amber-950 flex items-center gap-1.5 text-xs">
+                <Award className="w-4 h-4 text-amber-600" />
+                Penilaian Praktik Ibadah Harian (Format Raport Kelas 8 & 9 Sesuai PDF)
+              </span>
+              <span className="text-[10px] text-slate-500">Nilai Angka 0–100 & Konversi Predikat Otomatis</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                <label className="block text-[11px] font-bold text-slate-800 mb-1">
+                  1. Gerakan & Bacaan Shalat
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={ibadahShalatScore}
+                    onChange={(e) => setIbadahShalatScore(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                    className="w-16 p-1.5 bg-white border border-slate-300 rounded font-bold text-center text-xs"
+                  />
+                  <span className="text-xs font-black text-amber-900 bg-amber-100 px-2 py-1 rounded">
+                    Predikat: {getGradeFromScore(ibadahShalatScore).letter}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                <label className="block text-[11px] font-bold text-slate-800 mb-1">
+                  2. Dzikir & Do'a Shalat
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={ibadahDzikirScore}
+                    onChange={(e) => setIbadahDzikirScore(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                    className="w-16 p-1.5 bg-white border border-slate-300 rounded font-bold text-center text-xs"
+                  />
+                  <span className="text-xs font-black text-amber-900 bg-amber-100 px-2 py-1 rounded">
+                    Predikat: {getGradeFromScore(ibadahDzikirScore).letter}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                <label className="block text-[11px] font-bold text-slate-800 mb-1">
+                  3. Do'a-do'a Harian
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={ibadahDoaScore}
+                    onChange={(e) => setIbadahDoaScore(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                    className="w-16 p-1.5 bg-white border border-slate-300 rounded font-bold text-center text-xs"
+                  />
+                  <span className="text-xs font-black text-amber-900 bg-amber-100 px-2 py-1 rounded">
+                    Predikat: {getGradeFromScore(ibadahDoaScore).letter}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-700">Wali Kelas:</span>
+                <input
+                  type="text"
+                  value={waliKelasName}
+                  onChange={(e) => setWaliKelasName(e.target.value)}
+                  placeholder="Nama Wali Kelas"
+                  className="p-1 px-2 bg-white border border-slate-300 rounded text-xs font-bold w-48"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-700">NIK:</span>
+                <input
+                  type="text"
+                  value={waliKelasNik}
+                  onChange={(e) => setWaliKelasNik(e.target.value)}
+                  placeholder="NIK Wali Kelas"
+                  className="p-1 px-2 bg-white border border-slate-300 rounded text-xs font-mono w-32"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Row 5: Pengaturan Tanggal & Tanda Tangan */}
           <div className="border-t border-amber-200/80 pt-3 space-y-3">
             <div className="flex items-center justify-between">
@@ -1931,12 +2116,14 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
               </div>
             </div>
 
-            {/* DOCUMENT TITLE (PERBAIKAN FORMAT SESUAI PERMINTAAN) */}
+            {/* DOCUMENT TITLE (BERBEDA SESUAI PILIHAN TEMPLATE RAPORT) */}
             <div className="text-center space-y-0.5 pt-0.5">
-              <h1 className="text-[15px] sm:text-[16px] font-black uppercase tracking-tight text-slate-950">
-                LAPORAN PROGRAM TAHFIZHUL QUR'AN
+              <h1 className="text-[14.5px] sm:text-[15.5px] font-black uppercase tracking-tight text-slate-950">
+                {raportTemplateMode === 'kelas8_9'
+                  ? "LAPORAN PROGRAM TAHFIZHUL QUR'AN DAN IBADAH HARIAN"
+                  : "LAPORAN PROGRAM TAHFIZHUL QUR'AN"}
               </h1>
-              <h2 className="text-[13.5px] sm:text-[14.5px] font-bold uppercase tracking-tight text-slate-900">
+              <h2 className="text-[13px] sm:text-[14px] font-bold uppercase tracking-tight text-slate-900">
                 SMP ISLAM AL AZHAR 21 SUKOHARJO
               </h2>
               <div className="inline-block border-b-2 border-slate-900 pb-0.5 mt-0.5">
@@ -1982,253 +2169,514 @@ export const StudentRaportCard: React.FC<StudentRaportCardProps> = ({
             </div>
 
             {/* ========================================================================= */}
-            {/* I. KETERCAPAIAN TAHFIZH (PROPORSI PENUH & RAPI)                            */}
+            {/* KONTEN SESUAI FORMAT TERPILIH:                                           */}
+            {/* FORMAT 1: KELAS 7 (Tahfizh, Ummi, Kedisiplinan, Catatan, Kepsek & Koord) */}
+            {/* FORMAT 2: KELAS 8-9 (Tahfizh, Kedisiplinan, Ibadah, Catatan, Kepsek & WK) */}
             {/* ========================================================================= */}
-            <div className="space-y-1 pt-0.5">
-              <h3 className="font-bold text-[13px] text-slate-950">
-                I. &nbsp; Ketercapaian Tahfizh
-              </h3>
+            {raportTemplateMode === 'kelas8_9' ? (
+              /* FORMAT 2: KELAS 8 DAN 9 SESUAI CONTOH PDF RESMI */
+              <>
+                {/* I. KETERCAPAIAN TAHFIZH */}
+                <div className="space-y-1 pt-0.5">
+                  <h3 className="font-bold text-[13px] text-slate-950">
+                    I. &nbsp; Ketercapaian Tahfizh
+                  </h3>
 
-              <table className="w-full text-center text-[12.5px] border border-slate-900 border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-900">
-                    <th colSpan={3} className="py-2 px-3 font-bold text-slate-900">
-                      Capaian Tahfizhul Qur'an
-                    </th>
-                  </tr>
-                  <tr className="bg-white border-b border-slate-900 text-slate-900 font-bold">
-                    <th className="py-2 px-3 border-r border-slate-900 w-1/3">Surat / Ayat</th>
-                    <th className="py-2 px-3 border-r border-slate-900 w-1/3">Target</th>
-                    <th className="py-2 px-3 w-1/3">Keterangan</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b border-slate-900">
-                    <td className="py-2.5 px-3 border-r border-slate-900 font-semibold">{suratAyatCapaian}</td>
-                    <td className="py-2.5 px-3 border-r border-slate-900 font-semibold">{targetSuratAyat}</td>
-                    <td className="py-2.5 px-3 font-semibold text-slate-800">{keteranganTahfizh}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                  <table className="w-full text-center text-[12.5px] border border-slate-900 border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-900">
+                        <th colSpan={3} className="py-2 px-3 font-bold text-slate-900">
+                          Capaian Tahfizhul Qur'an
+                        </th>
+                      </tr>
+                      <tr className="bg-white border-b border-slate-900 text-slate-900 font-bold">
+                        <th className="py-2 px-3 border-r border-slate-900 w-1/3">Surat / Ayat</th>
+                        <th className="py-2 px-3 border-r border-slate-900 w-1/3">Target</th>
+                        <th className="py-2 px-3 w-1/3">Keterangan</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-slate-900">
+                        <td className="py-2.5 px-3 border-r border-slate-900 font-semibold">{suratAyatCapaian}</td>
+                        <td className="py-2.5 px-3 border-r border-slate-900 font-semibold">{targetSuratAyat}</td>
+                        <td className="py-2.5 px-3 font-semibold text-slate-800">{keteranganTahfizh}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
 
-            {/* ========================================================================= */}
-            {/* II. PERKEMBANGAN INDIVIDU METODE UMMI (ROMAWI II)                         */}
-            {/* ========================================================================= */}
-            <div className="space-y-1 pt-0.5">
-              <h3 className="font-bold text-[13px] text-slate-950">
-                II. &nbsp; Perkembangan Individu Metode Ummi
-              </h3>
+                {/* II. KEDISIPLINAN */}
+                <div className="space-y-1 pt-0.5">
+                  <h3 className="font-bold text-[13px] text-slate-950">
+                    II. &nbsp; Kedisiplinan
+                  </h3>
 
-              <table className="w-full text-[12.5px] border border-slate-900 border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-900 text-slate-900">
-                    <th colSpan={2} className="py-2 px-3 text-center font-bold text-[12.5px]">
-                      Capaian UMMI
-                    </th>
-                  </tr>
-                  <tr className="bg-white border-b border-slate-900 text-slate-900 font-bold">
-                    <th className="py-2 px-3 border-r border-slate-900 text-left w-8/12 font-bold">
-                      Jilid/Tilawah/Gharib/Tajwid
-                    </th>
-                    <th className="py-2 px-3 text-center w-4/12 font-bold">
-                      Nilai
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="py-2.5 px-3 border-r border-slate-900 font-normal text-slate-900">
-                      {ummiCapaianDescription}
-                    </td>
-                    <td className="py-2.5 px-3 text-center font-bold font-mono text-slate-900 text-[13px]">
-                      {(() => {
-                        if (!ummiNilaiScore || ummiNilaiScore === '-') return '-';
-                        const num = Number(ummiNilaiScore);
-                        if (!isNaN(num) && num > 0) {
-                          return getGradeFromScore(num).letter;
-                        }
-                        return ummiNilaiScore;
-                      })()}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                  <table className="w-full text-[12.5px] border border-slate-900 border-collapse">
+                    <thead>
+                      <tr className="bg-white border-b border-slate-900 text-slate-900 font-bold">
+                        <th className="py-2 px-3 border-r border-slate-900 w-1/2 text-center">Ketidakhadiran</th>
+                        <th className="py-2 px-3 w-1/2 text-center">Pelanggaran</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        {/* Left: Ketidakhadiran list */}
+                        <td className="p-3 border-r border-slate-900 align-top">
+                          <div className="space-y-1 px-4 font-mono text-[12.5px]">
+                            <div className="flex">
+                              <span className="w-8 font-bold font-sans">A</span>
+                              <span className="w-4 text-center">:</span>
+                              <span className="font-bold">{alphaCount}</span>
+                              <span className="ml-2 font-sans text-slate-700">kali</span>
+                            </div>
+                            <div className="flex">
+                              <span className="w-8 font-bold font-sans">I</span>
+                              <span className="w-4 text-center">:</span>
+                              <span className="font-bold">{izinCount}</span>
+                              <span className="ml-2 font-sans text-slate-700">kali</span>
+                            </div>
+                            <div className="flex">
+                              <span className="w-8 font-bold font-sans">S</span>
+                              <span className="w-4 text-center">:</span>
+                              <span className="font-bold">{sakitCount}</span>
+                              <span className="ml-2 font-sans text-slate-700">kali</span>
+                            </div>
+                          </div>
+                        </td>
 
-            {/* ========================================================================= */}
-            {/* III. KEDISIPLINAN (ROMAWI III)                                             */}
-            {/* ========================================================================= */}
-            <div className="space-y-1 pt-0.5">
-              <h3 className="font-bold text-[13px] text-slate-950">
-                III. &nbsp; Kedisiplinan
-              </h3>
+                        {/* Right: Pelanggaran */}
+                        <td className="p-3 text-center align-middle font-medium text-slate-800">
+                          {pelanggaranNotes}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
 
-              <table className="w-full text-[12.5px] border border-slate-900 border-collapse">
-                <thead>
-                  <tr className="bg-white border-b border-slate-900 text-slate-900 font-bold">
-                    <th className="py-2 px-3 border-r border-slate-900 w-1/2 text-center">Ketidakhadiran</th>
-                    <th className="py-2 px-3 w-1/2 text-center">Pelanggaran</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    {/* Left: Ketidakhadiran list */}
-                    <td className="p-3 border-r border-slate-900 align-top">
-                      <div className="space-y-1 px-4 font-mono text-[12.5px]">
-                        <div className="flex">
-                          <span className="w-8 font-bold font-sans">A</span>
-                          <span className="w-4 text-center">:</span>
-                          <span className="font-bold">{alphaCount}</span>
-                          <span className="ml-2 font-sans text-slate-700">kali</span>
+                {/* III. IBADAH (PRAKTIK IBADAH - SESUAI LAMPIRAN PDF RESMI) */}
+                <div className="space-y-1 pt-0.5">
+                  <h3 className="font-bold text-[13px] text-slate-950">
+                    III. &nbsp; Ibadah
+                  </h3>
+
+                  <table className="w-full text-[12.5px] border border-slate-900 border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-900 text-slate-900">
+                        <th colSpan={4} className="py-2 px-3 text-center font-bold text-[12.5px]">
+                          Praktik Ibadah
+                        </th>
+                      </tr>
+                      <tr className="bg-white border-b border-slate-900 text-slate-900 font-bold">
+                        <th className="py-2 px-3 border-r border-slate-900 text-center w-12">No</th>
+                        <th className="py-2 px-3 border-r border-slate-900 text-left">Materi Ibadah</th>
+                        <th className="py-2 px-3 border-r border-slate-900 text-center w-28">Nilai Angka</th>
+                        <th className="py-2 px-3 text-center w-28">Predikat</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-slate-900">
+                        <td className="py-2 px-3 border-r border-slate-900 text-center font-bold">1</td>
+                        <td className="py-2 px-3 border-r border-slate-900 font-semibold text-slate-900">
+                          Gerakan dan Bacaan Shalat
+                        </td>
+                        <td className="py-2 px-3 border-r border-slate-900 text-center font-mono font-bold">
+                          {ibadahShalatScore}
+                        </td>
+                        <td className="py-2 px-3 text-center font-bold font-mono">
+                          {getGradeFromScore(ibadahShalatScore).letter}
+                        </td>
+                      </tr>
+                      <tr className="border-b border-slate-900">
+                        <td className="py-2 px-3 border-r border-slate-900 text-center font-bold">2</td>
+                        <td className="py-2 px-3 border-r border-slate-900 font-semibold text-slate-900">
+                          Bacaan Dzikir dan Do'a Setelah Shalat
+                        </td>
+                        <td className="py-2 px-3 border-r border-slate-900 text-center font-mono font-bold">
+                          {ibadahDzikirScore}
+                        </td>
+                        <td className="py-2 px-3 text-center font-bold font-mono">
+                          {getGradeFromScore(ibadahDzikirScore).letter}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-3 border-r border-slate-900 text-center font-bold">3</td>
+                        <td className="py-2 px-3 border-r border-slate-900 font-semibold text-slate-900">
+                          Do'a-do'a Harian
+                        </td>
+                        <td className="py-2 px-3 border-r border-slate-900 text-center font-mono font-bold">
+                          {ibadahDoaScore}
+                        </td>
+                        <td className="py-2 px-3 text-center font-bold font-mono">
+                          {getGradeFromScore(ibadahDoaScore).letter}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* IV. CATATAN */}
+                <div className="space-y-1 pt-0.5">
+                  <h3 className="font-bold text-[13px] text-slate-950">
+                    IV. &nbsp; Catatan Musyrif / Wali Kelas
+                  </h3>
+
+                  <div className="border border-slate-900 p-3 min-h-[68px] sm:min-h-[74px] text-[12px] text-slate-900 leading-relaxed">
+                    {teacherNotes || '-'}
+                  </div>
+                </div>
+
+                {/* TANDA TANGAN FORMAT 2: KEPALA SEKOLAH (KIRI) & WALI KELAS (KANAN) */}
+                <div className="pt-3.5 grid grid-cols-2 text-center text-[12.5px]">
+                  {/* Left Signature: Kepala Sekolah (Sesuai PDF) */}
+                  <div className="flex flex-col items-center justify-between min-h-[110px]">
+                    <div>
+                      <p className="text-slate-800">Mengetahui,</p>
+                      <p className="font-bold text-slate-950 uppercase">
+                        KEPALA SMP ISLAM AL AZHAR 21 SUKOHARJO
+                      </p>
+                    </div>
+                    
+                    {/* Online Digital Signature Kepala Sekolah */}
+                    <div className="relative w-full flex flex-col items-center justify-center my-0.5">
+                      {headmasterSignatureUrl ? (
+                        <div className="relative group flex items-center justify-center">
+                          <img
+                            src={headmasterSignatureUrl}
+                            alt="Tanda Tangan Kepala Sekolah"
+                            className="h-14 sm:h-16 max-w-[140px] object-contain select-none -mb-3 relative z-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleRemoveHeadmasterSignature}
+                            title="Hapus Tanda Tangan"
+                            className="no-print absolute -top-1 -right-5 p-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-full opacity-0 group-hover:opacity-100 transition shadow-xs cursor-pointer z-20"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
                         </div>
-                        <div className="flex">
-                          <span className="w-8 font-bold font-sans">I</span>
-                          <span className="w-4 text-center">:</span>
-                          <span className="font-bold">{izinCount}</span>
-                          <span className="ml-2 font-sans text-slate-700">kali</span>
+                      ) : (
+                        <div className="h-14 flex items-center justify-center">
+                          <label className="no-print text-[10.5px] text-[#D4AF37] hover:text-amber-700 font-bold cursor-pointer border border-dashed border-amber-300 hover:border-amber-500 rounded-lg px-2.5 py-1 bg-amber-50/60 transition flex items-center gap-1">
+                            <Upload className="w-3 h-3" />
+                            <span>+ Upload TTD Kepsek</span>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp"
+                              onChange={handleHeadmasterSignatureUpload}
+                              className="hidden"
+                            />
+                          </label>
                         </div>
-                        <div className="flex">
-                          <span className="w-8 font-bold font-sans">S</span>
-                          <span className="w-4 text-center">:</span>
-                          <span className="font-bold">{sakitCount}</span>
-                          <span className="ml-2 font-sans text-slate-700">kali</span>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="font-bold text-slate-950 underline underline-offset-2">
+                        {headmasterName}
+                      </p>
+                      <p className="text-[11.5px] font-mono text-slate-800 mt-0.5">
+                        NIK. {headmasterNik}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right Signature: Wali Kelas (Sesuai PDF) */}
+                  <div className="flex flex-col items-center justify-between min-h-[110px]">
+                    <div>
+                      <p className="text-slate-800">{cityDate}</p>
+                      <p className="font-bold text-slate-950">
+                        Wali Kelas {studentClass?.name || '8A'}
+                      </p>
+                    </div>
+                    
+                    {/* Online Digital Signature Wali Kelas */}
+                    <div className="relative w-full flex flex-col items-center justify-center my-0.5">
+                      {waliKelasSignatureUrl ? (
+                        <div className="relative group flex items-center justify-center">
+                          <img
+                            src={waliKelasSignatureUrl}
+                            alt="Tanda Tangan Wali Kelas"
+                            className="h-14 sm:h-16 max-w-[140px] object-contain select-none -mb-3 relative z-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleRemoveWaliKelasSignature}
+                            title="Hapus Tanda Tangan"
+                            className="no-print absolute -top-1 -right-5 p-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-full opacity-0 group-hover:opacity-100 transition shadow-xs cursor-pointer z-20"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
                         </div>
-                      </div>
-                    </td>
-
-                    {/* Right: Pelanggaran */}
-                    <td className="p-3 text-center align-middle font-medium text-slate-800">
-                      {pelanggaranNotes}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* ========================================================================= */}
-            {/* IV. CATATAN                                                               */}
-            {/* ========================================================================= */}
-            <div className="space-y-1 pt-0.5">
-              <h3 className="font-bold text-[13px] text-slate-950">
-                IV. &nbsp; Catatan
-              </h3>
-
-              <div className="border border-slate-900 p-3 min-h-[72px] sm:min-h-[78px] text-[12px] text-slate-900 leading-relaxed">
-                {teacherNotes || '-'}
-              </div>
-            </div>
-
-            {/* ========================================================================= */}
-            {/* TANDA TANGAN (SIGNATURES) - SAMPAI SEBELUM BINGKAI BAWAH                   */}
-            {/* ========================================================================= */}
-            <div className="pt-4 grid grid-cols-2 text-center text-[12.5px]">
-              {/* Left Signature: Kepala Sekolah (Sinkron Admin, Tidak Kapital Semua) */}
-              <div className="flex flex-col items-center justify-between min-h-[112px]">
-                <div>
-                  <p className="text-slate-800">Mengetahui,</p>
-                  <p className="font-bold text-slate-950">
-                    Kepala SMP Islam Al Azhar 21
-                  </p>
-                </div>
-                
-                {/* Online Digital Signature Kepala Sekolah */}
-                <div className="relative w-full flex flex-col items-center justify-center my-0.5">
-                  {headmasterSignatureUrl ? (
-                    <div className="relative group flex items-center justify-center">
-                      <img
-                        src={headmasterSignatureUrl}
-                        alt="Tanda Tangan Kepala Sekolah"
-                        className="h-14 sm:h-16 max-w-[140px] object-contain select-none -mb-3 relative z-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleRemoveHeadmasterSignature}
-                        title="Hapus Tanda Tangan"
-                        className="no-print absolute -top-1 -right-5 p-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-full opacity-0 group-hover:opacity-100 transition shadow-xs cursor-pointer z-20"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
+                      ) : (
+                        <div className="h-14 flex items-center justify-center">
+                          <label className="no-print text-[10.5px] text-[#D4AF37] hover:text-amber-700 font-bold cursor-pointer border border-dashed border-amber-300 hover:border-amber-500 rounded-lg px-2.5 py-1 bg-amber-50/60 transition flex items-center gap-1">
+                            <Upload className="w-3 h-3" />
+                            <span>+ Upload TTD Wali Kelas</span>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp"
+                              onChange={handleWaliKelasSignatureUpload}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="h-14 flex items-center justify-center">
-                      <label className="no-print text-[10.5px] text-[#D4AF37] hover:text-amber-700 font-bold cursor-pointer border border-dashed border-amber-300 hover:border-amber-500 rounded-lg px-2.5 py-1 bg-amber-50/60 transition flex items-center gap-1">
-                        <Upload className="w-3 h-3" />
-                        <span>+ Upload TTD Kepsek</span>
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp"
-                          onChange={handleHeadmasterSignatureUpload}
-                          className="hidden"
-                        />
-                      </label>
+
+                    <div>
+                      <p className="font-bold text-slate-950 underline underline-offset-2">
+                        {waliKelasName}
+                      </p>
+                      <p className="text-[11.5px] font-mono text-slate-800 mt-0.5">
+                        NIK. {waliKelasNik}
+                      </p>
                     </div>
-                  )}
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* FORMAT 1: KELAS 7 (TAHFIZH & METODE UMMI) */
+              <>
+                {/* I. KETERCAPAIAN TAHFIZH */}
+                <div className="space-y-1 pt-0.5">
+                  <h3 className="font-bold text-[13px] text-slate-950">
+                    I. &nbsp; Ketercapaian Tahfizh
+                  </h3>
+
+                  <table className="w-full text-center text-[12.5px] border border-slate-900 border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-900">
+                        <th colSpan={3} className="py-2 px-3 font-bold text-slate-900">
+                          Capaian Tahfizhul Qur'an
+                        </th>
+                      </tr>
+                      <tr className="bg-white border-b border-slate-900 text-slate-900 font-bold">
+                        <th className="py-2 px-3 border-r border-slate-900 w-1/3">Surat / Ayat</th>
+                        <th className="py-2 px-3 border-r border-slate-900 w-1/3">Target</th>
+                        <th className="py-2 px-3 w-1/3">Keterangan</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-slate-900">
+                        <td className="py-2.5 px-3 border-r border-slate-900 font-semibold">{suratAyatCapaian}</td>
+                        <td className="py-2.5 px-3 border-r border-slate-900 font-semibold">{targetSuratAyat}</td>
+                        <td className="py-2.5 px-3 font-semibold text-slate-800">{keteranganTahfizh}</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
 
-                <div>
-                  <p className="font-bold text-slate-950 underline underline-offset-2">
-                    {headmasterName}
-                  </p>
-                  <p className="text-[11.5px] font-mono text-slate-800 mt-0.5">
-                    NIK. {headmasterNik}
-                  </p>
-                </div>
-              </div>
+                {/* II. PERKEMBANGAN INDIVIDU METODE UMMI */}
+                <div className="space-y-1 pt-0.5">
+                  <h3 className="font-bold text-[13px] text-slate-950">
+                    II. &nbsp; Perkembangan Individu Metode Ummi
+                  </h3>
 
-              {/* Right Signature: Koordinator Tahfizh (Sinkron Admin) */}
-              <div className="flex flex-col items-center justify-between min-h-[112px]">
-                <div>
-                  <p className="text-slate-800">{cityDate}</p>
-                  <p className="font-bold text-slate-950">
-                    Koordinator Tahfizh
-                  </p>
-                </div>
-                
-                {/* Online Digital Signature Koordinator Tahfizh */}
-                <div className="relative w-full flex flex-col items-center justify-center my-0.5">
-                  {tahfizhCoordinatorSignatureUrl ? (
-                    <div className="relative group flex items-center justify-center">
-                      <img
-                        src={tahfizhCoordinatorSignatureUrl}
-                        alt="Tanda Tangan Koordinator Tahfizh"
-                        className="h-14 sm:h-16 max-w-[140px] object-contain select-none -mb-3 relative z-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleRemoveTahfizhCoordinatorSignature}
-                        title="Hapus Tanda Tangan"
-                        className="no-print absolute -top-1 -right-5 p-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-full opacity-0 group-hover:opacity-100 transition shadow-xs cursor-pointer z-20"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="h-14 flex items-center justify-center">
-                      <label className="no-print text-[10.5px] text-[#D4AF37] hover:text-amber-700 font-bold cursor-pointer border border-dashed border-amber-300 hover:border-amber-500 rounded-lg px-2.5 py-1 bg-amber-50/60 transition flex items-center gap-1">
-                        <Upload className="w-3 h-3" />
-                        <span>+ Upload TTD Koordinator</span>
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp"
-                          onChange={handleTahfizhCoordinatorSignatureUpload}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-                  )}
+                  <table className="w-full text-[12.5px] border border-slate-900 border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-900 text-slate-900">
+                        <th colSpan={2} className="py-2 px-3 text-center font-bold text-[12.5px]">
+                          Capaian UMMI
+                        </th>
+                      </tr>
+                      <tr className="bg-white border-b border-slate-900 text-slate-900 font-bold">
+                        <th className="py-2 px-3 border-r border-slate-900 text-left w-8/12 font-bold">
+                          Jilid/Tilawah/Gharib/Tajwid
+                        </th>
+                        <th className="py-2 px-3 text-center w-4/12 font-bold">
+                          Nilai
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="py-2.5 px-3 border-r border-slate-900 font-normal text-slate-900">
+                          {ummiCapaianDescription}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-bold font-mono text-slate-900 text-[13px]">
+                          {(() => {
+                            if (!ummiNilaiScore || ummiNilaiScore === '-') return '-';
+                            const num = Number(ummiNilaiScore);
+                            if (!isNaN(num) && num > 0) {
+                              return getGradeFromScore(num).letter;
+                            }
+                            return ummiNilaiScore;
+                          })()}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
 
-                <div>
-                  <p className="font-bold text-slate-950 underline underline-offset-2">
-                    {tahfizhCoordinatorName}
-                  </p>
-                  <p className="text-[11.5px] font-mono text-slate-800 mt-0.5">
-                    NIK. {tahfizhCoordinatorNik}
-                  </p>
+                {/* III. KEDISIPLINAN */}
+                <div className="space-y-1 pt-0.5">
+                  <h3 className="font-bold text-[13px] text-slate-950">
+                    III. &nbsp; Kedisiplinan
+                  </h3>
+
+                  <table className="w-full text-[12.5px] border border-slate-900 border-collapse">
+                    <thead>
+                      <tr className="bg-white border-b border-slate-900 text-slate-900 font-bold">
+                        <th className="py-2 px-3 border-r border-slate-900 w-1/2 text-center">Ketidakhadiran</th>
+                        <th className="py-2 px-3 w-1/2 text-center">Pelanggaran</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        {/* Left: Ketidakhadiran list */}
+                        <td className="p-3 border-r border-slate-900 align-top">
+                          <div className="space-y-1 px-4 font-mono text-[12.5px]">
+                            <div className="flex">
+                              <span className="w-8 font-bold font-sans">A</span>
+                              <span className="w-4 text-center">:</span>
+                              <span className="font-bold">{alphaCount}</span>
+                              <span className="ml-2 font-sans text-slate-700">kali</span>
+                            </div>
+                            <div className="flex">
+                              <span className="w-8 font-bold font-sans">I</span>
+                              <span className="w-4 text-center">:</span>
+                              <span className="font-bold">{izinCount}</span>
+                              <span className="ml-2 font-sans text-slate-700">kali</span>
+                            </div>
+                            <div className="flex">
+                              <span className="w-8 font-bold font-sans">S</span>
+                              <span className="w-4 text-center">:</span>
+                              <span className="font-bold">{sakitCount}</span>
+                              <span className="ml-2 font-sans text-slate-700">kali</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Right: Pelanggaran */}
+                        <td className="p-3 text-center align-middle font-medium text-slate-800">
+                          {pelanggaranNotes}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
-              </div>
-            </div>
+
+                {/* IV. CATATAN */}
+                <div className="space-y-1 pt-0.5">
+                  <h3 className="font-bold text-[13px] text-slate-950">
+                    IV. &nbsp; Catatan
+                  </h3>
+
+                  <div className="border border-slate-900 p-3 min-h-[72px] sm:min-h-[78px] text-[12px] text-slate-900 leading-relaxed">
+                    {teacherNotes || '-'}
+                  </div>
+                </div>
+
+                {/* TANDA TANGAN FORMAT 1: KEPALA SEKOLAH & KOORDINATOR TAHFIZH */}
+                <div className="pt-4 grid grid-cols-2 text-center text-[12.5px]">
+                  {/* Left Signature: Kepala Sekolah */}
+                  <div className="flex flex-col items-center justify-between min-h-[112px]">
+                    <div>
+                      <p className="text-slate-800">Mengetahui,</p>
+                      <p className="font-bold text-slate-950">
+                        Kepala SMP Islam Al Azhar 21
+                      </p>
+                    </div>
+                    
+                    {/* Online Digital Signature Kepala Sekolah */}
+                    <div className="relative w-full flex flex-col items-center justify-center my-0.5">
+                      {headmasterSignatureUrl ? (
+                        <div className="relative group flex items-center justify-center">
+                          <img
+                            src={headmasterSignatureUrl}
+                            alt="Tanda Tangan Kepala Sekolah"
+                            className="h-14 sm:h-16 max-w-[140px] object-contain select-none -mb-3 relative z-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleRemoveHeadmasterSignature}
+                            title="Hapus Tanda Tangan"
+                            className="no-print absolute -top-1 -right-5 p-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-full opacity-0 group-hover:opacity-100 transition shadow-xs cursor-pointer z-20"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="h-14 flex items-center justify-center">
+                          <label className="no-print text-[10.5px] text-[#D4AF37] hover:text-amber-700 font-bold cursor-pointer border border-dashed border-amber-300 hover:border-amber-500 rounded-lg px-2.5 py-1 bg-amber-50/60 transition flex items-center gap-1">
+                            <Upload className="w-3 h-3" />
+                            <span>+ Upload TTD Kepsek</span>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp"
+                              onChange={handleHeadmasterSignatureUpload}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="font-bold text-slate-950 underline underline-offset-2">
+                        {headmasterName}
+                      </p>
+                      <p className="text-[11.5px] font-mono text-slate-800 mt-0.5">
+                        NIK. {headmasterNik}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right Signature: Koordinator Tahfizh */}
+                  <div className="flex flex-col items-center justify-between min-h-[112px]">
+                    <div>
+                      <p className="text-slate-800">{cityDate}</p>
+                      <p className="font-bold text-slate-950">
+                        Koordinator Tahfizh
+                      </p>
+                    </div>
+                    
+                    {/* Online Digital Signature Koordinator Tahfizh */}
+                    <div className="relative w-full flex flex-col items-center justify-center my-0.5">
+                      {tahfizhCoordinatorSignatureUrl ? (
+                        <div className="relative group flex items-center justify-center">
+                          <img
+                            src={tahfizhCoordinatorSignatureUrl}
+                            alt="Tanda Tangan Koordinator Tahfizh"
+                            className="h-14 sm:h-16 max-w-[140px] object-contain select-none -mb-3 relative z-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleRemoveTahfizhCoordinatorSignature}
+                            title="Hapus Tanda Tangan"
+                            className="no-print absolute -top-1 -right-5 p-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-full opacity-0 group-hover:opacity-100 transition shadow-xs cursor-pointer z-20"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="h-14 flex items-center justify-center">
+                          <label className="no-print text-[10.5px] text-[#D4AF37] hover:text-amber-700 font-bold cursor-pointer border border-dashed border-amber-300 hover:border-amber-500 rounded-lg px-2.5 py-1 bg-amber-50/60 transition flex items-center gap-1">
+                            <Upload className="w-3 h-3" />
+                            <span>+ Upload TTD Koordinator</span>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp"
+                              onChange={handleTahfizhCoordinatorSignatureUpload}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="font-bold text-slate-950 underline underline-offset-2">
+                        {tahfizhCoordinatorName}
+                      </p>
+                      <p className="text-[11.5px] font-mono text-slate-800 mt-0.5">
+                        NIK. {tahfizhCoordinatorNik}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
           </div>
         </div>

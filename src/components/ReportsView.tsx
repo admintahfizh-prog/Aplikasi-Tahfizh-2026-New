@@ -19,7 +19,8 @@ import {
   X,
   TrendingUp,
   BarChart3,
-  Activity
+  Activity,
+  Table2
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -38,6 +39,7 @@ import {
 import { Student, Teacher, ClassItem, MemorizationRecord, UmmiRecord, AppSettings, Role, User, TermName, TargetProgress } from '../types';
 import { storageService } from '../services/storageService';
 import { StudentRaportCard } from './StudentRaportCard';
+import { Card3D } from './Card3D';
 import { MonthlyHafalanRecapModal } from './MonthlyHafalanRecapModal';
 import { isGrade8or9Student, isClass7Bto7E, resolveRaportTargetHafalan } from '../utils/gradeHelper';
 import { getGradeFromScore } from '../utils/gradeConversion';
@@ -69,7 +71,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   onRefreshData
 }) => {
   const isWali = userRole === 'wali';
-  const [reportType, setReportType] = useState<'raport_individu' | 'rekap_bulanan' | 'hafalan' | 'ummi' | 'rekap_nilai' | 'raport_kelas'>('raport_individu');
+  const [reportType, setReportType] = useState<'raport_individu' | 'rekap_bulanan' | 'hafalan' | 'ummi' | 'rekap_nilai' | 'raport_kelas' | 'leger_raport'>('raport_individu');
   const [selectedClass, setSelectedClass] = useState<string>('');
   const [selectedTeacher, setSelectedTeacher] = useState<string>('');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
@@ -562,6 +564,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     const targetStudents = sortedStudents.filter(s => !effectiveClassId || s.classId === effectiveClassId);
     const targetStudentIds = new Set(targetStudents.map(s => s.id));
 
+    if (datasetType === 'active_view' && reportType === 'leger_raport') {
+      handleExportLegerExcel(format);
+      return;
+    }
+
     const resolvedDataset =
       datasetType === 'active_view'
         ? reportType === 'ummi'
@@ -680,6 +687,73 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     setShowExportModal(false);
   };
 
+  // Export Leger Raport Kelas to XLSX / CSV
+  const handleExportLegerExcel = (format: 'xlsx' | 'csv' = 'xlsx') => {
+    const classObj = classes.find(c => c.id === selectedClass);
+    const classLabel = classObj ? `Kelas_${classObj.name}` : 'Semua_Kelas';
+    const dateStamp = new Date().toISOString().split('T')[0];
+
+    const legerRows = reportStudents.map((std, idx) => {
+      const cls = classes.find(c => c.id === std.classId);
+      const tch = teachers.find(t => t.id === std.teacherId);
+      const att = storageService.getAttendanceCounts(std.id);
+      const violations = storageService.getViolationsByStudent(std.id);
+      const vText = violations && violations.length > 0
+        ? violations.map(v => `${v.typeName}`).join(', ')
+        : 'Tidak ada';
+
+      const isGr89 = isGrade8or9Student(std, classes);
+      const tSurat = resolveRaportTargetHafalan(std, classes, cls, 'TENGAH SEMESTER 1');
+      const hSurat = std.lastHafalan || '-';
+      const pctTahfizh = Math.min(100, Math.round(((Number(std.totalJuzHafal) || 0) / Math.max(0.5, Number(std.targetJuz) || 1)) * 100));
+      const statusKetuntasan = pctTahfizh >= 70 ? 'TUNTAS' : 'BELUM TUNTAS';
+
+      let ummiIbadahDesc = '-';
+      if (!isGr89) {
+        ummiIbadahDesc = `${std.currentUmmiJilid || 'Jilid 1'} hal. ${std.currentUmmiPage || 1} (Grade ${std.avgScore ? getGradeFromScore(std.avgScore).letter : 'B+'})`;
+      } else {
+        const shalat = (std as any).raportIbadahShalat || 90;
+        const dzikir = (std as any).raportIbadahDzikir || 88;
+        const doa = (std as any).raportIbadahDoa || 92;
+        ummiIbadahDesc = `Shalat: ${shalat} (${getGradeFromScore(shalat).letter}), Dzikir: ${dzikir} (${getGradeFromScore(dzikir).letter}), Doa: ${doa} (${getGradeFromScore(doa).letter})`;
+      }
+
+      return {
+        No: idx + 1,
+        NIS: std.nis || '-',
+        NISN: std.nisn || '-',
+        'Nama Lengkap Santri': std.name,
+        Kelas: cls?.name || '-',
+        'Halaqah / Program': std.program || std.raportHalaqahType || 'Reguler',
+        'Guru Pembimbing': tch?.name || '-',
+        'Capaian Hafalan': `${hSurat} (${std.totalJuzHafal || 0} Juz)`,
+        'Target Hafalan': `${tSurat} (${std.targetJuz || 1} Juz)`,
+        '% Ketercapaian': `${pctTahfizh}%`,
+        'Status Ketuntasan': statusKetuntasan,
+        'Capaian Ummi / Ibadah Harian': ummiIbadahDesc,
+        'Sakit (S)': std.raportSakit !== undefined ? std.raportSakit : att.sakit,
+        'Izin (I)': std.raportIzin !== undefined ? std.raportIzin : att.izin,
+        'Alpha (A)': std.raportAlpha !== undefined ? std.raportAlpha : att.alfa,
+        'Pelanggaran & Kedisiplinan': vText
+      };
+    });
+
+    if (format === 'csv') {
+      downloadCSVFile(legerRows, `Leger_Raport_${classLabel}_${dateStamp}`);
+      setExportFeedback(`Leger Raport ${classLabel} berhasil diekspor ke file CSV (${legerRows.length} santri)`);
+      setTimeout(() => setExportFeedback(null), 5000);
+      return;
+    }
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(legerRows);
+    applyAutoColumnWidths(ws, legerRows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Leger Raport');
+    XLSX.writeFile(wb, `Leger_Raport_${classLabel}_${dateStamp}.xlsx`);
+    setExportFeedback(`Leger Raport ${classLabel} berhasil diekspor ke Excel (.xlsx) (${legerRows.length} santri)`);
+    setTimeout(() => setExportFeedback(null), 5000);
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in">
       
@@ -774,6 +848,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               { id: 'ummi', label: '4. Rekap Pembelajaran Metode Ummi (Kelas 7)', icon: BookMarked },
               { id: 'rekap_nilai', label: '5. Rekapitulasi Nilai & Evaluasi', icon: Award },
               { id: 'raport_kelas', label: '6. Buku Induk Tahfizh Kelas', icon: Layers },
+              { id: 'leger_raport', label: '7. Leger Raport Kelas (Lengkap)', icon: Table2, highlight: true },
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = reportType === tab.id;
@@ -952,9 +1027,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
         {showTrendChart && (
           <div className="p-4 sm:p-5 space-y-5">
-            {/* KPI Summary Row */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 flex items-center justify-between">
+            {/* KPI Summary Row with 3D Mouse Tracking */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 perspective-container">
+              <Card3D 
+                className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 flex items-center justify-between"
+              >
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-amber-900/70 block">
                     Total Ayat Disetor
@@ -969,9 +1046,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 <div className="w-9 h-9 rounded-lg bg-[#D4AF37]/20 text-[#8C7015] flex items-center justify-center shrink-0">
                   <BookOpen className="w-4 h-4" />
                 </div>
-              </div>
+              </Card3D>
 
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+              <Card3D 
+                className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between"
+              >
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
                     Frekuensi Setoran
@@ -986,9 +1065,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 <div className="w-9 h-9 rounded-lg bg-slate-200/70 text-slate-700 flex items-center justify-center shrink-0">
                   <BarChart3 className="w-4 h-4" />
                 </div>
-              </div>
+              </Card3D>
 
-              <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 flex items-center justify-between">
+              <Card3D 
+                className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 flex items-center justify-between"
+              >
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800/70 block">
                     Rata-rata Kualitas Nilai
@@ -1003,9 +1084,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
                   <Award className="w-4 h-4" />
                 </div>
-              </div>
+              </Card3D>
 
-              <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 flex items-center justify-between">
+              <Card3D 
+                className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 flex items-center justify-between"
+              >
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800/70 block">
                     Bulan Progres Tertinggi
@@ -1020,7 +1103,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 <div className="w-9 h-9 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
                   <Activity className="w-4 h-4" />
                 </div>
-              </div>
+              </Card3D>
             </div>
 
             {/* Chart Mode Switcher */}
@@ -1334,11 +1417,101 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
               {reportType === 'ummi' && `REKAPITULASI PEMBELAJARAN & CAPAIAN TARGET METODE UMMI (KELAS 7 - ${selectedUmmiTerm.toUpperCase()})`}
               {reportType === 'rekap_nilai' && 'REKAPITULASI NILAI & EVALUASI TAJWID'}
               {reportType === 'raport_kelas' && 'BUKU INDUK MONITORING TAHFIZH & UMMI'}
+              {reportType === 'leger_raport' && 'LEGER NILAI & RAPORT TAHFIZHUL QUR\'AN KELAS'}
             </h3>
             <p className="text-xs text-slate-600">
               Kelas: <strong>{selectedClass ? classes.find(c => c.id === selectedClass)?.name : 'Semua Kelas'}</strong> • Periode: {settings.academicYear} ({settings.semester})
             </p>
           </div>
+
+          {/* Leger Raport Kelas Banner & Action Bar */}
+          {reportType === 'leger_raport' && (
+            <div className="space-y-3 no-print">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Santri Leger</span>
+                  <span className="text-xl font-black text-slate-900">{reportStudents.length}</span>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">{selectedClass ? `Kelas ${classes.find(c => c.id === selectedClass)?.name}` : 'Seluruh Rombel'}</span>
+                </div>
+                <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200">
+                  <span className="text-[10px] uppercase font-bold text-emerald-800 block">Santri Tuntas Target</span>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-xl font-black text-emerald-800">
+                      {reportStudents.filter(s => {
+                        const tJuz = Math.max(0.5, Number(s.targetJuz) || 1);
+                        return ((Number(s.totalJuzHafal) || 0) / tJuz) >= 0.7;
+                      }).length}
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-700">
+                      ({reportStudents.length > 0 ? Math.round((reportStudents.filter(s => {
+                        const tJuz = Math.max(0.5, Number(s.targetJuz) || 1);
+                        return ((Number(s.totalJuzHafal) || 0) / tJuz) >= 0.7;
+                      }).length / reportStudents.length) * 100) : 0}%)
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-emerald-600 block mt-0.5">Capaian &ge; 70% Target</span>
+                </div>
+                <div className="bg-rose-50 p-3 rounded-xl border border-rose-200">
+                  <span className="text-[10px] uppercase font-bold text-rose-800 block">Belum Tuntas</span>
+                  <span className="text-xl font-black text-rose-800">
+                    {reportStudents.filter(s => {
+                      const tJuz = Math.max(0.5, Number(s.targetJuz) || 1);
+                      return ((Number(s.totalJuzHafal) || 0) / tJuz) < 0.7;
+                    }).length}
+                  </span>
+                  <span className="text-[10px] text-rose-600 block mt-0.5">Perlu akselerasi &amp; muroja'ah</span>
+                </div>
+                <div className="bg-amber-50 p-3 rounded-xl border border-amber-200">
+                  <span className="text-[10px] uppercase font-bold text-amber-900 block">Rata-rata Capaian</span>
+                  <span className="text-xl font-black text-slate-900">
+                    {reportStudents.length > 0
+                      ? (reportStudents.reduce((sum, s) => sum + (Number(s.totalJuzHafal) || 0), 0) / reportStudents.length).toFixed(2)
+                      : 0} Juz
+                  </span>
+                  <span className="text-[10px] text-amber-700 block mt-0.5">Kumulatif seluruh siswa</span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Table2 className="w-4 h-4 text-[#D4AF37]" />
+                  Tabel Leger Raport Lengkap: Capaian Hafalan, Ummi/Ibadah, Status Ketuntasan, Absensi &amp; Pelanggaran
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleExportLegerExcel('csv')}
+                    className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold border border-slate-300 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    title="Unduh leger dalam format CSV"
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Ekspor CSV</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleExportLegerExcel('xlsx')}
+                    className="px-3.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    title="Unduh buku kerja Excel Leger Raport (.xlsx)"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-200" />
+                    <span>Unduh Excel Leger (.xlsx)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handlePrint}
+                    className="px-3.5 py-1.5 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    title="Cetak Leger Raport ke Kertas F4 / Folio Landscape"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    <span>Cetak Leger (F4)</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {reportType === 'ummi' && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900 flex items-start gap-2.5 no-print">
@@ -1352,8 +1525,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             </div>
           )}
 
-          {/* Table Content */}
-          <div className="overflow-x-auto">
+          {/* Table Content with Interactive 3D Hover & Elevation */}
+          <div className="overflow-x-auto interactive-table-3d bg-white">
             <table className="w-full text-xs border border-slate-200 border-collapse">
               <thead>
                 <tr className="bg-slate-100 border-b border-slate-200 text-slate-800 font-bold text-[11px]">
@@ -1400,6 +1573,20 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                       <th className="p-2 text-left">Guru Pembimbing</th>
                     </>
                   )}
+
+                  {reportType === 'leger_raport' && (
+                    <>
+                      <th className="p-2 text-left border-r border-slate-200">Halaqah</th>
+                      <th className="p-2 text-center border-r border-slate-200">Capaian Hafalan</th>
+                      <th className="p-2 text-center border-r border-slate-200">Target</th>
+                      <th className="p-2 text-center border-r border-slate-200">% Capaian</th>
+                      <th className="p-2 text-center border-r border-slate-200">Ketuntasan</th>
+                      <th className="p-2 text-left border-r border-slate-200">Ummi / Ibadah Harian</th>
+                      <th className="p-2 text-center border-r border-slate-200">Absensi (S/I/A)</th>
+                      <th className="p-2 text-left border-r border-slate-200">Pelanggaran</th>
+                      <th className="p-2 text-center no-print">Raport</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1410,7 +1597,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                   const ummiTargetInfo = reportType === 'ummi' ? getStudentUmmiTargetInfo(std, selectedUmmiTerm) : null;
 
                   return (
-                    <tr key={std.id} className="hover:bg-slate-50">
+                    <tr key={std.id} className="transition-all hover:bg-slate-50/80 cursor-pointer">
                       <td className="p-2 text-center border-r border-slate-200 font-mono text-[11px]">{idx + 1}</td>
                       <td className="p-2 border-r border-slate-200 font-mono text-[11px]">{std.nis}</td>
                       <td className="p-2 border-r border-slate-200 font-semibold text-slate-900">{std.name}</td>
@@ -1482,6 +1669,100 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                           <td className="p-2">{teacher?.name}</td>
                         </>
                       )}
+
+                      {reportType === 'leger_raport' && (() => {
+                        const att = storageService.getAttendanceCounts(std.id);
+                        const sCount = std.raportSakit !== undefined ? std.raportSakit : att.sakit;
+                        const iCount = std.raportIzin !== undefined ? std.raportIzin : att.izin;
+                        const aCount = std.raportAlpha !== undefined ? std.raportAlpha : att.alfa;
+
+                        const violations = storageService.getViolationsByStudent(std.id);
+                        const vSummary = violations && violations.length > 0
+                          ? violations.map(v => `${v.typeName}`).slice(0, 2).join(', ')
+                          : '-';
+
+                        const isGr89 = isGrade8or9Student(std, classes);
+                        const targetSurat = resolveRaportTargetHafalan(std, classes, cls, 'TENGAH SEMESTER 1');
+                        const capaianSurat = std.lastHafalan || '-';
+                        const pctHafalan = Math.min(100, Math.round(((Number(std.totalJuzHafal) || 0) / Math.max(0.5, Number(std.targetJuz) || 1)) * 100));
+                        const isTuntas = pctHafalan >= 70;
+
+                        let ummiIbadahCell: React.ReactNode = null;
+                        if (!isGr89) {
+                          ummiIbadahCell = (
+                            <div>
+                              <span className="font-bold text-slate-800">{std.currentUmmiJilid || 'Jilid 1'}</span>
+                              <span className="text-slate-500 text-[10px]"> hal. {std.currentUmmiPage || 1}</span>
+                              <span className="ml-1 px-1.5 py-0.2 rounded bg-blue-100 text-blue-900 font-extrabold text-[10px]">
+                                Grade {std.avgScore ? getGradeFromScore(std.avgScore).letter : 'B+'}
+                              </span>
+                            </div>
+                          );
+                        } else {
+                          const shalat = (std as any).raportIbadahShalat || 90;
+                          const dzikir = (std as any).raportIbadahDzikir || 88;
+                          const doa = (std as any).raportIbadahDoa || 92;
+                          ummiIbadahCell = (
+                            <div className="text-[10.5px] space-y-0.5">
+                              <div><span className="font-bold text-slate-700">Shalat:</span> {shalat} ({getGradeFromScore(shalat).letter})</div>
+                              <div><span className="font-bold text-slate-700">Dzikir:</span> {dzikir} ({getGradeFromScore(dzikir).letter})</div>
+                              <div><span className="font-bold text-slate-700">Doa:</span> {doa} ({getGradeFromScore(doa).letter})</div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <>
+                            <td className="p-2 border-r border-slate-200 text-[11px] font-medium text-slate-700 truncate max-w-[120px]">
+                              {std.program || std.raportHalaqahType || 'Reguler'}
+                            </td>
+                            <td className="p-2 text-center border-r border-slate-200 font-bold text-slate-900 text-[11px]">
+                              <div>{capaianSurat}</div>
+                              <span className="text-[10px] text-amber-700 font-extrabold">({std.totalJuzHafal || 0} Juz)</span>
+                            </td>
+                            <td className="p-2 text-center border-r border-slate-200 text-[11px] font-semibold text-slate-700">
+                              <div>{targetSurat}</div>
+                              <span className="text-[10px] text-slate-500">({std.targetJuz || 1} Juz)</span>
+                            </td>
+                            <td className="p-2 text-center border-r border-slate-200 font-mono font-bold text-[11px]">
+                              {pctHafalan}%
+                            </td>
+                            <td className="p-2 text-center border-r border-slate-200">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wide ${
+                                isTuntas 
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                                  : 'bg-rose-100 text-rose-800 border border-rose-300'
+                              }`}>
+                                {isTuntas ? 'TUNTAS' : 'BELUM TUNTAS'}
+                              </span>
+                            </td>
+                            <td className="p-2 border-r border-slate-200">
+                              {ummiIbadahCell}
+                            </td>
+                            <td className="p-2 text-center border-r border-slate-200 font-mono text-[11px]">
+                              <span className="text-blue-700 font-bold" title="Sakit">S:{sCount}</span>{' '}
+                              <span className="text-amber-700 font-bold" title="Izin">I:{iCount}</span>{' '}
+                              <span className="text-rose-700 font-black" title="Alpha">A:{aCount}</span>
+                            </td>
+                            <td className="p-2 border-r border-slate-200 text-[11px] text-slate-700 max-w-[130px] truncate" title={vSummary}>
+                              {vSummary}
+                            </td>
+                            <td className="p-2 text-center no-print">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedIndividualStudentId(std.id);
+                                  setReportType('raport_individu');
+                                }}
+                                className="px-2 py-1 rounded bg-[#1E293B] hover:bg-slate-800 text-[#D4AF37] font-bold text-[10px] transition cursor-pointer shadow-2xs"
+                                title="Buka Raport Individu Santri Ini"
+                              >
+                                Raport →
+                              </button>
+                            </td>
+                          </>
+                        );
+                      })()}
                     </tr>
                   );
                 })}

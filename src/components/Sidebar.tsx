@@ -186,17 +186,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={toggleDropdown}
             className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs transition cursor-pointer text-left ${
               isGroupActive
-                ? 'bg-slate-800 text-[#D4AF37] font-bold border border-[#D4AF37]/40'
+                ? 'bg-slate-800 text-white font-bold border border-slate-600'
                 : 'text-slate-300 hover:bg-slate-800 hover:text-white'
             }`}
           >
             <div className="flex items-center gap-3 min-w-0 flex-1">
-              <Icon className={`w-4 h-4 shrink-0 ${isGroupActive ? 'text-[#D4AF37]' : 'text-slate-400'}`} />
+              <Icon className={`w-4 h-4 shrink-0 ${isGroupActive ? 'text-white' : 'text-slate-400'}`} />
               <span className="whitespace-nowrap font-semibold text-xs">{item.label}</span>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               {item.badge && (
-                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-700/80 text-amber-300">
+                <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700">
                   {item.badge}
                 </span>
               )}
@@ -222,7 +222,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     onClick={() => handleSelectView(sub.id)}
                     className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-[11px] transition cursor-pointer text-left ${
                       isSubActive
-                        ? 'bg-[#D4AF37] text-white font-bold shadow-sm'
+                        ? 'bg-slate-800 text-white font-bold border border-slate-600'
                         : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                     }`}
                   >
@@ -248,7 +248,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         onClick={() => handleSelectView(item.id)}
         className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs transition cursor-pointer text-left ${
           isActive
-            ? 'bg-[#D4AF37] text-white font-medium shadow-md shadow-[#D4AF37]/20'
+            ? 'bg-slate-800 text-white font-bold border border-slate-600 shadow-xs'
             : 'text-slate-400 hover:bg-slate-800 hover:text-white'
         }`}
       >
@@ -258,8 +258,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
         {item.badge && (
           <span
-            className={`text-[10px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
-              isActive ? 'bg-white/20 text-white' : 'bg-slate-700/80 text-amber-300'
+            className={`text-[10px] font-medium px-1.5 py-0.2 rounded shrink-0 ${
+              isActive ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-300 border border-slate-700'
             }`}
           >
             {item.badge}
@@ -279,7 +279,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className="no-print hidden md:flex fixed left-0 top-20 z-30 items-center gap-1.5 pl-2.5 pr-3 py-2 bg-[#1E293B] hover:bg-slate-800 text-white rounded-r-xl border border-l-0 border-slate-700 shadow-lg transition cursor-pointer group"
           title="Klik untuk menampilkan Sidebar Menu"
         >
-          <PanelLeftOpen className="w-4 h-4 text-[#D4AF37] group-hover:scale-110 transition" />
+          <PanelLeftOpen className="w-4 h-4 text-white group-hover:scale-110 transition" />
           <span className="text-[11px] font-bold tracking-tight">Menu</span>
         </button>
       )}
@@ -343,7 +343,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 type="button"
                 onClick={onToggle}
-                className="p-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-[#D4AF37] border border-slate-700 transition cursor-pointer shrink-0"
+                className="p-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition cursor-pointer shrink-0"
                 title="Sembunyikan Sidebar Kiri (Tampilan Lebih Full)"
               >
                 <PanelLeftClose className="w-4 h-4" />
@@ -372,12 +372,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     role={currentUser?.role || userRole}
                     gender={currentUser?.role === 'guru' ? (currentTeacher?.gender || 'L') : undefined}
                     size="sm"
-                    className="ring-2 ring-[#D4AF37]/60 group-hover:ring-[#D4AF37] transition"
+                    className="ring-2 ring-slate-600 group-hover:ring-slate-400 transition"
                   />
                   <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#1E293B]" title="Status Online"></span>
                 </div>
                 <div className="flex flex-col min-w-0 flex-1">
-                  <span className="text-xs font-bold text-white truncate group-hover:text-[#D4AF37] transition">
+                  <span className="text-xs font-bold text-white truncate group-hover:text-slate-200 transition">
                     {currentUser?.name || (userRole === 'admin' ? 'Administrator Tahfizh' : currentTeacher?.name || 'Guru Tahfizh')}
                   </span>
                   <span className="text-[10px] text-slate-400 capitalize truncate">
@@ -396,7 +396,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   type="button"
                   onClick={onOpenProfile}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-[#D4AF37] border border-slate-700 transition cursor-pointer shrink-0"
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition cursor-pointer shrink-0"
                   title="Pengaturan Akun (Ganti Password & Foto)"
                 >
                   <Settings className="w-3.5 h-3.5" />
@@ -414,7 +414,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={() => handleSelectView('parent-portal')}
               className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
-                current === 'parent-portal' ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+                current === 'parent-portal' ? 'text-white font-bold bg-slate-800' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <HeartHandshake className="w-4 h-4 mb-0.5" />
@@ -423,7 +423,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={() => handleSelectView('hafalan')}
               className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
-                current === 'hafalan' ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+                current === 'hafalan' ? 'text-white font-bold bg-slate-800' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <BookOpen className="w-4 h-4 mb-0.5" />
@@ -432,7 +432,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={() => handleSelectView('ummi')}
               className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
-                current === 'ummi' ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+                current === 'ummi' ? 'text-white font-bold bg-slate-800' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <BookMarked className="w-4 h-4 mb-0.5" />
@@ -441,7 +441,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={() => handleSelectView('reports')}
               className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
-                current === 'reports' ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+                current === 'reports' ? 'text-white font-bold bg-slate-800' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <BarChart3 className="w-4 h-4 mb-0.5" />
@@ -453,7 +453,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={() => handleSelectView('dashboard')}
               className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
-                current === 'dashboard' ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+                current === 'dashboard' ? 'text-white font-bold bg-slate-800' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <LayoutDashboard className="w-4 h-4 mb-0.5" />
@@ -462,7 +462,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={() => handleSelectView('students')}
               className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
-                current === 'students' ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+                current === 'students' ? 'text-white font-bold bg-slate-800' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <GraduationCap className="w-4 h-4 mb-0.5" />
@@ -471,7 +471,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={() => handleSelectView('hafalan')}
               className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
-                current === 'hafalan' ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+                current === 'hafalan' ? 'text-white font-bold bg-slate-800' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <BookOpen className="w-4 h-4 mb-0.5" />
@@ -480,7 +480,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={() => handleSelectView('ummi')}
               className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
-                current === 'ummi' ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+                current === 'ummi' ? 'text-white font-bold bg-slate-800' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <BookMarked className="w-4 h-4 mb-0.5" />
@@ -499,11 +499,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }
           }}
           className={`flex flex-col items-center py-1.5 px-2 rounded-lg transition text-[10px] cursor-pointer ${
-            isMobileOpen ? 'text-[#D4AF37] font-bold' : 'text-slate-400 hover:text-slate-200'
+            isMobileOpen ? 'text-white font-bold bg-slate-800' : 'text-slate-400 hover:text-slate-200'
           }`}
           title="Buka Menu Lengkap"
         >
-          <Menu className="w-4 h-4 mb-0.5 text-[#D4AF37]" />
+          <Menu className="w-4 h-4 mb-0.5 text-slate-300" />
           <span>Menu</span>
         </button>
       </nav>

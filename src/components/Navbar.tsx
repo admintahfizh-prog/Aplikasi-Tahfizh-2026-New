@@ -113,12 +113,12 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between h-16">
           
           {/* Left: Sidebar Toggle + Logo & Brand Header */}
-          <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
             {onToggleSidebar && (
               <button
                 type="button"
                 onClick={onToggleSidebar}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg border text-xs font-semibold transition cursor-pointer ${
+                className={`p-2 sm:px-2.5 sm:py-2 rounded-lg border text-xs font-semibold transition cursor-pointer shrink-0 ${
                   isSidebarOpen
                     ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
                     : 'bg-[#1E293B] hover:bg-slate-800 text-white border-[#1E293B] shadow-xs'
@@ -128,41 +128,41 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {isSidebarOpen ? (
                   <>
                     <PanelLeftClose className="w-4 h-4 text-slate-700" />
-                    <span className="hidden xl:inline text-[11px]">Tutup Menu</span>
+                    <span className="hidden xl:inline text-[11px] ml-1.5">Tutup Menu</span>
                   </>
                 ) : (
                   <>
-                    <PanelLeftOpen className="w-4 h-4 text-[#D4AF37]" />
-                    <span className="hidden sm:inline text-[11px]">Menu</span>
+                    <PanelLeftOpen className="w-4 h-4 text-slate-300" />
+                    <span className="hidden sm:inline text-[11px] ml-1.5">Menu</span>
                   </>
                 )}
               </button>
             )}
 
             <div 
-              className="flex items-center space-x-3 cursor-pointer group" 
+              className="flex items-center space-x-2 sm:space-x-3 cursor-pointer group min-w-0" 
               onClick={() => setActiveView && setActiveView(currentUser.role === 'wali' ? 'parent-portal' : 'dashboard')}
             >
               {Boolean(storageService.getSettings()?.customLogoUrl?.trim()) && (
-                <div className="p-1 bg-white rounded-lg border border-slate-200 shadow-xs group-hover:scale-105 transition flex items-center justify-center shrink-0">
+                <div className="p-0.5 sm:p-1 bg-white rounded-lg border border-slate-200 shadow-xs group-hover:scale-105 transition flex items-center justify-center shrink-0">
                   <img
                     src={storageService.getSettings()?.customLogoUrl?.trim() || undefined}
                     alt="Logo Sekolah"
-                    className="w-9 h-9 sm:w-10 sm:h-10 object-contain rounded-md"
+                    className="w-7 h-7 sm:w-10 sm:h-10 object-contain rounded-md"
                   />
                 </div>
               )}
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-extrabold tracking-tight text-base sm:text-lg text-slate-900 font-sans">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="font-black tracking-tight text-xs sm:text-base text-slate-900 font-sans truncate">
                     TAHFIZH SMPIA 21
                   </span>
-                  <span className="hidden sm:inline-block text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-slate-100 text-slate-700 rounded border border-slate-200">
+                  <span className="hidden sm:inline-block text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 bg-slate-100 text-slate-700 rounded border border-slate-200 shrink-0">
                     {currentUser.role === 'admin' ? 'Admin' : currentUser.role === 'guru' ? 'Guru' : 'Wali'}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500 font-medium hidden md:block">
-                  {schoolName} • Monitoring Tahfizh & Metode Ummi
+                <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium hidden md:block truncate">
+                  {schoolName} • Monitoring Tahfizh &amp; Metode Ummi
                 </p>
               </div>
             </div>
@@ -203,24 +203,23 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
-          {/* Right Actions Toolbar */}
-          <div className="flex items-center space-x-1.5 sm:space-x-2">
+          {/* Right Actions Toolbar: Clean & Streamlined for Mobile */}
+          <div className="flex items-center space-x-1 sm:space-x-2 shrink-0">
             
-            {/* Quick Access Scan Barcode for Hafalan & Ummi + Daily Input */}
+            {/* Quick Access Scan & Daily Input (Simplified on Mobile) */}
             {currentUser.role !== 'wali' && (
               <>
+                {/* On mobile: Compact single scan button; on desktop: Full buttons */}
                 {onOpenScanHafalan && (
                   <button
                     id="btn-navbar-scan-hafalan"
                     type="button"
                     onClick={onOpenScanHafalan}
-                    className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs transition shadow-xs active:scale-95 cursor-pointer"
-                    title="Scan Barcode / QR Siswa untuk Absen & Input Setoran Hafalan Al-Qur'an"
+                    className="btn-3d inline-flex items-center gap-1.5 p-2 sm:px-3 sm:py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs transition shadow-xs active:scale-95 cursor-pointer"
+                    title="Scan Barcode / QR Siswa untuk Absen &amp; Input Setoran Hafalan"
                   >
-                    <ScanLine className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-                    <BookOpen className="w-3.5 h-3.5 text-amber-200 hidden md:inline shrink-0" />
-                    <span className="hidden sm:inline">Scan Hafalan</span>
-                    <span className="sm:hidden">Scan Qur&apos;an</span>
+                    <ScanLine className="w-4 h-4 text-emerald-200 shrink-0" />
+                    <span className="hidden md:inline">Scan Hafalan</span>
                   </button>
                 )}
 
@@ -229,13 +228,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                     id="btn-navbar-scan-ummi"
                     type="button"
                     onClick={onOpenScanUmmi}
-                    className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-extrabold text-xs transition shadow-xs active:scale-95 cursor-pointer"
-                    title="Scan Barcode / QR Siswa untuk Absen & Input Evaluasi Metode Ummi"
+                    className="btn-3d hidden sm:inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs transition shadow-xs active:scale-95 cursor-pointer"
+                    title="Scan Barcode / QR Siswa untuk Absen &amp; Input Evaluasi Metode Ummi"
                   >
-                    <ScanLine className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-                    <BookMarked className="w-3.5 h-3.5 text-amber-200 hidden md:inline shrink-0" />
-                    <span className="hidden sm:inline">Scan Ummi</span>
-                    <span className="sm:hidden">Ummi</span>
+                    <BookMarked className="w-3.5 h-3.5 text-blue-200 shrink-0" />
+                    <span className="hidden md:inline">Scan Ummi</span>
                   </button>
                 )}
 
@@ -243,10 +240,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                   id="btn-quick-setoran"
                   type="button"
                   onClick={onOpenDailyInput}
-                  className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white font-semibold text-xs transition shadow-sm active:scale-95 cursor-pointer"
-                  title="Input Setoran Hafalan / Ummi"
+                  className="btn-3d inline-flex items-center gap-1.5 p-2 sm:px-3.5 sm:py-2 rounded-lg bg-[#1E293B] hover:bg-slate-800 text-white font-semibold text-xs transition shadow-sm active:scale-95 cursor-pointer"
+                  title="Input Setoran Baru (Tahfizh &amp; Ummi)"
                 >
-                  <Plus className="w-4 h-4 text-[#D4AF37]" />
+                  <Plus className="w-4 h-4 text-emerald-400" />
                   <span className="hidden md:inline">Setoran Baru</span>
                 </button>
               </>

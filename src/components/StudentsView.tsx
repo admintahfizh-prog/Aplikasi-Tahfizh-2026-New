@@ -35,6 +35,7 @@ import { Student, Teacher, ClassItem, Role, User, HalaqahGroup, AttendanceRecord
 import { storageService } from '../services/storageService';
 import { UMMI_JILIDS } from '../data/ummiData';
 import { AvatarBadge } from './AvatarBadge';
+import { Card3D } from './Card3D';
 import { isGrade8or9Student, isGrade8or9Class } from '../utils/gradeHelper';
 import { HalaqahFilterBar } from './HalaqahFilterBar';
 import { 
@@ -839,7 +840,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                       Tidak ada santri yang cocok dengan filter pencarian pada halaqah ini.
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 perspective-container">
                       {group.students.map((std) => {
                         const cls = classes.find(c => c.id === std.classId);
                         const teacher = teachers.find(t => t.id === std.teacherId);
@@ -847,9 +848,9 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                         const halInfo = getStudentHalaqahInfo(std, activeHalaqahGroups, teachers);
 
                         return (
-                          <div
+                          <Card3D
                             key={std.id}
-                            className="bg-white rounded-xl border border-slate-200 shadow-xs hover:shadow-md transition p-4 flex flex-col justify-between space-y-3 relative group"
+                            className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col justify-between space-y-3 relative group"
                           >
                             {/* Top Row: Avatar & Basic Info */}
                             <div className="flex items-start gap-3">
@@ -1075,7 +1076,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                                 </>
                               )}
                             </div>
-                          </div>
+                          </Card3D>
                         );
                       })}
                     </div>
@@ -1087,7 +1088,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
         </div>
       ) : (
         /* Class Mode Grid */
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 perspective-container">
           {filteredStudents.map((std) => {
             const cls = classes.find(c => c.id === std.classId);
             const teacher = teachers.find(t => t.id === std.teacherId);
@@ -1095,9 +1096,9 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
             const halInfo = getStudentHalaqahInfo(std, activeHalaqahGroups, teachers);
 
             return (
-              <div
+              <Card3D
                 key={std.id}
-                className="bg-white rounded-xl border border-slate-200 shadow-xs hover:shadow-md transition p-4 flex flex-col justify-between space-y-3 relative group"
+                className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col justify-between space-y-3 relative group"
               >
                 {/* Top Row: Avatar & Basic Info */}
                 <div className="flex items-start gap-3">
@@ -1321,7 +1322,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                     </>
                   )}
                 </div>
-              </div>
+              </Card3D>
             );
           })}
         </div>

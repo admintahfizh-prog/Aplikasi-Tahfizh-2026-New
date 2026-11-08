@@ -408,6 +408,7 @@ export default function App() {
             <DashboardView
               students={students}
               teachers={teachers}
+              classes={classes}
               records={records}
               ummiRecords={ummiRecords}
               targets={targets}

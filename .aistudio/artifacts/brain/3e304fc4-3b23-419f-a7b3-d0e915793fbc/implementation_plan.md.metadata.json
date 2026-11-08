@@ -1,0 +1,6 @@
+{
+  "summary":  "Rencana implementasi untuk:\n1. Grafik Ketercapaian Target Hafalan & Ummi di Dashboard Utama dengan filter Jenjang (7, 8, 9) dan Per Kelas (7A-7E, 8A-8E, 9A-9E).\n2. Dua Pilihan Format Raport di StudentRaportCard:\n   - Format 1 (Standar Kelas 7): Raport Tahfizh & Metode Ummi.\n   - Format 2 (Sesuai Contoh PDF Kelas 8 & 9): Laporan Program Tahfizhul Qur'an & Ibadah Harian Tengah Semester dengan romawi I (Tahfizh), II (Kedisiplinan), III (Praktik Ibadah: Gerakan Shalat, Dzikir & Doa, Doa Harian), IV (Catatan), TTD Kepala Sekolah & Wali Kelas.\n3. Fitur Leger Raport Kelas Terpadu di menu Laporan (ReportsView): Tabel rekapitulasi lengkap nama, NIS/NISN, capaian hafalan, target, persentase & ketuntasan, absensi (Hadir, Sakit, Izin, Alpa), poin/catatan pelanggaran, predikat, tombol aksi, serta ekspor Excel (.xlsx) dan Cetak Leger Folio/F4.",
+  "updatedAt":  "2026-11-08T04:53:13.672473649Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

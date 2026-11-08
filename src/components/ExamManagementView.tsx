@@ -621,30 +621,127 @@ export const ExamManagementView: React.FC<ExamManagementViewProps> = ({
     selectedSubmission?.letterNumber ||
     buildDefaultParentLetterNumber(category, effectiveScheduledDate, 72);
 
-  const handlePrintSurat = () => {
-    document.body.classList.add('printing-surat');
-    const cleanup = () => {
-      document.body.classList.remove('printing-surat');
-      window.removeEventListener('afterprint', cleanup);
-    };
-    window.addEventListener('afterprint', cleanup);
-    setTimeout(() => {
+  const printElementIsolated = (element: HTMLElement | null, documentTitle: string) => {
+    if (!element) {
       window.print();
-      setTimeout(cleanup, 2500);
-    }, 150);
+      return;
+    }
+
+    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map(el => el.outerHTML)
+      .join('\n');
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.visibility = 'hidden';
+    iframe.style.zIndex = '-999';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html lang="id">
+        <head>
+          <meta charset="utf-8" />
+          <title>${documentTitle}</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          ${styles}
+          <style>
+            @page {
+              size: 215mm 330mm;
+              margin: 0;
+            }
+            *, *::before, *::after {
+              box-sizing: border-box;
+            }
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              width: 215mm !important;
+              background: #ffffff !important;
+              color: #000000 !important;
+              font-family: 'Times New Roman', Times, serif;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .surat-sheet, .form1-sheet {
+              box-sizing: border-box !important;
+              width: 215mm !important;
+              max-width: 215mm !important;
+              min-width: 215mm !important;
+              height: 320mm !important;
+              min-height: 320mm !important;
+              max-height: 324mm !important;
+              margin: 0 auto !important;
+              padding: 10mm 18mm 8mm 18mm !important;
+              overflow: hidden !important;
+              page-break-inside: avoid !important;
+              page-break-after: avoid !important;
+              page-break-before: avoid !important;
+              display: flex !important;
+              flex-direction: column !important;
+              justify-content: space-between !important;
+              box-shadow: none !important;
+              border: none !important;
+            }
+            .no-print {
+              display: none !important;
+            }
+            table {
+              border-collapse: collapse;
+              width: 100%;
+            }
+          </style>
+        </head>
+        <body>
+          <div style="display:flex;justify-content:center;margin:0;padding:0;width:100%;">
+            ${element.outerHTML}
+          </div>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (err) {
+        console.warn('Iframe print failed, falling back to window.print:', err);
+        window.print();
+      } finally {
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 5000);
+      }
+    }, 400);
+  };
+
+  const handlePrintSurat = () => {
+    printElementIsolated(
+      form2PrintRef.current,
+      `Surat_Pemberitahuan_${(currentParticipant?.studentName || 'Santri').replace(/\s+/g, '_')}`
+    );
   };
 
   const handlePrintForm1 = () => {
-    document.body.classList.add('printing-form1');
-    const cleanup = () => {
-      document.body.classList.remove('printing-form1');
-      window.removeEventListener('afterprint', cleanup);
-    };
-    window.addEventListener('afterprint', cleanup);
-    setTimeout(() => {
-      window.print();
-      setTimeout(cleanup, 2500);
-    }, 150);
+    printElementIsolated(
+      form1PrintRef.current,
+      `Formulir_Pengajuan_${config.shortTitle.replace(/\s+/g, '_')}`
+    );
   };
 
   const handleDownloadPdf = async (
@@ -1258,8 +1355,11 @@ Koordinator Tahfizh: ${coordinatorName}`;
                       className="form1-sheet bg-white text-slate-950 relative shadow-xl print:shadow-none print:m-0 space-y-6"
                       style={{
                         width: '215mm',
-                        minHeight: '330mm',
-                        maxHeight: '330mm',
+                        minWidth: '215mm',
+                        maxWidth: '215mm',
+                        height: '320mm',
+                        minHeight: '320mm',
+                        maxHeight: '324mm',
                         padding: '12mm 18mm 12mm 18mm',
                         fontFamily: "'Calibri', 'Segoe UI', Arial, sans-serif"
                       }}
@@ -1633,9 +1733,12 @@ Koordinator Tahfizh: ${coordinatorName}`;
                           className="surat-sheet bg-white text-slate-950 relative shadow-xl print:shadow-none print:m-0"
                           style={{
                             width: '215mm',
-                            minHeight: '330mm',
-                            maxHeight: '330mm',
-                            padding: '8mm 18mm 8mm 18mm',
+                            minWidth: '215mm',
+                            maxWidth: '215mm',
+                            height: '320mm',
+                            minHeight: '320mm',
+                            maxHeight: '324mm',
+                            padding: '10mm 18mm 8mm 18mm',
                             fontFamily: "'Times New Roman', Times, serif"
                           }}
                         >
@@ -1716,8 +1819,8 @@ Koordinator Tahfizh: ${coordinatorName}`;
 
                                 {/* Right Date: Hijriah underlined over Masehi */}
                                 <div className="text-right shrink-0">
-                                  <div className="inline-block text-center">
-                                    <p className="border-b border-slate-900 pb-0.5 px-1 font-medium">
+                                  <div className="inline-block text-center whitespace-nowrap">
+                                    <p className="border-b border-slate-900 pb-0.5 px-2 font-medium">
                                       Sukoharjo, {effectiveHijriDate}
                                     </p>
                                     <p className="pt-0.5">
@@ -1756,57 +1859,57 @@ Koordinator Tahfizh: ${coordinatorName}`;
                                 </p>
 
                                 {/* Details Table: Hari, Tanggal, Waktu, Tempat, Jilid/Juz, Penguji */}
-                                <div className="pl-3 sm:pl-6">
-                                  <table className="border-none text-[13px]">
+                                <div className="pl-2 sm:pl-6">
+                                  <table className="w-full border-none text-[13.5px]">
                                     <tbody>
                                       <tr>
-                                        <td className="py-0.5 pr-6 w-32 font-medium">Nama / Kelas</td>
-                                        <td className="py-0.5 pr-2">:</td>
-                                        <td className="py-0.5 font-bold">
+                                        <td className="py-1 pr-3 w-36 sm:w-44 font-medium whitespace-nowrap align-top">Nama / Kelas</td>
+                                        <td className="py-1 pr-2 w-4 align-top">:</td>
+                                        <td className="py-1 font-bold text-slate-900 align-top">
                                           {currentParticipant
                                             ? `${currentParticipant.studentName} (${currentParticipant.className})`
                                             : '-'}
                                         </td>
                                       </tr>
                                       <tr>
-                                        <td className="py-0.5 pr-6 font-medium">Hari</td>
-                                        <td className="py-0.5 pr-2">:</td>
-                                        <td className="py-0.5 font-semibold">
+                                        <td className="py-1 pr-3 font-medium whitespace-nowrap align-top">Hari</td>
+                                        <td className="py-1 pr-2 align-top">:</td>
+                                        <td className="py-1 font-semibold text-slate-900 align-top">
                                           {effectiveScheduledDay}
                                         </td>
                                       </tr>
                                       <tr>
-                                        <td className="py-0.5 pr-6 font-medium">Tanggal</td>
-                                        <td className="py-0.5 pr-2">:</td>
-                                        <td className="py-0.5 font-semibold">
+                                        <td className="py-1 pr-3 font-medium whitespace-nowrap align-top">Tanggal</td>
+                                        <td className="py-1 pr-2 align-top">:</td>
+                                        <td className="py-1 font-semibold text-slate-900 align-top">
                                           {formatIndonesianDate(effectiveScheduledDate)}
                                         </td>
                                       </tr>
                                       <tr>
-                                        <td className="py-0.5 pr-6 font-medium">Waktu</td>
-                                        <td className="py-0.5 pr-2">:</td>
-                                        <td className="py-0.5 font-semibold">
+                                        <td className="py-1 pr-3 font-medium whitespace-nowrap align-top">Waktu</td>
+                                        <td className="py-1 pr-2 align-top">:</td>
+                                        <td className="py-1 font-semibold text-slate-900 align-top">
                                           {effectiveScheduledTime}
                                         </td>
                                       </tr>
                                       <tr>
-                                        <td className="py-0.5 pr-6 font-medium">Tempat</td>
-                                        <td className="py-0.5 pr-2">:</td>
-                                        <td className="py-0.5 font-semibold">
+                                        <td className="py-1 pr-3 font-medium whitespace-nowrap align-top">Tempat</td>
+                                        <td className="py-1 pr-2 align-top">:</td>
+                                        <td className="py-1 font-semibold text-slate-900 align-top">
                                           {effectiveScheduledRoom}
                                         </td>
                                       </tr>
                                       <tr>
-                                        <td className="py-0.5 pr-6 font-medium">{config.columnLabel}</td>
-                                        <td className="py-0.5 pr-2">:</td>
-                                        <td className="py-0.5 font-bold text-emerald-900">
+                                        <td className="py-1 pr-3 font-medium whitespace-nowrap align-top">{config.columnLabel}</td>
+                                        <td className="py-1 pr-2 align-top">:</td>
+                                        <td className="py-1 font-bold text-emerald-900 align-top">
                                           {currentParticipant?.jilidOrJuz || '-'}
                                         </td>
                                       </tr>
                                       <tr>
-                                        <td className="py-0.5 pr-6 font-medium">Penguji</td>
-                                        <td className="py-0.5 pr-2">:</td>
-                                        <td className="py-0.5 font-bold">
+                                        <td className="py-1 pr-3 font-medium whitespace-nowrap align-top">Penguji</td>
+                                        <td className="py-1 pr-2 align-top">:</td>
+                                        <td className="py-1 font-bold text-slate-900 align-top">
                                           {effectiveExaminer}
                                         </td>
                                       </tr>
